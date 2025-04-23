@@ -16,6 +16,20 @@ export function analyzeExpose(code: string): ExposeInfo[] {
   const exposes: ExposeInfo[] = [];
 
   traverse(ast, {
+    ObjectProperty(path: NodePath<t.ObjectProperty>) {
+      // 检查是否是 expose 属性
+      if (t.isIdentifier(path.node.key, { name: 'expose' })) {
+        // 处理 expose: ['method1', 'method2'] 形式
+        if (t.isArrayExpression(path.node.value)) {
+          path.node.value.elements.forEach(element => {
+            if (t.isStringLiteral(element)) {
+              exposes.push({ name: element.value });
+            }
+          });
+        }
+      }
+    },
+
     CallExpression(path: NodePath<t.CallExpression>) {
       // 查找 defineExpose({...})
       if (

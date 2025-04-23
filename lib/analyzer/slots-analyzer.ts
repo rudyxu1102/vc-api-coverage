@@ -99,5 +99,27 @@ export function analyzeSlots(code: string): SlotInfo[] {
 
   // TODO: 添加对 <script setup> 中 useSlots() 的分析
 
+  traverse(ast, {
+    ObjectProperty(path: NodePath<t.ObjectProperty>) {
+      // 检查是否是 slots 属性
+      if (t.isIdentifier(path.node.key, { name: 'slots' })) {
+        // 处理 TypeScript 类型断言的情况
+        if (t.isTSAsExpression(path.node.value)) {
+          const typeArguments = path.node.value.typeAnnotation;
+          if (t.isTSTypeReference(typeArguments) && typeArguments.typeParameters) {
+            const slotType = typeArguments.typeParameters.params[0];
+            if (t.isTSTypeLiteral(slotType)) {
+              slotType.members.forEach(member => {
+                if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
+                  slots.push({ name: member.key.name });
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+  });
+
   return slots;
 } 
