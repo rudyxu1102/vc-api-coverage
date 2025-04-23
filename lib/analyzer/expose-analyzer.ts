@@ -31,9 +31,9 @@ export function analyzeExpose(code: string): ExposeInfo[] {
     },
 
     CallExpression(path: NodePath<t.CallExpression>) {
-      // 查找 defineExpose({...})
+      // 查找 expose({...}) 调用
       if (
-        t.isIdentifier(path.node.callee, { name: 'defineExpose' }) &&
+        t.isIdentifier(path.node.callee, { name: 'expose' }) &&
         path.node.arguments.length > 0 &&
         t.isObjectExpression(path.node.arguments[0])
       ) {
@@ -51,12 +51,9 @@ export function analyzeExpose(code: string): ExposeInfo[] {
           // 处理 { ...spread }
           else if (t.isSpreadElement(prop)) {
             // 理论上可能需要解析 spread 的来源，但暂时简化
-            console.warn('[expose-analyzer] Spread syntax in defineExpose is not fully supported yet.');
+            console.warn('[expose-analyzer] Spread syntax in expose is not fully supported yet.');
           }
         });
-
-        // 假设一个组件只有一个 defineExpose 调用
-        path.stop();
       }
     },
   });

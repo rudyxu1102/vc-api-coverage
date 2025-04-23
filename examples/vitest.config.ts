@@ -24,4 +24,9 @@ export default defineConfig({
     // 指定测试文件查找目录，避免扫描项目根目录的 node_modules
     include: ['src/**/*.spec.ts', 'src/**/*.test.ts', 'src/**/*.spec.tsx', 'src/**/*.test.tsx'],
   },
+  css: {
+    modules: {
+      localsConvention: 'camelCase',
+    },
+  },
 }); 
