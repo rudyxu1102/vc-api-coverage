@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    /* Base Options */
+    "target": "ES2020", // 编译目标 JavaScript 版本
+    "module": "NodeNext", // 使用 Node.js 的现代模块系统
+    "lib": ["ES2020", "DOM"], // 包含的库定义 (DOM 用于 @vue/test-utils 等可能需要的类型)
+    "outDir": "./dist", // 输出目录
+    "rootDir": "./", // 源文件根目录
+    "strict": true, // 启用所有严格类型检查选项
+    "esModuleInterop": true, // 允许 CJS 和 ESM 互操作
+    "skipLibCheck": true, // 跳过库文件的类型检查，加快编译速度
+    "forceConsistentCasingInFileNames": true, // 强制文件名大小写一致
+    "resolveJsonModule": true, // 允许导入 JSON 文件
+    "moduleResolution": "NodeNext", // 模块解析策略
+    "jsx": "preserve", // 添加此行，让 Vite 处理 JSX 转换
+
+    /* Declaration Files */
+    "declaration": true, // 生成 .d.ts 文件
+    "declarationDir": "./dist/types", // .d.ts 文件输出目录
+
+    /* Source Maps */
+    "sourceMap": true, // 生成 .map 文件，方便调试
+
+    /* Type Checking */
+    "noUnusedLocals": true, // 报告未使用的局部变量
+    "noUnusedParameters": true, // 报告未使用的参数
+    "noImplicitReturns": true, // 报告并非所有代码路径都有返回值
+    "noFallthroughCasesInSwitch": true // 报告 switch 语句中的 fallthrough 情况
+  },
+  "include": [
+    "lib/**/*.ts", // 包含 lib 目录下的所有 .ts 文件
+    "reporters/**/*.ts" // 包含 reporters 目录下的所有 .ts 文件
+  ],
+  "exclude": [
+    "node_modules", // 排除 node_modules
+    "dist", // 排除输出目录
+    "examples" // 排除示例目录
+  ]
+} 
