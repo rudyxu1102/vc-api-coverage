@@ -50,20 +50,20 @@ The reporter will automatically generate coverage reports for your Vue 3 TSX com
    │                                                            │
    │   [Coverage Report for src/components/button/Button.tsx]   │
    │                                                            │
-   │   Props Coverage: 1 / 3 (33.3%)                           │
+   │   Props Coverage: 1 / 3 (33.3%)                            │
    │     label           ✅                                     │
    │     size            ❌                                     │
    │     disabled        ❌                                     │
    │                                                            │
-   │   Emits Coverage: 1 / 2 (50%)                             │
+   │   Emits Coverage: 1 / 2 (50%)                              │
    │     click           ✅                                     │
    │     hover           ❌                                     │
    │                                                            │
-   │   Slots Coverage: 1 / 2 (50%)                             │
+   │   Slots Coverage: 1 / 2 (50%)                              │
    │     default         ✅                                     │
    │     icon            ❌                                     │
    │                                                            │
-   │   Expose Coverage: 0 / 1 (0%)                             │
+   │   Expose Coverage: 0 / 1 (0%)                              │
    │     focus           ❌                                     │
    │                                                            │
    ╰────────────────────────────────────────────────────────────╯
