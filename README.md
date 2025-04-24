@@ -74,7 +74,7 @@ export default defineConfig({
 
 ## Example Output
 
-### CLI Format
+### 1. CLI Format
 ```
    ╭─────────────────── VC Coverage Reporter ───────────────────╮
    │                                                            │
@@ -99,7 +99,7 @@ export default defineConfig({
    ╰────────────────────────────────────────────────────────────╯
 ```
 
-### HTML Format
+### 2. HTML Format
 ![](./examples/src/assets/image.png)
 
 

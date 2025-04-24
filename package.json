@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "example": "npm run build && cd examples && vitest run && cd ."
+    "example": "npm run build && cd examples && vitest run && cd .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@vue/compiler-sfc": "^3.5.13",
     "open": "^10.1.1",
     "vue": "^3.3.0"
   },

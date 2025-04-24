@@ -53,6 +53,8 @@ export class HTMLReporter {
     const componentRows = this.generateComponentRows()
     const chartData = this.prepareChartData()
 
+    const noApiMessage = this.coverageData.length === 0 ? '<div class="text-center text-gray-500 mt-4">No API found</div>' : ''
+
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -104,6 +106,7 @@ export class HTMLReporter {
         <!-- Components Table -->
         <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-semibold mb-4">Component Details</h2>
+            ${noApiMessage}
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
@@ -157,10 +160,10 @@ export class HTMLReporter {
   private calculateOverallStats() {
     if (this.coverageData.length === 0) {
       return {
-        props: 0,
-        emits: 0,
-        slots: 0,
-        exposes: 0
+        props: 100,
+        emits: 100,
+        slots: 100,
+        exposes: 100
       }
     }
 
@@ -195,7 +198,7 @@ export class HTMLReporter {
         <h3 class="text-sm font-medium text-gray-500">Props Coverage</h3>
         <p class="mt-1">
           <span class="coverage-badge ${this.getCoverageBadgeClass(stats.props)}">
-            ${stats.props.toFixed(1)}%
+            Props Coverage: ${stats.props.toFixed(0)}%
           </span>
         </p>
       </div>
@@ -203,7 +206,7 @@ export class HTMLReporter {
         <h3 class="text-sm font-medium text-gray-500">Events Coverage</h3>
         <p class="mt-1">
           <span class="coverage-badge ${this.getCoverageBadgeClass(stats.emits)}">
-            ${stats.emits.toFixed(1)}%
+            Emits Coverage: ${stats.emits.toFixed(0)}%
           </span>
         </p>
       </div>
@@ -211,7 +214,7 @@ export class HTMLReporter {
         <h3 class="text-sm font-medium text-gray-500">Slots Coverage</h3>
         <p class="mt-1">
           <span class="coverage-badge ${this.getCoverageBadgeClass(stats.slots)}">
-            ${stats.slots.toFixed(1)}%
+            Slots Coverage: ${stats.slots.toFixed(0)}%
           </span>
         </p>
       </div>
@@ -219,7 +222,7 @@ export class HTMLReporter {
         <h3 class="text-sm font-medium text-gray-500">Methods Coverage</h3>
         <p class="mt-1">
           <span class="coverage-badge ${this.getCoverageBadgeClass(stats.exposes)}">
-            ${stats.exposes.toFixed(1)}%
+            Methods Coverage: ${stats.exposes.toFixed(0)}%
           </span>
         </p>
       </div>
@@ -227,34 +230,72 @@ export class HTMLReporter {
   }
 
   private generateComponentRows(): string {
-    return this.coverageData.map(component => `
-      <tr>
-        <td class="px-6 py-4 whitespace-nowrap">
-          <div class="text-sm font-medium text-gray-900">${component.name}</div>
-          <div class="text-sm text-gray-500">${component.file}</div>
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(component.props.covered / component.props.total * 100)}">
-            ${component.props.covered}/${component.props.total}
-          </span>
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(component.emits.covered / component.emits.total * 100)}">
-            ${component.emits.covered}/${component.emits.total}
-          </span>
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(component.slots.covered / component.slots.total * 100)}">
-            ${component.slots.covered}/${component.slots.total}
-          </span>
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(component.exposes.covered / component.exposes.total * 100)}">
-            ${component.exposes.covered}/${component.exposes.total}
-          </span>
-        </td>
-      </tr>
-    `).join('')
+    if (this.coverageData.length === 0) {
+      return `
+        <tr>
+          <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+            No API found
+          </td>
+        </tr>
+      `
+    }
+
+    return this.coverageData.map(component => {
+      const propsCoverage = component.props.total ? (component.props.covered / component.props.total * 100) : 100
+      const emitsCoverage = component.emits.total ? (component.emits.covered / component.emits.total * 100) : 100
+      const slotsCoverage = component.slots.total ? (component.slots.covered / component.slots.total * 100) : 100
+      const exposesCoverage = component.exposes.total ? (component.exposes.covered / component.exposes.total * 100) : 100
+
+      const hasNoApi = component.props.total === 0 && component.emits.total === 0 && 
+                      component.slots.total === 0 && component.exposes.total === 0
+
+      if (hasNoApi) {
+        return `
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-medium text-gray-900">${component.name}</div>
+              <div class="text-sm text-gray-500">${component.file}</div>
+            </td>
+            <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+              No API found
+            </td>
+          </tr>
+        `
+      }
+
+      return `
+        <tr>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="text-sm font-medium text-gray-900">${component.name}</div>
+            <div class="text-sm text-gray-500">${component.file}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="coverage-badge ${this.getCoverageBadgeClass(propsCoverage)}">
+              ${component.props.covered}/${component.props.total}
+              <span class="ml-1">(${propsCoverage.toFixed(0)}%)</span>
+            </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="coverage-badge ${this.getCoverageBadgeClass(emitsCoverage)}">
+              ${component.emits.covered}/${component.emits.total}
+              <span class="ml-1">(${emitsCoverage.toFixed(0)}%)</span>
+            </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="coverage-badge ${this.getCoverageBadgeClass(slotsCoverage)}">
+              ${component.slots.covered}/${component.slots.total}
+              <span class="ml-1">(${slotsCoverage.toFixed(0)}%)</span>
+            </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="coverage-badge ${this.getCoverageBadgeClass(exposesCoverage)}">
+              ${component.exposes.covered}/${component.exposes.total}
+              <span class="ml-1">(${exposesCoverage.toFixed(0)}%)</span>
+            </span>
+          </td>
+        </tr>
+      `
+    }).join('')
   }
 
   private prepareChartData() {

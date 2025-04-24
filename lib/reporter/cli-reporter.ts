@@ -30,6 +30,20 @@ export function generateCliReport(coverageData: TestCoverage, componentPath: str
   let report = ''
   report += chalk.bold(`[Coverage Report for ${componentPath}]`) + '\n\n';
 
+  // Check if the component has any API
+  if (coverageData.props.length === 0 && coverageData.emits.length === 0 && 
+      coverageData.slots.length === 0 && coverageData.exposes.length === 0) {
+    report += chalk.yellow('No API found') + '\n';
+    return boxen(report.trim(), {
+      padding: 1,
+      margin: 1,
+      borderStyle: 'round',
+      borderColor: 'cyan',
+      title: 'VC Coverage Reporter',
+      titleAlignment: 'center'
+    });
+  }
+
   report += chalk.underline(`Props Coverage: ${propsStats.covered} / ${propsStats.total} (${propsStats.percent}%)`) + '\n';
   report += formatCoverageResults(coverageData.props) + '\n\n';
 
@@ -43,11 +57,11 @@ export function generateCliReport(coverageData: TestCoverage, componentPath: str
   report += formatCoverageResults(coverageData.exposes);
 
   return boxen(report.trim(), {
-      padding: 1,
-      margin: 1,
-      borderStyle: 'round',
-      borderColor: 'cyan',
-      title: 'VC Coverage Reporter',
-      titleAlignment: 'center'
+    padding: 1,
+    margin: 1,
+    borderStyle: 'round',
+    borderColor: 'cyan',
+    title: 'VC Coverage Reporter',
+    titleAlignment: 'center'
   });
 } 
