@@ -84,7 +84,7 @@ export default defineConfig({
    │     size            ❌                                     │
    │     disabled        ❌                                     │
    │                                                            │
-   │   Events Coverage: 1 / 2 (50%)                              │
+   │   Events Coverage: 1 / 2 (50%)                             │
    │     click           ✅                                     │
    │     hover           ❌                                     │
    │                                                            │
@@ -92,7 +92,7 @@ export default defineConfig({
    │     default         ✅                                     │
    │     icon            ❌                                     │
    │                                                            │
-   │   Methods Coverage: 0 / 1 (0%)                              │
+   │   Methods Coverage: 0 / 1 (0%)                             │
    │     focus           ❌                                     │
    │                                                            │
    ╰────────────────────────────────────────────────────────────╯
