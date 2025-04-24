@@ -33,13 +33,13 @@ export function generateCliReport(coverageData: TestCoverage, componentPath: str
   report += chalk.underline(`Props Coverage: ${propsStats.covered} / ${propsStats.total} (${propsStats.percent}%)`) + '\n';
   report += formatCoverageResults(coverageData.props) + '\n\n';
 
-  report += chalk.underline(`Emits Coverage: ${emitsStats.covered} / ${emitsStats.total} (${emitsStats.percent}%)`) + '\n';
+  report += chalk.underline(`Events Coverage: ${emitsStats.covered} / ${emitsStats.total} (${emitsStats.percent}%)`) + '\n';
   report += formatCoverageResults(coverageData.emits) + '\n\n';
 
   report += chalk.underline(`Slots Coverage: ${slotsStats.covered} / ${slotsStats.total} (${slotsStats.percent}%)`) + '\n';
   report += formatCoverageResults(coverageData.slots) + '\n\n';
 
-  report += chalk.underline(`Expose Coverage: ${exposeStats.covered} / ${exposeStats.total} (${exposeStats.percent}%)`) + '\n';
+  report += chalk.underline(`Methods Coverage: ${exposeStats.covered} / ${exposeStats.total} (${exposeStats.percent}%)`) + '\n';
   report += formatCoverageResults(coverageData.exposes);
 
   return boxen(report.trim(), {

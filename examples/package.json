@@ -3,18 +3,19 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.3",
-    "@vitejs/plugin-vue-jsx": "^4.1.2",
-    "@vue/test-utils": "^2.4.6",
-    "jsdom": "^26.1.0",
-    "vitest": "^3.1.2",
-    "vue": "^3.5.13"
+    "@testing-library/jest-dom": "^6.6.3",
+    "@vitejs/plugin-vue": "^4.5.0",
+    "@vitejs/plugin-vue-jsx": "^3.1.0",
+    "@vue/test-utils": "^2.4.0",
+    "jsdom": "^22.1.0",
+    "vitest": "^0.34.0",
+    "vue": "^3.3.0"
   }
 }

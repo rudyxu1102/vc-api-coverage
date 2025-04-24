@@ -1,11 +1,11 @@
-# vc-coverage-reporter
+# Vue Component API Coverage (vc-api-coverage)
 
-A specialized Vitest reporter designed for Vue 3 TSX components that helps you track and improve your component API coverage. This tool analyzes and reports the usage coverage of your component's Props, Emits, Slots, and Exposed methods in your tests.
+A specialized Vitest reporter designed for Vue 3 TSX components that helps you track and improve your component API coverage. This tool analyzes and reports the usage coverage of your component's Props, Events, Slots, and Exposed methods in your tests.
 
 ## Features
 
 - 📊 Detailed coverage reporting for Vue 3 TSX components
-- ✨ Tracks Props, Emits, Slots, and Expose coverage
+- ✨ Tracks Props, Events, Slots, and Methods Coverage
 - 🎯 Visual representation of test coverage with emoji indicators
 - 🔍 Clear identification of untested component APIs
 - 📈 Coverage percentage calculation for each API category
@@ -13,11 +13,11 @@ A specialized Vitest reporter designed for Vue 3 TSX components that helps you t
 ## Installation
 
 ```bash
-npm install vc-coverage-reporter --save-dev
+npm install vc-api-coverage --save-dev
 # or
-yarn add -D vc-coverage-reporter
+yarn add -D vc-api-coverage
 # or
-pnpm add -D vc-coverage-reporter
+pnpm add -D vc-api-coverage
 ```
 
 ## Usage
@@ -30,7 +30,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    reporters: ['vc-coverage-reporter']
+    reporters: ['vc-api-coverage']
   }
 })
 ```
@@ -43,8 +43,37 @@ vitest
 
 The reporter will automatically generate coverage reports for your Vue 3 TSX components, showing which APIs are covered by your tests and which ones need attention.
 
+## Configuration
+
+The reporter supports several configuration options to customize its behavior:
+
+```ts
+// vitest.config.ts
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    reporters: [['vc-api-coverage', {
+      // File patterns to include in the coverage report
+      include: ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'],
+      
+      // Output directory for the coverage report
+      outputDir: 'coverage',
+      
+      // Report formats: 'cli', 'html', 'json'
+      // You can specify multiple formats: ['cli', 'html']
+      format: ['cli', 'html', 'json'],
+      
+      // Whether to open browser after generating HTML report
+      openBrowser: false
+    }]]
+  }
+})
+```
+
 ## Example Output
 
+### CLI Format
 ```
    ╭─────────────────── VC Coverage Reporter ───────────────────╮
    │                                                            │
@@ -55,7 +84,7 @@ The reporter will automatically generate coverage reports for your Vue 3 TSX com
    │     size            ❌                                     │
    │     disabled        ❌                                     │
    │                                                            │
-   │   Emits Coverage: 1 / 2 (50%)                              │
+   │   Events Coverage: 1 / 2 (50%)                             │
    │     click           ✅                                     │
    │     hover           ❌                                     │
    │                                                            │
@@ -63,11 +92,15 @@ The reporter will automatically generate coverage reports for your Vue 3 TSX com
    │     default         ✅                                     │
    │     icon            ❌                                     │
    │                                                            │
-   │   Expose Coverage: 0 / 1 (0%)                              │
+   │   Methods Coverage: 0 / 1 (0%)                             │
    │     focus           ❌                                     │
    │                                                            │
    ╰────────────────────────────────────────────────────────────╯
 ```
+
+### HTML Format
+![](./examples/src/assets/image.png)
+
 
 ## Understanding the Report
 
