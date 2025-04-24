@@ -1,4 +1,5 @@
-# Vue Component API Coverage (vc-api-coverage)
+# vc-api-coverage
+A Vue Component API Coverage Tool.
 
 A specialized Vitest reporter designed for Vue 3 TSX components that helps you track and improve your component API coverage. This tool analyzes and reports the usage coverage of your component's Props, Events, Slots, and Exposed methods in your tests.
 
