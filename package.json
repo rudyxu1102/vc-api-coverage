@@ -1,6 +1,6 @@
 {
-  "name": "vc-coverage-reporter",
-  "version": "1.0.0",
+  "name": "vc-api-reporter",
+  "version": "0.1.0",
   "description": "Vue Component API Coverage Reporter",
   "type": "module",
   "scripts": {
