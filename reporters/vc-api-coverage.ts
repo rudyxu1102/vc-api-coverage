@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
 import chalk from 'chalk';
+import open from 'open';
 
 import { analyzeProps } from '../lib/analyzer/props-analyzer.js';
 import { analyzeEmits } from '../lib/analyzer/emits-analyzer.js';
@@ -10,6 +11,9 @@ import { analyzeSlots } from '../lib/analyzer/slots-analyzer.js';
 import { analyzeExpose } from '../lib/analyzer/expose-analyzer.js';
 import { matchTestCoverage, ComponentAnalysis } from '../lib/matcher/test-coverage-matcher.js';
 import { generateCliReport } from '../lib/reporter/cli-reporter.js';
+import { HTMLReporter } from '../lib/reporter/html-reporter.js';
+import { JSONReporter } from '../lib/reporter/json-reporter.js';
+import { VcCoverageOptions, ReportFormat } from '../lib/types.js';
 
 // 默认组件文件匹配模式
 const DEFAULT_INCLUDE = ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'];
@@ -18,60 +22,91 @@ const DEFAULT_TEST_SUFFIXES = ['.spec.ts', '.test.ts', '.spec.tsx', '.test.tsx']
 
 export default class VcCoverageReporter implements Reporter {
   private ctx!: Vitest;
-  private options: any;
+  private options: VcCoverageOptions;
   private allReports: string[] = [];
+  private htmlReporter: HTMLReporter;
+  private jsonReporter: JSONReporter;
+  private coverageData: Array<{
+    name: string;
+    file: string;
+    props: {
+      total: number;
+      covered: number;
+      details: Array<{ name: string; covered: boolean }>;
+    };
+    emits: {
+      total: number;
+      covered: number;
+      details: Array<{ name: string; covered: boolean }>;
+    };
+    slots: {
+      total: number;
+      covered: number;
+      details: Array<{ name: string; covered: boolean }>;
+    };
+    exposes: {
+      total: number;
+      covered: number;
+      details: Array<{ name: string; covered: boolean }>;
+    };
+  }> = [];
 
-  constructor(options: any = {}) {
-    this.options = options;
+  constructor(options: VcCoverageOptions = {}) {
+    this.options = {
+      format: ['cli', 'html', 'json'],
+      outputDir: 'coverage',
+      openBrowser: false,
+      ...options
+    };
+
+    this.htmlReporter = new HTMLReporter(this.options.outputDir);
+    this.jsonReporter = new JSONReporter(this.options.outputDir);
   }
 
   onInit(ctx: Vitest): void {
     this.ctx = ctx;
-    console.log('\n[vc-coverage-reporter] Initialized.');
+    console.log('\n[vc-api-coverage] Initialized.');
   }
 
   async onFinished(_files?: File[], _errors?: unknown[]): Promise<void> {
-    console.log('[vc-coverage-reporter] Generating coverage report...');
+    console.log('[vc-api-coverage] Generating coverage report...');
     if (!this.ctx || !this.ctx.config) {
-      console.error(chalk.red('[vc-coverage-reporter] Error: Vitest context or config is not available.'));
+      console.error(chalk.red('[vc-api-coverage] Error: Vitest context or config is not available.'));
       return;
     }
     const rootDir = this.ctx.config.root;
-    console.log(`[vc-coverage-reporter] Vitest root directory: ${rootDir}`); // 打印 rootDir
+    console.log(`[vc-api-coverage] Vitest root directory: ${rootDir}`);
 
     const includeOption = this.options.include || DEFAULT_INCLUDE;
-    // 将 include 模式转换为相对于 rootDir 的模式
     const absoluteIncludePatterns = Array.isArray(includeOption)
       ? includeOption.map(pattern => path.join(rootDir, pattern))
       : [path.join(rootDir, includeOption)];
 
-    console.log(`[vc-coverage-reporter] Searching for component files using patterns: ${JSON.stringify(absoluteIncludePatterns)}`);
+    console.log(`[vc-api-coverage] Searching for component files using patterns: ${JSON.stringify(absoluteIncludePatterns)}`);
 
     const componentFiles = await fg(absoluteIncludePatterns, {
-      // cwd: rootDir, // 使用绝对模式时，cwd 可以省略或按需设置
       ignore: [
         '**/node_modules/**',
         '**/*.d.ts',
-        path.join(rootDir, '**/dist/**'), // 确保忽略 dist
-        ...DEFAULT_TEST_SUFFIXES.map(suffix => path.join(rootDir, `**/*${suffix}`)) // 忽略测试文件
+        path.join(rootDir, '**/dist/**'),
+        ...DEFAULT_TEST_SUFFIXES.map(suffix => path.join(rootDir, `**/*${suffix}`))
       ],
       absolute: true,
-      onlyFiles: true, // 确保只匹配文件
+      onlyFiles: true,
     });
 
-    console.log(`[vc-coverage-reporter] Found ${componentFiles.length} component files.`); // 打印找到的文件数
+    console.log(`[vc-api-coverage] Found ${componentFiles.length} component files.`);
 
     if (componentFiles.length === 0) {
-      // console.log('[vc-coverage-reporter] No component files found matching patterns:', absoluteIncludePatterns); // 已在上面打印
       return;
     }
 
     for (const componentPath of componentFiles) {
-      const relativeComponentPath = path.relative(rootDir, componentPath); // 用于查找测试和报告
-      const testPath = await this.findTestFile(componentPath); // findTestFile 基于 componentPath 操作
+      const relativeComponentPath = path.relative(rootDir, componentPath);
+      const testPath = await this.findTestFile(componentPath);
 
       if (!testPath) {
-        console.warn(chalk.yellow(`[vc-coverage-reporter] Skipping: No test file found for ${relativeComponentPath}`));
+        console.warn(chalk.yellow(`[vc-api-coverage] Skipping: No test file found for ${relativeComponentPath}`));
         continue;
       }
 
@@ -90,25 +125,63 @@ export default class VcCoverageReporter implements Reporter {
         const coverage = matchTestCoverage(analysis, testCode);
 
         // 3. 生成并存储报告
-        const report = generateCliReport(coverage, relativeComponentPath); // 报告中使用相对路径
+        const report = generateCliReport(coverage, relativeComponentPath);
         this.allReports.push(report);
 
+        // 4. 收集覆盖率数据
+        this.coverageData.push({
+          name: path.basename(relativeComponentPath),
+          file: relativeComponentPath,
+          props: {
+            total: coverage.props.length,
+            covered: coverage.props.filter(p => p.covered).length,
+            details: coverage.props
+          },
+          emits: {
+            total: coverage.emits.length,
+            covered: coverage.emits.filter(e => e.covered).length,
+            details: coverage.emits
+          },
+          slots: {
+            total: coverage.slots.length,
+            covered: coverage.slots.filter(s => s.covered).length,
+            details: coverage.slots
+          },
+          exposes: {
+            total: coverage.exposes.length,
+            covered: coverage.exposes.filter(e => e.covered).length,
+            details: coverage.exposes
+          }
+        });
+
       } catch (error: any) {
-        console.error(chalk.red(`[vc-coverage-reporter] Error processing file ${relativeComponentPath}:`), error.message);
+        console.error(chalk.red(`[vc-api-coverage] Error processing file ${relativeComponentPath}:`), error.message);
       }
     }
 
-    // 4. 打印所有报告
-    if (this.allReports.length > 0) {
+    // 5. 根据配置生成不同格式的报告
+    const format = this.options.format || [];
+    const shouldGenerateFormat = (f: ReportFormat) => format.includes(f);
+
+    if (shouldGenerateFormat('cli') && this.allReports.length > 0) {
       console.log('\n' + this.allReports.join('\n'));
-    } else {
-      console.log('[vc-coverage-reporter] No reports generated (after filtering).');
     }
 
-    // TODO: 实现 JSON 报告输出逻辑
-    // if (this.options.outputJson) { ... }
+    if (shouldGenerateFormat('html')) {
+      this.htmlReporter.setCoverageData(this.coverageData);
+      await this.htmlReporter.generateReport();
+      if (this.options.openBrowser) {
+        const htmlPath = path.join(process.cwd(), this.options.outputDir || 'coverage', 'index.html');
+        await open(htmlPath);
+      }
+    }
 
-    console.log('[vc-coverage-reporter] Report generation finished.');
+    if (shouldGenerateFormat('json')) {
+      this.jsonReporter.setCoverageData(this.coverageData);
+      await this.jsonReporter.generateReport();
+    }
+
+    console.log('[vc-api-coverage] Report generation finished.');
   }
 
   // 辅助函数：寻找测试文件

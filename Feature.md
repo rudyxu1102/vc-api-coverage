@@ -1,12 +1,12 @@
-# vc-coverage-reporter 需求文档
+# vc-api-coverage 需求文档
 
 ## 项目名称
 
-vc-coverage-reporter
+vc-api-coverage
 
 ## 项目目标
 
-`vc-coverage-reporter` 是一个 Vitest Reporter 插件，专为使用 TypeScript + TSX 编写的 Vue 3 组件设计。它会分析组件中公开 API（props、emits、slots、expose 方法）是否被测试覆盖，提升组件测试完整性和质量。
+`vc-api-coverage` 是一个 Vitest Reporter 插件，专为使用 TypeScript + TSX 编写的 Vue 3 组件设计。它会分析组件中公开 API（props、emits、slots、expose 方法）是否被测试覆盖，提升组件测试完整性和质量。
 
 ## 功能需求
 
@@ -25,7 +25,7 @@ vc-coverage-reporter
   const props = withDefaults(defineProps<Props>(), { size: 'md' })
   ```
 
-#### Emits 分析
+#### Events 分析
 
 - 支持以下形式：
   ```typescript
@@ -48,7 +48,7 @@ vc-coverage-reporter
 ### 测试覆盖分析功能
 
 - **Props**： 检查测试中是否通过 `mount(Component, { props })` 设置了对应 prop
-- **Emits**： 检查是否使用了 `wrapper.emitted('xxx')` 或 `expect(wrapper.emitted()).toHaveProperty('xxx')`
+- **Events**： 检查是否使用了 `wrapper.emitted('xxx')` 或 `expect(wrapper.emitted()).toHaveProperty('xxx')`
 - **Slots**： 检查 `mount(Component, { slots: { default: ..., icon: ... } })` 中是否传入对应插槽
 - **Expose**： 检查是否调用 `wrapper.vm.xxx()`，验证是否覆盖 exposed 方法
 
@@ -64,7 +64,7 @@ Props Coverage: 2 / 3 (66.7%)
   type    ✅
   disabled ❌
 
-Emits Coverage: 1 / 2 (50%)
+Events Coverage: 1 / 2 (50%)
   click   ✅
   hover   ❌
 
@@ -72,7 +72,7 @@ Slots Coverage: 1 / 2 (50%)
   default ✅
   icon    ❌
 
-Expose Coverage: 0 / 1 (0%)
+Methods Coverage: 0 / 1 (0%)
   focus   ❌
 ```
 
@@ -97,7 +97,7 @@ Expose Coverage: 0 / 1 (0%)
 
     export default defineConfig({
       test: {
-        reporters: ['default', './reporters/vc-coverage-reporter.ts'],
+        reporters: ['default', './reporters/vc-api-coverage.ts'],
       }
     })
     ```
@@ -111,9 +111,9 @@ Expose Coverage: 0 / 1 (0%)
 ## 项目结构建议
 
 ```
-vc-coverage-reporter/
+vc-api-coverage/
 ├── reporters/
-│   └── vc-coverage-reporter.ts
+│   └── vc-api-coverage.ts
 ├── lib/
 │   ├── analyzer/
 │   │   ├── props-analyzer.ts

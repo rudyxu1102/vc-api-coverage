@@ -12,17 +12,24 @@ export default defineConfig({
     vue(),
     vueJsx(), // 启用 JSX/TSX 支持
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   test: {
     globals: true, // 使用全局 API (describe, it, expect)
     environment: 'jsdom', // 模拟 DOM 环境
+    
     // 使用绝对路径
-    reporters: ['default', path.resolve(__dirname, '../dist/reporters/vc-coverage-reporter.js')], // 指向编译后的 JS 文件
-    // coverage: { // 标准的代码覆盖率配置（可选，但通常会一起使用）
-    //   provider: 'v8', // or 'istanbul'
-    //   reporter: ['text', 'json', 'html'],
-    // },
+    reporters: ['default', path.resolve(__dirname, '../dist/reporters/vc-api-coverage.js')], // 指向编译后的 JS 文件
+   
     // 指定测试文件查找目录，避免扫描项目根目录的 node_modules
-    include: ['src/**/*.spec.ts', 'src/**/*.test.ts', 'src/**/*.spec.tsx', 'src/**/*.test.tsx'],
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    deps: {
+      inline: [/vue/, /@vue/],
+    },
+    root: '.',
   },
   css: {
     modules: {
