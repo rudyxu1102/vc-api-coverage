@@ -20,7 +20,7 @@ export default defineComponent({
       hover: null // 无验证器
   },
 
-  expose: ['focus'],
+  expose: ['focus'] as any,
 
   methods: {
     handleClick(event: MouseEvent) {
@@ -29,7 +29,7 @@ export default defineComponent({
       }
     },
     focus() {
-      this.$refs.buttonRef?.focus();
+      (this.$refs.buttonRef as HTMLButtonElement)?.focus();
     },
   },
 

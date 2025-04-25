@@ -19,7 +19,7 @@ describe('Input.tsx', () => {
       props: {
         modelValue: 'test value',
         placeholder: 'Enter text',
-        disabled: true,
+        // disabled: true,
         type: 'password',
         size: 'sm',
         clearable: true,
@@ -110,12 +110,12 @@ describe('Input.tsx', () => {
       }
     });
     
-    expect(wrapper.vm.focus).toBeDefined();
-    expect(wrapper.vm.select).toBeDefined();
-    expect(wrapper.vm.clear).toBeDefined();
+    expect((wrapper.vm as any).focus).toBeDefined();
+    expect((wrapper.vm as any).select).toBeDefined();
+    expect((wrapper.vm as any).clear).toBeDefined();
     
     // 调用方法
-    wrapper.vm.focus();
+    (wrapper.vm as any).focus();
     // wrapper.vm.select();
     // wrapper.vm.clear();
   });

@@ -7,12 +7,7 @@ import { fileURLToPath } from 'url'; // 用于获取 __dirname 在 ESM 中的等
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 定义一个单独的pluginArray变量，规避TypeScript的直接类型检查
-const pluginArray = [vue(), vueJsx()];
-
 export default defineConfig({
-  // @ts-ignore - 忽略类型检查以解决不同版本Vite插件的类型冲突问题
-  plugins: pluginArray,
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

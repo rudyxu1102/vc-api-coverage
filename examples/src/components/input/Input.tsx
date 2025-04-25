@@ -1,4 +1,6 @@
 import { defineComponent, ref, computed, SlotsType, VNode } from 'vue';
+import type { CSSProperties } from 'vue';
+
 
 export default defineComponent({
   name: 'MyInput',
@@ -78,7 +80,7 @@ export default defineComponent({
       backgroundColor: props.disabled ? '#f5f7fa' : undefined,
       borderColor: props.disabled ? '#e4e7ed' : undefined,
       cursor: props.disabled ? 'not-allowed' : undefined,
-    };
+    } as CSSProperties;
 
     const inputStyle = {
       border: 'none',
