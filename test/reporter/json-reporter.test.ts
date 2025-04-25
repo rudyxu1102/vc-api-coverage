@@ -57,7 +57,6 @@ describe('json-reporter', () => {
     await reporter.generateReport()
 
     const jsonPath = path.join(testOutputDir, 'coverage.json')
-    console.log(jsonPath, 123)
     const jsonContent = JSON.parse(await fs.readFile(jsonPath, 'utf-8'))
 
     expect(jsonContent).toEqual({

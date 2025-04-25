@@ -206,8 +206,7 @@ export function analyzeExpose(code: string): string[] {
     ObjectProperty(path) {
       if (
         t.isIdentifier(path.node.key) &&
-        path.node.key.name === 'expose' &&
-        !inSetupContext
+        path.node.key.name === 'expose'
       ) {
         hasExplicitExpose = true
         hasOptionsExpose = true
@@ -231,7 +230,7 @@ export function analyzeExpose(code: string): string[] {
 
     // Handle setup function return value
     ReturnStatement(path) {
-      if (inSetupContext && !hasExplicitExpose) {
+      if (inSetupContext && !hasExplicitExpose && !hasOptionsExpose) {
         const argument = path.node.argument
         if (t.isObjectExpression(argument)) {
           argument.properties.forEach(prop => {
@@ -257,21 +256,14 @@ export function analyzeExpose(code: string): string[] {
     }
   })
 
+  // If options expose is found, return only those properties
+  if (hasOptionsExpose) {
+    return optionsExposeOrder
+  }
+
   // If no explicit expose is found, return all properties from setup return
   if (!hasExplicitExpose && exposeOrder.length > 0) {
     return exposeOrder
-  }
-
-  // If options expose is found, combine it with other exposed properties
-  if (hasOptionsExpose) {
-    // Combine options expose with other exposed properties
-    const allExposed = [...optionsExposeOrder]
-    exposeOrder.forEach(name => {
-      if (!optionsExpose.has(name)) {
-        allExposed.push(name)
-      }
-    })
-    return allExposed
   }
 
   return exposeOrder
