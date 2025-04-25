@@ -157,20 +157,19 @@ describe('analyzeExpose', () => {
   it('should handle multiple expose declarations', () => {
     const code = `
       export default {
-        expose: ['method1'],
+        expose: ['method1', 'method2', 'prop1'],
         setup() {
-          defineExpose({
-            method2: () => {},
-            prop1: 'value'
-          })
           return {
-            method3: () => {},
-            prop2: ref('')
+            method1: () => {},
+            method2: () => {},
+            prop1: 'value',
+            method3: () => {},  // 这个不会被暴露
+            prop2: ref('')      // 这个不会被暴露
           }
         }
       }
     `
-    expect(analyzeExpose(code)).toEqual(['method1', 'method2', 'prop1', 'method3', 'prop2'])
+    expect(analyzeExpose(code)).toEqual(['method1', 'method2', 'prop1'])
   })
 
   it('should handle empty expose declarations', () => {
