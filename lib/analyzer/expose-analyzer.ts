@@ -229,31 +229,50 @@ export function analyzeExpose(code: string): string[] {
       }
     },
 
-    // Handle setup function return
+    // Handle setup function return value
     ReturnStatement(path) {
-      if (inSetupContext && !hasOptionsExpose && !hasExplicitExpose) {
-        const arg = path.node.argument
-        if (t.isObjectExpression(arg)) {
-          arg.properties.forEach(prop => {
+      if (inSetupContext && !hasExplicitExpose) {
+        const argument = path.node.argument
+        if (t.isObjectExpression(argument)) {
+          argument.properties.forEach(prop => {
             if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
               addExposedProperty(prop)
             }
           })
+        } else if (t.isIdentifier(argument)) {
+          // Handle case where an identifier is returned
+          const binding = path.scope.getBinding(argument.name)
+          if (binding && t.isVariableDeclarator(binding.path.node)) {
+            const init = binding.path.node.init
+            if (t.isObjectExpression(init)) {
+              init.properties.forEach(prop => {
+                if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
+                  addExposedProperty(prop)
+                }
+              })
+            }
+          }
         }
       }
     }
   })
 
-  // 如果有 options expose，只返回 options expose 中的属性
-  if (hasOptionsExpose) {
-    return optionsExposeOrder
-  }
-
-  // 如果有显式的 defineExpose，只返回 defineExpose 中的属性
-  if (hasExplicitExpose) {
+  // If no explicit expose is found, return all properties from setup return
+  if (!hasExplicitExpose && exposeOrder.length > 0) {
     return exposeOrder
   }
 
-  // 如果既没有 options expose 也没有显式的 defineExpose，返回 setup 返回的属性
+  // If options expose is found, combine it with other exposed properties
+  if (hasOptionsExpose) {
+    // Combine options expose with other exposed properties
+    const allExposed = [...optionsExposeOrder]
+    exposeOrder.forEach(name => {
+      if (!optionsExpose.has(name)) {
+        allExposed.push(name)
+      }
+    })
+    return allExposed
+  }
+
   return exposeOrder
 } 
