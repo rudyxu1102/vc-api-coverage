@@ -1,10 +1,13 @@
 import { defineComponent, ref, SlotsType, VNode } from 'vue';
-import { buttonProps } from './props.ts';
 
 export default defineComponent({
   name: 'MyButton',
 
-  props: buttonProps,
+  props: {
+    label: { type: String, required: true },
+    size: { type: String, default: 'md' },
+    disabled: { type: Boolean, default: false },
+  },
 
   slots: Object as SlotsType<{
     default?: () => VNode[];

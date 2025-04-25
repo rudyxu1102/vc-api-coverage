@@ -43,6 +43,34 @@ describe('expose-analyzer', () => {
     expect(exposed).toEqual(['getValue', 'increment'])
   })
 
+  it('should analyze expose in TSX component with expose', () => {
+    const code = `
+      export default defineComponent({
+        setup(props, { expose }) {
+          const focus = () => {
+            console.log('focus')
+          }
+          const blur = () => {
+            console.log('blur')
+          }
+          const state = reactive({
+            value: 0
+          })
+          expose({
+            focus,
+            blur
+          })
+          
+          return {
+            state
+          }
+        }
+      })
+    `
+    const exposed = analyzeExpose(code)
+    expect(exposed).toEqual(['focus', 'blur'])
+  })
+
   it('should analyze expose with type annotations', () => {
     const code = `
       <script setup lang="ts">

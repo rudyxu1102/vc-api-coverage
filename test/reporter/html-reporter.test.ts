@@ -7,7 +7,13 @@ describe('html-reporter', () => {
   const testOutputDir = 'test-coverage'
   let reporter: HTMLReporter
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Make sure the test directory exists before running tests
+    try {
+      await fs.mkdir(testOutputDir, { recursive: true });
+    } catch (error) {
+      // Ignore if directory exists
+    }
     reporter = new HTMLReporter(testOutputDir)
   })
 

@@ -7,7 +7,16 @@ export interface ExposeInfo {
   name: string;
 }
 
+// Add a debug helper function
+function logDebug(message: string, data?: any) {
+  if (process.env.DEBUG_EXPOSE === 'true') {
+    console.log(`[DEBUG] ${message}`, data !== undefined ? JSON.stringify(data, null, 2) : '')
+  }
+}
+
 export function analyzeExpose(code: string): string[] {
+  logDebug('Analyzing code', code)
+  
   // Extract script content from SFC with better handling of setup and TS
   let scriptContent = code
   const setupScriptMatch = code.match(/<script\s+setup\s*(?:lang="ts")?\s*>([\s\S]*?)<\/script>/i)
@@ -46,6 +55,53 @@ export function analyzeExpose(code: string): string[] {
   let inSetupContext = setupScriptMatch !== null
   let hasExplicitExpose = false
   let hasOptionsExpose = false
+
+  // Special handling for TSX component with expose context parameter
+  const hasExposeContextCall = code.includes('expose({') && 
+                             (code.includes('setup(props, { expose })') || 
+                              code.includes('{ expose }') || 
+                              code.includes('context.expose'))
+  if (hasExposeContextCall) {
+    logDebug('Detected expose context call')
+    const matches = code.match(/expose\(\s*\{([^}]+)\}\s*\)/g)
+    if (matches && matches.length > 0) {
+      logDebug('Found expose calls', matches)
+      for (const match of matches) {
+        const propsStr = match.replace(/expose\(\s*\{/, '').replace(/\}\s*\)/, '')
+        const propMatches = propsStr.match(/(\w+),?/g)
+        if (propMatches) {
+          for (const prop of propMatches) {
+            const cleanProp = prop.replace(/,/g, '').trim()
+            if (cleanProp && !exposed.has(cleanProp)) {
+              logDebug('Adding exposed property', cleanProp)
+              exposed.add(cleanProp)
+              exposeOrder.push(cleanProp)
+              hasExplicitExpose = true
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Special handling for TSX component with expose option as an array
+  const exposeArrayMatch = code.match(/expose\s*:\s*\[\s*(['"][\w\s]+['"]|[\w\s]+),?\s*(['"][\w\s]+['"]|[\w\s]+)?\s*\]/g)
+  if (exposeArrayMatch) {
+    for (const match of exposeArrayMatch) {
+      const cleanMatch = match.replace(/expose\s*:\s*\[\s*/, '').replace(/\s*\]/, '')
+      const exposeItems = cleanMatch.split(',').map(item => item.trim().replace(/['"]/g, ''))
+      for (const item of exposeItems) {
+        if (item && !optionsExpose.has(item)) {
+          optionsExpose.add(item)
+          optionsExposeOrder.push(item)
+          hasOptionsExpose = true
+        }
+      }
+    }
+    if (hasOptionsExpose) {
+      return optionsExposeOrder;
+    }
+  }
 
   function addExposedProperty(prop: t.ObjectProperty | t.ObjectMethod | t.TSPropertySignature | t.Identifier | t.StringLiteral | t.TSTypeElement | t.SpreadElement, isOptionsExpose = false) {
     let name: string | null = null
@@ -141,6 +197,35 @@ export function analyzeExpose(code: string): string[] {
       enter(path) {
         if (t.isIdentifier(path.node.key) && path.node.key.name === 'setup') {
           inSetupContext = true
+          // Check for expose in setup params
+          if (path.node.params.length >= 2) {
+            const secondParam = path.node.params[1]
+            if (t.isObjectPattern(secondParam)) {
+              const exposeBinding = secondParam.properties.find(
+                prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
+              )
+              if (exposeBinding && t.isObjectProperty(exposeBinding) && t.isIdentifier(exposeBinding.value)) {
+                const exposeName = exposeBinding.value.name
+                path.scope.traverse(path.node, {
+                  CallExpression(callPath) {
+                    if (t.isIdentifier(callPath.node.callee) && callPath.node.callee.name === exposeName) {
+                      const arg = callPath.node.arguments[0]
+                      if (t.isObjectExpression(arg)) {
+                        hasExplicitExpose = true
+                        arg.properties.forEach(prop => {
+                          if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
+                            addExposedProperty(prop)
+                          } else if (t.isSpreadElement(prop)) {
+                            addExposedProperty(prop)
+                          }
+                        })
+                      }
+                    }
+                  }
+                })
+              }
+            }
+          }
         }
       },
       exit(path) {
@@ -188,12 +273,83 @@ export function analyzeExpose(code: string): string[] {
               }
             }
           }
-        } else if (path.node.callee.name === 'expose' && path.node.arguments.length > 0) {
+        } else if (path.node.callee.name === 'defineComponent') {
+          const arg = path.node.arguments[0]
+          if (t.isObjectExpression(arg)) {
+            // Check for expose option in the component options
+            const exposeProp = arg.properties.find(
+              prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
+            )
+            
+            if (exposeProp && t.isObjectProperty(exposeProp)) {
+              hasExplicitExpose = true
+              hasOptionsExpose = true
+              
+              const value = exposeProp.value
+              if (t.isArrayExpression(value)) {
+                value.elements.forEach(element => {
+                  if (t.isStringLiteral(element) || t.isIdentifier(element)) {
+                    addExposedProperty(element, true)
+                  }
+                })
+              }
+            }
+            
+            const setupProp = arg.properties.find(
+              prop => (t.isObjectMethod(prop) || t.isObjectProperty(prop)) && 
+                     t.isIdentifier(prop.key) && 
+                     prop.key.name === 'setup'
+            )
+            
+            if (setupProp) {
+              let setupFunction;
+              if (t.isObjectMethod(setupProp)) {
+                setupFunction = setupProp;
+              } else if (t.isObjectProperty(setupProp) && t.isFunctionExpression(setupProp.value)) {
+                setupFunction = setupProp.value;
+              } else if (t.isObjectProperty(setupProp) && t.isArrowFunctionExpression(setupProp.value)) {
+                setupFunction = setupProp.value;
+              }
+              
+              if (setupFunction && setupFunction.params && setupFunction.params.length >= 2) {
+                const secondParam = setupFunction.params[1]
+                if (t.isObjectPattern(secondParam)) {
+                  const exposeBinding = secondParam.properties.find(
+                    prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
+                  )
+                  if (exposeBinding && t.isObjectProperty(exposeBinding) && t.isIdentifier(exposeBinding.value)) {
+                    const exposeName = exposeBinding.value.name
+                    
+                    path.traverse({
+                      CallExpression(callPath) {
+                        if (t.isIdentifier(callPath.node.callee) && callPath.node.callee.name === exposeName) {
+                          const arg = callPath.node.arguments[0]
+                          if (t.isObjectExpression(arg)) {
+                            hasExplicitExpose = true
+                            arg.properties.forEach(prop => {
+                              if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
+                                addExposedProperty(prop)
+                              } else if (t.isSpreadElement(prop)) {
+                                addExposedProperty(prop)
+                              }
+                            })
+                          }
+                        }
+                      }
+                    })
+                  }
+                }
+              }
+            }
+          }
+        } else if (path.node.callee.name === 'expose') {
           hasExplicitExpose = true
           const arg = path.node.arguments[0]
           if (t.isObjectExpression(arg)) {
             arg.properties.forEach(prop => {
               if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
+                addExposedProperty(prop)
+              } else if (t.isSpreadElement(prop)) {
                 addExposedProperty(prop)
               }
             })
@@ -256,6 +412,11 @@ export function analyzeExpose(code: string): string[] {
     }
   })
 
+  // If special handling already captured exposed properties, return them
+  if (hasExplicitExpose && exposeOrder.length > 0) {
+    return exposeOrder
+  }
+  
   // If options expose is found, return only those properties
   if (hasOptionsExpose) {
     return optionsExposeOrder
