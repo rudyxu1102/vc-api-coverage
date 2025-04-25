@@ -124,7 +124,12 @@ export function analyzeSlots(code: string): string[] {
 
   // 只有在模板中找到插槽时才添加默认插槽
   if (hasTemplateSlots && !slots.has('default')) {
-    slots.add('default')
+    // 检查模板中是否有不带 name 属性的 slot 标签
+    const templateContent = extractTemplateContent(code)
+    const hasDefaultSlot = /<slot(?!\s+[^>]*?(?:name|:name|v-bind:name)=["'][^"']+["'])[^>]*?>/.test(templateContent)
+    if (hasDefaultSlot) {
+      slots.add('default')
+    }
   }
 
   // 返回排序后的数组

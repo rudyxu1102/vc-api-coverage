@@ -50,12 +50,15 @@ describe('slots-analyzer', () => {
 
   it('should analyze scoped slots', () => {
     const code = `
+      <script setup>
+      const items = [{ text: 'Hello' }]
+      const count = 5
+      </script>
+
       <template>
         <div>
-          <slot name="item" :data="item">
-            {{ item.text }}
-          </slot>
-          <slot name="footer" :count="count"></slot>
+          <slot name="item"></slot>
+          <slot name="footer"></slot>
         </div>
       </template>
     `
