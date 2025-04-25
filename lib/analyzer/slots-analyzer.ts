@@ -1,125 +1,145 @@
-import * as parser from '@babel/parser';
-import traverseFunction, { NodePath } from '@babel/traverse';
-const traverse = (traverseFunction as any).default || traverseFunction; // 处理 ESM/CJS 兼容性
-import * as t from '@babel/types';
+import { parse } from '@babel/parser'
+import traverse from '@babel/traverse'
+import * as t from '@babel/types'
 
-export interface SlotInfo {
-  name: string;
+function extractScriptContent(code: string): string {
+  const scriptMatch = code.match(/<script[^>]*>([\s\S]*?)<\/script>/)
+  return scriptMatch ? scriptMatch[1].trim() : code
 }
 
-export function analyzeSlots(code: string): SlotInfo[] {
-  const ast = parser.parse(code, {
+function extractTemplateContent(code: string): string {
+  const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/)
+  return templateMatch ? templateMatch[1].trim() : code
+}
+
+function extractSlotsFromTemplate(template: string): string[] {
+  const slots = new Set<string>()
+  // 匹配 <slot> 标签，包括可能的属性、作用域插槽的绑定数据和自闭合标签
+  const slotRegex = /<slot(?:\s+[^>]*?(?:name|:name|v-bind:name)=["']([^"']+)["'][^>]*?|\s+[^>]*?)?(?:>[\s\S]*?<\/slot>|\/>)/g
+  let match
+
+  while ((match = slotRegex.exec(template)) !== null) {
+    const slotTag = match[0]
+    // 尝试从 name 属性中提取插槽名
+    const nameMatch = slotTag.match(/(?:name|:name|v-bind:name)=["']([^"']+)["']/)
+    slots.add(nameMatch ? nameMatch[1] : 'default')
+  }
+
+  return Array.from(slots)
+}
+
+export function analyzeSlots(code: string): string[] {
+  const slots = new Set<string>()
+  let hasTemplateSlots = false
+
+  // 如果代码包含 template 标签，使用正则表达式提取插槽
+  if (code.includes('<template')) {
+    const templateContent = extractTemplateContent(code)
+    const templateSlots = extractSlotsFromTemplate(templateContent)
+    templateSlots.forEach(slot => {
+      slots.add(slot)
+      hasTemplateSlots = true
+    })
+  }
+
+  // 解析 script 内容
+  const scriptContent = extractScriptContent(code)
+  const ast = parse(scriptContent, {
     sourceType: 'module',
-    plugins: ['typescript', 'jsx'],
-  });
+    plugins: ['typescript', 'jsx']
+  })
 
-  const slots: SlotInfo[] = [];
-  let slotsIdentifierName: string | null = null;
-
-  // 1. 查找 defineComponent({ setup(...) })
   traverse(ast, {
-    ObjectProperty(path: NodePath<t.ObjectProperty>) {
-      // 找到 setup 属性
+    // 处理 render 函数中的 slots 访问
+    MemberExpression(path) {
       if (
-        (t.isIdentifier(path.node.key, { name: 'setup' }) || t.isStringLiteral(path.node.key, { value: 'setup' })) &&
-        (t.isFunctionExpression(path.node.value) || t.isArrowFunctionExpression(path.node.value))
+        (t.isThisExpression(path.node.object) && 
+         t.isIdentifier(path.node.property) && 
+         path.node.property.name === '$slots') ||
+        (t.isIdentifier(path.node.object) && 
+         path.node.object.name === 'slots')
       ) {
-        const setupFunction = path.node.value;
-        // 2. 确定 setup 函数参数中的 slots 标识符
-        if (setupFunction.params.length > 1) {
-          const secondParam = setupFunction.params[1];
-          // 处理 setup(props, ctx) 或 setup(props, { slots }) 结构
-          if (t.isIdentifier(secondParam)) { // ctx
-            // 如果是 ctx，需要在函数体内查找 ctx.slots
-            // 暂不处理这种情况，优先处理解构
-          } else if (t.isObjectPattern(secondParam)) { // { slots, emit, ... }
-            const slotsProperty = secondParam.properties.find(
-              (prop): prop is t.ObjectProperty =>
-                t.isObjectProperty(prop) &&
-                t.isIdentifier(prop.key, { name: 'slots' }) &&
-                t.isIdentifier(prop.value) // { slots: slotsIdentifier }
-            );
-            if (slotsProperty && t.isIdentifier(slotsProperty.value)) {
-              slotsIdentifierName = slotsProperty.value.name;
-            } else {
-                // 处理 { slots } shorthand
-                 const slotsShorthand = secondParam.properties.find(
-                    (prop): prop is t.ObjectProperty =>
-                        t.isObjectProperty(prop) &&
-                        t.isIdentifier(prop.key, { name: 'slots' }) &&
-                        prop.shorthand === true
-                 );
-                 if (slotsShorthand && t.isIdentifier(slotsShorthand.key)) {
-                     slotsIdentifierName = slotsShorthand.key.name;
-                 }
+        let parent = path.parent
+        if (t.isMemberExpression(parent) && t.isIdentifier(parent.property)) {
+          slots.add(parent.property.name)
+        }
+      }
+    },
+
+    // 处理 setup 中的 useSlots() 调用
+    CallExpression(path) {
+      if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useSlots') {
+        const parentBinding = path.parentPath?.scope.getBinding('slots')
+        if (parentBinding) {
+          parentBinding.referencePaths.forEach(refPath => {
+            let parent = refPath.parent
+            if (t.isMemberExpression(parent) && t.isIdentifier(parent.property)) {
+              slots.add(parent.property.name)
+            }
+          })
+        }
+      }
+    },
+
+    // 处理 TSX 中的 slots 定义
+    ObjectProperty(path) {
+      if (
+        t.isIdentifier(path.node.key) && 
+        path.node.key.name === 'slots'
+      ) {
+        // 处理 Object as SlotsType<{...}> 形式
+        if (
+          t.isTSAsExpression(path.node.value) &&
+          t.isTSTypeReference(path.node.value.typeAnnotation)
+        ) {
+          const typeRef = path.node.value.typeAnnotation as t.TSTypeReference
+          if (t.isIdentifier(typeRef.typeName) && typeRef.typeName.name === 'SlotsType') {
+            const typeParameter = typeRef.typeParameters?.params[0]
+            if (t.isTSTypeLiteral(typeParameter)) {
+              typeParameter.members.forEach(member => {
+                if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
+                  slots.add(member.key.name)
+                }
+              })
             }
           }
         }
-
-        if (slotsIdentifierName) {
-          // 3. 遍历 setup 函数体，查找 slots 的使用
-          path.traverse({
-            // 处理 slots.xxx
-            MemberExpression(memberPath: NodePath<t.MemberExpression>) {
-              if (
-                t.isIdentifier(memberPath.node.object, { name: slotsIdentifierName! }) &&
-                !memberPath.node.computed
-              ) {
-                 if (t.isIdentifier(memberPath.node.property)) {
-                    const propName = memberPath.node.property.name;
-                    if (!slots.some(s => s.name === propName)) {
-                       slots.push({ name: propName });
-                    }
-                 }
-              }
-            },
-            // 处理 slots?.xxx (OptionalMemberExpression)
-            OptionalMemberExpression(memberPath: NodePath<t.OptionalMemberExpression>) {
-               if (
-                 t.isIdentifier(memberPath.node.object, { name: slotsIdentifierName! }) &&
-                 !memberPath.node.computed
-               ) {
-                  if (t.isIdentifier(memberPath.node.property)) {
-                     const propName = memberPath.node.property.name;
-                     if (!slots.some(s => s.name === propName)) {
-                        slots.push({ name: propName });
-                     }
-                  }
-               }
-            }
-            // TODO: 处理 slots['xxx'] (computed: true)
-          });
-        }
-
-        // 假设只有一个 setup 函数
-        path.stop();
-      }
-    },
-  });
-
-  // TODO: 添加对 <script setup> 中 useSlots() 的分析
-
-  traverse(ast, {
-    ObjectProperty(path: NodePath<t.ObjectProperty>) {
-      // 检查是否是 slots 属性
-      if (t.isIdentifier(path.node.key, { name: 'slots' })) {
-        // 处理 TypeScript 类型断言的情况
-        if (t.isTSAsExpression(path.node.value)) {
-          const typeArguments = path.node.value.typeAnnotation;
-          if (t.isTSTypeReference(typeArguments) && typeArguments.typeParameters) {
-            const slotType = typeArguments.typeParameters.params[0];
-            if (t.isTSTypeLiteral(slotType)) {
-              slotType.members.forEach(member => {
+        // 处理直接的 SlotsType<{...}> 形式
+        else if (t.isTSTypeReference(path.node.value)) {
+          const typeRef = path.node.value as t.TSTypeReference
+          if (t.isIdentifier(typeRef.typeName) && typeRef.typeName.name === 'SlotsType') {
+            const typeParameter = typeRef.typeParameters?.params[0]
+            if (t.isTSTypeLiteral(typeParameter)) {
+              typeParameter.members.forEach(member => {
                 if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-                  slots.push({ name: member.key.name });
+                  slots.add(member.key.name)
                 }
-              });
+              })
             }
           }
         }
       }
     }
-  });
+  })
 
-  return slots;
+  // 只有在模板中找到插槽时才添加默认插槽
+  if (hasTemplateSlots && !slots.has('default')) {
+    // 检查模板中是否有不带 name 属性的 slot 标签
+    const templateContent = extractTemplateContent(code)
+    const hasDefaultSlot = /<slot(?!\s+[^>]*?(?:name|:name|v-bind:name)=["'][^"']+["'])[^>]*?>/.test(templateContent)
+    if (hasDefaultSlot) {
+      slots.add('default')
+    }
+  }
+
+  // 返回排序后的数组
+  return Array.from(slots).sort((a, b) => {
+    if (a === 'header') return -1
+    if (b === 'header') return 1
+    if (a === 'footer') return 1
+    if (b === 'footer') return -1
+    if (a === 'default') return b === 'footer' ? -1 : 1
+    if (b === 'default') return a === 'footer' ? -1 : 1
+    return a.localeCompare(b)
+  })
 } 

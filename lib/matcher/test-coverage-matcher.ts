@@ -2,17 +2,13 @@ import * as parser from '@babel/parser';
 import traverseFunction, { NodePath } from '@babel/traverse';
 const traverse = (traverseFunction as any).default || traverseFunction;
 import * as t from '@babel/types';
-import { PropInfo } from '../analyzer/props-analyzer.js';
-import { EmitInfo } from '../analyzer/emits-analyzer.js';
-import { SlotInfo } from '../analyzer/slots-analyzer.js';
-import { ExposeInfo } from '../analyzer/expose-analyzer.js';
 
 // 输入接口：包含组件分析结果
 export interface ComponentAnalysis {
-  props: PropInfo[];
-  emits: EmitInfo[];
-  slots: SlotInfo[];
-  exposes: ExposeInfo[];
+  props: string[];
+  emits: string[];
+  slots: string[];
+  exposes: string[];
 }
 
 // 输出接口：描述每个 API 的覆盖状态
@@ -47,7 +43,6 @@ export function matchTestCoverage(
     CallExpression(path: NodePath<t.CallExpression>) {
       // 1. 查找 mount(Component, { props: {...}, slots: {...} })
       if (t.isIdentifier(path.node.callee, { name: 'mount' }) && path.node.arguments.length > 1) {
-        // TODO: 需要更精确地匹配 Component 参数，可能需要 componentIdentifier
         const optionsArgument = path.node.arguments[1];
         if (t.isObjectExpression(optionsArgument)) {
           // 查找 props
@@ -56,9 +51,10 @@ export function matchTestCoverage(
           );
           if (propsProperty && t.isObjectExpression(propsProperty.value)) {
             propsProperty.value.properties.forEach(p => {
-              if (t.isObjectProperty(p) && t.isIdentifier(p.key)) foundProps.add(p.key.name);
-              else if (t.isObjectProperty(p) && t.isStringLiteral(p.key)) foundProps.add(p.key.value);
-              // 暂不处理 shorthand, spread
+              if (t.isObjectProperty(p)) {
+                if (t.isIdentifier(p.key)) foundProps.add(p.key.name);
+                else if (t.isStringLiteral(p.key)) foundProps.add(p.key.value);
+              }
             });
           }
 
@@ -68,8 +64,10 @@ export function matchTestCoverage(
           );
           if (slotsProperty && t.isObjectExpression(slotsProperty.value)) {
             slotsProperty.value.properties.forEach(s => {
-              if (t.isObjectProperty(s) && t.isIdentifier(s.key)) foundSlots.add(s.key.name);
-              else if (t.isObjectProperty(s) && t.isStringLiteral(s.key)) foundSlots.add(s.key.value);
+              if (t.isObjectProperty(s)) {
+                if (t.isIdentifier(s.key)) foundSlots.add(s.key.name);
+                else if (t.isStringLiteral(s.key)) foundSlots.add(s.key.value);
+              }
             });
           }
         }
@@ -82,60 +80,57 @@ export function matchTestCoverage(
           foundEmits.add(path.node.arguments[0].value);
         }
       } else if (t.isIdentifier(path.node.callee, { name: 'expect' })) {
-         // expect(wrapper.emitted())...
-         const arg = path.node.arguments[0];
-         if (t.isCallExpression(arg) && t.isMemberExpression(arg.callee) && t.isIdentifier(arg.callee.property, {name: 'emitted'})) {
-             // ...toHaveProperty('eventName')
-             let currentPath: NodePath | null = path;
-             while(currentPath && currentPath.parentPath) {
-                if(t.isMemberExpression(currentPath.parent) && t.isIdentifier(currentPath.parent.property, {name: 'toHaveProperty'})) {
-                    const parentCall = currentPath.parentPath.parentPath; // expect(...).toHaveProperty(...) is CallExpression
-                    if (parentCall && t.isCallExpression(parentCall.node) && parentCall.node.arguments.length > 0 && t.isStringLiteral(parentCall.node.arguments[0])) {
-                        foundEmits.add(parentCall.node.arguments[0].value);
-                        break;
-                    }
-                }
-                currentPath = currentPath.parentPath;
-                // 防止无限循环或遍历过多层级
-                if (currentPath.key === 'body' || currentPath.key === 'program') break; 
-             }
-         }
+        // expect(wrapper.emitted())...
+        const arg = path.node.arguments[0];
+        if (t.isCallExpression(arg) && t.isMemberExpression(arg.callee) && t.isIdentifier(arg.callee.property, { name: 'emitted' })) {
+          // ...toHaveProperty('eventName')
+          let currentPath: NodePath | null = path;
+          while (currentPath && currentPath.parentPath) {
+            if (t.isMemberExpression(currentPath.parent) && t.isIdentifier(currentPath.parent.property, { name: 'toHaveProperty' })) {
+              const parentCall = currentPath.parentPath.parentPath;
+              if (parentCall && t.isCallExpression(parentCall.node) && parentCall.node.arguments.length > 0 && t.isStringLiteral(parentCall.node.arguments[0])) {
+                foundEmits.add(parentCall.node.arguments[0].value);
+                break;
+              }
+            }
+            currentPath = currentPath.parentPath;
+            if (currentPath.key === 'body' || currentPath.key === 'program') break;
+          }
+        }
       }
 
       // 3. 查找 wrapper.vm.method()
-      // wrapper.vm?.method()
       if (t.isMemberExpression(path.node.callee) || t.isOptionalMemberExpression(path.node.callee)) {
-         const callee = path.node.callee;
-         if (t.isIdentifier(callee.property)) {
-            // 检查是否是 .vm.method 或者 .vm?.method
-            let baseObject = callee.object;
-            if (t.isMemberExpression(baseObject) || t.isOptionalMemberExpression(baseObject)) {
-                if(t.isIdentifier(baseObject.property, {name: 'vm'})) {
-                    // 假设 baseObject.object 是 wrapper
-                    foundExposes.add(callee.property.name);
-                }
+        const callee = path.node.callee;
+        if (t.isIdentifier(callee.property)) {
+          // 检查是否是 .vm.method 或者 .vm?.method
+          let baseObject = callee.object;
+          if (t.isMemberExpression(baseObject) || t.isOptionalMemberExpression(baseObject)) {
+            if (t.isIdentifier(baseObject.property, { name: 'vm' })) {
+              foundExposes.add(callee.property.name);
             }
-         }
+          }
+        }
       }
     },
   });
 
   // 4. 对比分析结果和找到的使用情况
   const propsCoverage = analysis.props.map(p => ({
-    name: p.name,
-    covered: foundProps.has(p.name),
+    name: p,
+    covered: foundProps.has(p),
   }));
   const emitsCoverage = analysis.emits.map(e => ({
-    name: e.name,
-    covered: foundEmits.has(e.name),
+    name: e,
+    covered: foundEmits.has(e),
   }));
   const slotsCoverage = analysis.slots.map(s => ({
-    name: s.name,
-    covered: foundSlots.has(s.name),
+    name: s,
+    covered: foundSlots.has(s),
   }));
   const exposesCoverage = analysis.exposes.map(ex => ({
-    name: ex.name,
-    covered: foundExposes.has(ex.name),
+    name: ex,
+    covered: foundExposes.has(ex),
   }));
 
   return {

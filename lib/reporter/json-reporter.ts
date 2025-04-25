@@ -45,38 +45,19 @@ export class JSONReporter {
     }
 
     const jsonContent = {
-      timestamp: new Date().toISOString(),
-      summary: this.calculateOverallStats(),
-      components: this.coverageData.map(component => ({
-        name: component.name,
-        file: component.file,
-        coverage: {
-          props: {
-            total: component.props.total,
-            covered: component.props.covered,
-            percentage: component.props.total ? (component.props.covered / component.props.total * 100) : 100,
-            details: component.props.details
-          },
-          events: {
-            total: component.emits.total,
-            covered: component.emits.covered,
-            percentage: component.emits.total ? (component.emits.covered / component.emits.total * 100) : 100,
-            details: component.emits.details
-          },
-          slots: {
-            total: component.slots.total,
-            covered: component.slots.covered,
-            percentage: component.slots.total ? (component.slots.covered / component.slots.total * 100) : 100,
-            details: component.slots.details
-          },
-          methods: {
-            total: component.exposes.total,
-            covered: component.exposes.covered,
-            percentage: component.exposes.total ? (component.exposes.covered / component.exposes.total * 100) : 100,
-            details: component.exposes.details
-          }
-        }
-      }))
+      summary: {
+        totalComponents: this.coverageData.length,
+        totalProps: this.coverageData.reduce((sum, comp) => sum + comp.props.total, 0),
+        coveredProps: this.coverageData.reduce((sum, comp) => sum + comp.props.covered, 0),
+        totalEmits: this.coverageData.reduce((sum, comp) => sum + comp.emits.total, 0),
+        coveredEmits: this.coverageData.reduce((sum, comp) => sum + comp.emits.covered, 0),
+        totalSlots: this.coverageData.reduce((sum, comp) => sum + comp.slots.total, 0),
+        coveredSlots: this.coverageData.reduce((sum, comp) => sum + comp.slots.covered, 0),
+        totalExposes: this.coverageData.reduce((sum, comp) => sum + comp.exposes.total, 0),
+        coveredExposes: this.coverageData.reduce((sum, comp) => sum + comp.exposes.covered, 0)
+      },
+      stats: this.calculateOverallStats(),
+      components: this.coverageData
     }
 
     fs.writeFileSync(
