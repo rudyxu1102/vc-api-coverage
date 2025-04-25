@@ -57,6 +57,7 @@ describe('json-reporter', () => {
     await reporter.generateReport()
 
     const jsonPath = path.join(testOutputDir, 'coverage.json')
+    console.log(jsonPath, 123)
     const jsonContent = JSON.parse(await fs.readFile(jsonPath, 'utf-8'))
 
     expect(jsonContent).toEqual({
@@ -70,6 +71,13 @@ describe('json-reporter', () => {
         coveredSlots: 1,
         totalExposes: 0,
         coveredExposes: 0
+      },
+      stats: {
+        props: 100,
+        events: 50,
+        slots: 100,
+        methods: 100,
+        total: 80
       },
       components: coverageData
     })
@@ -118,6 +126,13 @@ describe('json-reporter', () => {
         coveredSlots: 0,
         totalExposes: 0,
         coveredExposes: 0
+      },
+      stats: {
+        props: 100,
+        events: 100,
+        slots: 100,
+        methods: 100,
+        total: 100
       },
       components: coverageData
     })
@@ -174,6 +189,13 @@ describe('json-reporter', () => {
         coveredSlots: 0,
         totalExposes: 0,
         coveredExposes: 0
+      },
+      stats: {
+        props: 100,
+        events: 50,
+        slots: 100,
+        methods: 100,
+        total: 75
       },
       components: coverageData
     })
