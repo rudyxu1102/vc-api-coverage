@@ -5,16 +5,16 @@ import fg from 'fast-glob';
 import chalk from 'chalk';
 import open from 'open';
 
-import { analyzeProps } from '../lib/analyzer/props-analyzer.js';
-import { analyzeEmits } from '../lib/analyzer/emits-analyzer.js';
-import { analyzeSlots } from '../lib/analyzer/slots-analyzer.js';
-import { analyzeExpose } from '../lib/analyzer/expose-analyzer.js';
-import { matchTestCoverage, ComponentAnalysis } from '../lib/matcher/test-coverage-matcher.js';
-import { generateCliReport } from '../lib/reporter/cli-reporter.js';
-import { HTMLReporter } from '../lib/reporter/html-reporter.js';
-import { JSONReporter } from '../lib/reporter/json-reporter.js';
-import { VcCoverageOptions, ReportFormat } from '../lib/types.js';
-import { parseComponent } from '../lib/analyzer/shared-parser.js';
+import { analyzeProps } from '../lib/analyzer/props-analyzer';
+import { analyzeEmits } from '../lib/analyzer/emits-analyzer';
+import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
+import { analyzeExpose } from '../lib/analyzer/expose-analyzer';
+import { matchTestCoverage, ComponentAnalysis } from '../lib/matcher/test-coverage-matcher';
+import { generateCliReport } from '../lib/reporter/cli-reporter';
+import { HTMLReporter } from '../lib/reporter/html-reporter';
+import { JSONReporter } from '../lib/reporter/json-reporter';
+import { VcCoverageOptions, ReportFormat } from '../lib/types';
+import { parseComponent } from '../lib/analyzer/shared-parser';
 
 // 默认组件文件匹配模式
 const DEFAULT_INCLUDE = ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'];

@@ -2,7 +2,7 @@ import traverse from '@babel/traverse'
 import * as t from '@babel/types'
 import type { ParseResult } from '@babel/parser'
 import type { File } from '@babel/types'
-import { parseComponent } from './shared-parser.js'
+import { parseComponent } from './shared-parser'
 
 export function analyzeProps(code: string, parsedAst?: ParseResult<File>): string[] {
   const props: string[] = []

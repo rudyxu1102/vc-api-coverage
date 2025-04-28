@@ -3,7 +3,7 @@ import * as t from '@babel/types'
 import type { NodePath } from '@babel/traverse'
 import type { ParseResult } from '@babel/parser'
 import type { File } from '@babel/types'
-import { parseComponent } from './shared-parser.js'
+import { parseComponent } from './shared-parser'
 
 export interface ExposeInfo {
   name: string;
