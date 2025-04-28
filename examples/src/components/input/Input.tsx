@@ -1,18 +1,18 @@
 import { defineComponent, ref, computed, SlotsType, VNode } from 'vue';
 import type { CSSProperties } from 'vue';
 
-
+const props = {
+  modelValue: { type: String, default: '' },
+  placeholder: { type: String, default: '' },
+  disabled: { type: Boolean, default: false },
+  type: { type: String, default: 'text' },
+  size: { type: String, default: 'md' },
+  clearable: { type: Boolean, default: false },
+}
 export default defineComponent({
   name: 'MyInput',
 
-  props: {
-    modelValue: { type: String, default: '' },
-    placeholder: { type: String, default: '' },
-    disabled: { type: Boolean, default: false },
-    type: { type: String, default: 'text' },
-    size: { type: String, default: 'md' },
-    clearable: { type: Boolean, default: false },
-  },
+  props,
 
   slots: Object as SlotsType<{
     prefix?: () => VNode[];

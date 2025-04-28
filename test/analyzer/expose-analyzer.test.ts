@@ -45,6 +45,28 @@ describe('expose-analyzer', () => {
 
   it('should analyze expose in TSX component with expose', () => {
     const code = `
+      const expose = ['getValue', 'increment']
+      export default defineComponent({
+        expose,
+        setup() {
+          const state = reactive({
+            value: 0
+          })
+          
+          return {
+            state,
+            increment: () => state.value++,
+            getValue: () => state.value
+          }
+        },
+      })
+    `
+    const exposed = analyzeExpose(code)
+    expect(exposed).toEqual(['getValue', 'increment'])
+  })
+  
+  it('should analyze expose in TSX component with expose', () => {
+    const code = `
       export default defineComponent({
         setup(props, { expose }) {
           const focus = () => {

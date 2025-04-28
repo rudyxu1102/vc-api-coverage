@@ -75,4 +75,20 @@ describe('slots-analyzer', () => {
     const slots = analyzeSlots(code)
     expect(slots).toEqual([])
   })
+
+  it('should analyze slots in TSX component', () => {
+    const code = `
+      export default {
+        render() {
+          return h('div', [
+            this.$slots.header?.(),
+            this.$slots.default?.(),
+            this.$slots.footer?.()
+          ])
+        }
+      }
+    `
+    const slots = analyzeSlots(code)
+    expect(slots).toEqual(['header', 'default', 'footer'])
+  }) 
 }) 

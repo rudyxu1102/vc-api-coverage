@@ -45,6 +45,17 @@ describe('emits-analyzer', () => {
     expect(emits).toEqual(['submit', 'update:modelValue', 'change'])
   })
 
+  it('should analyze emits with runtime validation', () => {
+    const code = `
+      const emits = ['submit', 'update:modelValue', 'change']
+      export default {
+        emits,
+      }
+    `
+    const emits = analyzeEmits(code)
+    expect(emits).toEqual(['submit', 'update:modelValue', 'change'])
+  })
+
   it('should return empty array for component without emits', () => {
     const code = `
       <script setup>
