@@ -57,6 +57,20 @@ export function analyzeEmits(code: string): string[] {
                }
              });
           }
+          // 处理 emits 为变量引用的情况
+          else if (t.isIdentifier(emitsProperty.value)) {
+            const binding = path.scope.getBinding(emitsProperty.value.name);
+            if (binding && t.isVariableDeclarator(binding.path.node)) {
+              const init = binding.path.node.init;
+              if (t.isArrayExpression(init)) {
+                init.elements.forEach((element) => {
+                  if (t.isStringLiteral(element)) {
+                    emits.push(element.value);
+                  }
+                });
+              }
+            }
+          }
           path.stop();
         }
       }
@@ -82,6 +96,18 @@ export function analyzeEmits(code: string): string[] {
                 }
               }
             });
+          } else if (t.isIdentifier(emitsProperty.value)) {
+            const binding = path.scope.getBinding(emitsProperty.value.name);
+            if (binding && t.isVariableDeclarator(binding.path.node)) {
+              const init = binding.path.node.init;
+              if (t.isArrayExpression(init)) {
+                init.elements.forEach((element) => {
+                  if (t.isStringLiteral(element)) {
+                    emits.push(element.value);
+                  }
+                });
+              }
+            }
           }
           path.stop();
         }

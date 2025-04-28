@@ -1,5 +1,6 @@
 import { defineComponent, ref, SlotsType, VNode } from 'vue';
-
+const expose = ['focus']
+const emits = ['click', 'hover']
 export default defineComponent({
   name: 'MyButton',
 
@@ -15,12 +16,9 @@ export default defineComponent({
   }>,
 
   // 2. Emits 定义
-  emits: {
-      click: (payload: MouseEvent) => payload instanceof MouseEvent, // 带验证器
-      hover: null // 无验证器
-  },
+  emits,
 
-  expose: ['focus'] as any,
+  expose,
 
   methods: {
     handleClick(event: MouseEvent) {
