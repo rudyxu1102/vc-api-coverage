@@ -64,4 +64,25 @@ describe('props-analyzer', () => {
     const props = analyzeProps(code)
     expect(props).toEqual([])
   })
+
+  it('should analyze props with runtime declaration', () => {
+    const code = `
+      const props = {
+          message: String,
+          count: {
+            type: Number,
+            required: true
+          },
+          flag: {
+            type: Boolean,
+            default: false
+          }
+        }
+      export default {
+        props,
+      }
+    `
+    const props = analyzeProps(code)
+    expect(props).toEqual(['message', 'count', 'flag'])
+  })
 }) 

@@ -42,7 +42,7 @@ describe('expose-analyzer', () => {
     const exposed = analyzeExpose(code)
     expect(exposed).toEqual(['getValue', 'increment'])
   })
-
+  
   it('should analyze expose in TSX component with expose', () => {
     const code = `
       export default defineComponent({

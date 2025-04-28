@@ -33,18 +33,31 @@ export function analyzeProps(code: string): string[] {
       }
     },
 
-    // 处理 props: ['prop1', 'prop2'] 形式
+    // 处理 props: ['prop1', 'prop2'] 形式和 props: variableName 形式
     ObjectProperty(path) {
       if (
         t.isIdentifier(path.node.key) &&
-        path.node.key.name === 'props' &&
-        t.isArrayExpression(path.node.value)
+        path.node.key.name === 'props'
       ) {
-        path.node.value.elements.forEach(element => {
-          if (t.isStringLiteral(element)) {
-            props.push(element.value)
+        if (t.isArrayExpression(path.node.value)) {
+          path.node.value.elements.forEach(element => {
+            if (t.isStringLiteral(element)) {
+              props.push(element.value)
+            }
+          })
+        } else if (t.isIdentifier(path.node.value)) {
+          const binding = path.scope.getBinding(path.node.value.name)
+          if (binding && t.isVariableDeclarator(binding.path.node)) {
+            const init = binding.path.node.init
+            if (t.isObjectExpression(init)) {
+              init.properties.forEach(prop => {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  props.push(prop.key.name)
+                }
+              })
+            }
           }
-        })
+        }
       }
     },
 
