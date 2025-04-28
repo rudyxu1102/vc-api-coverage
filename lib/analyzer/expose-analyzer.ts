@@ -85,16 +85,32 @@ export function analyzeExpose(code: string): string[] {
   }
 
   // Special handling for TSX component with expose option as an array
-  const exposeArrayMatch = code.match(/expose\s*:\s*\[\s*(['"][\w\s]+['"]|[\w\s]+),?\s*(['"][\w\s]+['"]|[\w\s]+)?\s*\]/g)
+  const exposeArrayMatch = code.match(/expose\s*:\s*(?:\[\s*(['"][\w\s]+['"]|[\w\s]+),?\s*(['"][\w\s]+['"]|[\w\s]+)?\s*\]|(\w+))/g)
   if (exposeArrayMatch) {
     for (const match of exposeArrayMatch) {
-      const cleanMatch = match.replace(/expose\s*:\s*\[\s*/, '').replace(/\s*\]/, '')
-      const exposeItems = cleanMatch.split(',').map(item => item.trim().replace(/['"]/g, ''))
-      for (const item of exposeItems) {
-        if (item && !optionsExpose.has(item)) {
-          optionsExpose.add(item)
-          optionsExposeOrder.push(item)
-          hasOptionsExpose = true
+      if (match.includes('[')) {
+        const cleanMatch = match.replace(/expose\s*:\s*\[\s*/, '').replace(/\s*\]/, '')
+        const exposeItems = cleanMatch.split(',').map(item => item.trim().replace(/['"]/g, ''))
+        for (const item of exposeItems) {
+          if (item && !optionsExpose.has(item)) {
+            optionsExpose.add(item)
+            optionsExposeOrder.push(item)
+            hasOptionsExpose = true
+          }
+        }
+      } else {
+        // Handle variable reference
+        const variableName = match.replace(/expose\s*:\s*/, '')
+        const variableMatch = code.match(new RegExp(`const\\s+${variableName}\\s*=\\s*\\[([^\\]]+)\\]`))
+        if (variableMatch) {
+          const exposeItems = variableMatch[1].split(',').map(item => item.trim().replace(/['"]/g, ''))
+          for (const item of exposeItems) {
+            if (item && !optionsExpose.has(item)) {
+              optionsExpose.add(item)
+              optionsExposeOrder.push(item)
+              hasOptionsExpose = true
+            }
+          }
         }
       }
     }
@@ -364,22 +380,32 @@ export function analyzeExpose(code: string): string[] {
         t.isIdentifier(path.node.key) &&
         path.node.key.name === 'expose'
       ) {
-        hasExplicitExpose = true
-        hasOptionsExpose = true
-
-        const value = path.node.value
-        if (t.isArrayExpression(value)) {
-          value.elements.forEach(element => {
-            if (t.isStringLiteral(element) || t.isIdentifier(element)) {
-              addExposedProperty(element, true)
+        if (t.isArrayExpression(path.node.value)) {
+          path.node.value.elements.forEach(element => {
+            if (t.isStringLiteral(element)) {
+              if (!optionsExpose.has(element.value)) {
+                optionsExpose.add(element.value)
+                optionsExposeOrder.push(element.value)
+                hasOptionsExpose = true
+              }
             }
           })
-        } else if (t.isObjectExpression(value)) {
-          value.properties.forEach(prop => {
-            if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-              addExposedProperty(prop, true)
+        } else if (t.isIdentifier(path.node.value)) {
+          const binding = path.scope.getBinding(path.node.value.name)
+          if (binding && t.isVariableDeclarator(binding.path.node)) {
+            const init = binding.path.node.init
+            if (t.isArrayExpression(init)) {
+              init.elements.forEach(element => {
+                if (t.isStringLiteral(element)) {
+                  if (!optionsExpose.has(element.value)) {
+                    optionsExpose.add(element.value)
+                    optionsExposeOrder.push(element.value)
+                    hasOptionsExpose = true
+                  }
+                }
+              })
             }
-          })
+          }
         }
       }
     },
