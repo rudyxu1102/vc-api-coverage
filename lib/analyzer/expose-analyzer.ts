@@ -1,58 +1,31 @@
-import { parse } from '@babel/parser'
 import traverse from '@babel/traverse'
 import * as t from '@babel/types'
 import type { NodePath } from '@babel/traverse'
+import type { ParseResult } from '@babel/parser'
+import type { File } from '@babel/types'
+import { parseComponent } from './shared-parser.js'
 
 export interface ExposeInfo {
   name: string;
 }
 
-// Add a debug helper function
-function logDebug(message: string, data?: any) {
-  if (process.env.DEBUG_EXPOSE === 'true') {
-    console.log(`[DEBUG] ${message}`, data !== undefined ? JSON.stringify(data, null, 2) : '')
+function logDebug(message: string, ...args: any[]) {
+  if (process.env.DEBUG) {
+    console.log(`[expose-analyzer] ${message}`, ...args);
   }
 }
 
-export function analyzeExpose(code: string): string[] {
+export function analyzeExpose(code: string, parsedAst?: ParseResult<File>): string[] {
   logDebug('Analyzing code', code)
   
-  // Extract script content from SFC with better handling of setup and TS
-  let scriptContent = code
-  const setupScriptMatch = code.match(/<script\s+setup\s*(?:lang="ts")?\s*>([\s\S]*?)<\/script>/i)
-  const normalScriptMatch = code.match(/<script\s*(?:lang="ts")?\s*>([\s\S]*?)<\/script>/i)
-  
-  // Prioritize setup script over normal script
-  if (setupScriptMatch) {
-    scriptContent = setupScriptMatch[1].trim()
-  } else if (normalScriptMatch) {
-    scriptContent = normalScriptMatch[1].trim()
-  }
-
-  const ast = parse(scriptContent, {
-    sourceType: 'module',
-    plugins: [
-      'typescript',
-      'jsx',
-      'decorators-legacy',
-      'classProperties',
-      'classPrivateProperties',
-      'classPrivateMethods',
-      'exportDefaultFrom',
-      'exportNamespaceFrom',
-      'objectRestSpread',
-      'optionalChaining',
-      'nullishCoalescingOperator'
-    ]
-  })
-
+  const ast = parsedAst || parseComponent(code).ast
   const exposed = new Set<string>()
   const exposeOrder: string[] = []
   const optionsExpose = new Set<string>()
   const optionsExposeOrder: string[] = []
 
   // Flag to track if we're in a setup function or script setup
-  let inSetupContext = setupScriptMatch !== null
+  let inSetupContext = false
   let hasExplicitExpose = false
   let hasOptionsExpose = false
 

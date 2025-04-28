@@ -14,6 +14,7 @@ import { generateCliReport } from '../lib/reporter/cli-reporter.js';
 import { HTMLReporter } from '../lib/reporter/html-reporter.js';
 import { JSONReporter } from '../lib/reporter/json-reporter.js';
 import { VcCoverageOptions, ReportFormat } from '../lib/types.js';
+import { parseComponent } from '../lib/analyzer/shared-parser.js';
 
 // 默认组件文件匹配模式
 const DEFAULT_INCLUDE = ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'];
@@ -114,11 +115,12 @@ export default class VcCoverageReporter implements Reporter {
         const componentCode = await fs.readFile(componentPath, 'utf-8');
         const testCode = await fs.readFile(testPath, 'utf-8');
 
-        // 1. 分析组件 API
-        const props = analyzeProps(componentCode);
-        const emits = analyzeEmits(componentCode);
-        const slots = analyzeSlots(componentCode);
-        const exposes = analyzeExpose(componentCode);
+        // 1. 分析组件 API - 使用共享的 AST
+        const parsedContent = parseComponent(componentCode);
+        const props = analyzeProps(componentCode, parsedContent.ast);
+        const emits = analyzeEmits(componentCode, parsedContent.ast);
+        const slots = analyzeSlots(componentCode, parsedContent);
+        const exposes = analyzeExpose(componentCode, parsedContent.ast);
         const analysis: ComponentAnalysis = { props, emits, slots, exposes };
 
         // 2. 匹配测试覆盖

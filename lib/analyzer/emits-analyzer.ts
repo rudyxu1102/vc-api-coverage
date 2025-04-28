@@ -1,20 +1,12 @@
-import * as parser from '@babel/parser';
-import traverseFunction, { NodePath } from '@babel/traverse';
-const traverse = (traverseFunction as any).default || traverseFunction; // 处理 ESM/CJS 兼容性
+import traverse from '@babel/traverse';
 import * as t from '@babel/types';
+import type { NodePath } from '@babel/traverse';
+import type { ParseResult } from '@babel/parser';
+import type { File } from '@babel/types';
+import { parseComponent } from './shared-parser.js';
 
-function extractScriptContent(code: string): string {
-  const scriptMatch = code.match(/<script[^>]*>([\s\S]*?)<\/script>/);
-  return scriptMatch ? scriptMatch[1].trim() : code;
-}
-
-export function analyzeEmits(code: string): string[] {
-  const scriptContent = extractScriptContent(code);
-  const ast = parser.parse(scriptContent, {
-    sourceType: 'module',
-    plugins: ['typescript', 'jsx'],
-  });
-
+export function analyzeEmits(code: string, parsedAst?: ParseResult<File>): string[] {
+  const ast = parsedAst || parseComponent(code).ast;
   const emits: string[] = [];
   let foundDefineComponentEmits = false;
 
@@ -75,6 +67,7 @@ export function analyzeEmits(code: string): string[] {
         }
       }
     },
+
     ObjectExpression(path: NodePath<t.ObjectExpression>) {
       if (!foundDefineComponentEmits) {
         const emitsProperty = path.node.properties.find(

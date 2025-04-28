@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyzeSlots } from '../../lib/analyzer/slots-analyzer'
+import { analyzeSlots } from '../../lib/analyzer/slots-analyzer.js'
 
 describe('slots-analyzer', () => {
   it('should analyze slots in Vue SFC template', () => {
