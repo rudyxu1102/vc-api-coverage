@@ -1,20 +1,12 @@
-import { parse } from '@babel/parser'
 import traverse from '@babel/traverse'
 import * as t from '@babel/types'
+import type { ParseResult } from '@babel/parser'
+import type { File } from '@babel/types'
+import { parseComponent } from './shared-parser'
 
-function extractScriptContent(code: string): string {
-  const scriptMatch = code.match(/<script[^>]*>([\s\S]*?)<\/script>/)
-  return scriptMatch ? scriptMatch[1].trim() : code
-}
-
-export function analyzeProps(code: string): string[] {
+export function analyzeProps(code: string, parsedAst?: ParseResult<File>): string[] {
   const props: string[] = []
-  const scriptContent = extractScriptContent(code)
-  
-  const ast = parse(scriptContent, {
-    sourceType: 'module',
-    plugins: ['typescript', 'jsx']
-  })
+  const ast = parsedAst || parseComponent(code).ast
 
   traverse(ast, {
     // 处理 defineProps<{...}>() 形式

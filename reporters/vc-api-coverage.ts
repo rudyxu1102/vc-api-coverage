@@ -5,15 +5,16 @@ import fg from 'fast-glob';
 import chalk from 'chalk';
 import open from 'open';
 
-import { analyzeProps } from '../lib/analyzer/props-analyzer.js';
-import { analyzeEmits } from '../lib/analyzer/emits-analyzer.js';
-import { analyzeSlots } from '../lib/analyzer/slots-analyzer.js';
-import { analyzeExpose } from '../lib/analyzer/expose-analyzer.js';
-import { matchTestCoverage, ComponentAnalysis } from '../lib/matcher/test-coverage-matcher.js';
-import { generateCliReport } from '../lib/reporter/cli-reporter.js';
-import { HTMLReporter } from '../lib/reporter/html-reporter.js';
-import { JSONReporter } from '../lib/reporter/json-reporter.js';
-import { VcCoverageOptions, ReportFormat } from '../lib/types.js';
+import { analyzeProps } from '../lib/analyzer/props-analyzer';
+import { analyzeEmits } from '../lib/analyzer/emits-analyzer';
+import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
+import { analyzeExpose } from '../lib/analyzer/expose-analyzer';
+import { matchTestCoverage, ComponentAnalysis } from '../lib/matcher/test-coverage-matcher';
+import { generateCliReport } from '../lib/reporter/cli-reporter';
+import { HTMLReporter } from '../lib/reporter/html-reporter';
+import { JSONReporter } from '../lib/reporter/json-reporter';
+import { VcCoverageOptions, ReportFormat } from '../lib/types';
+import { parseComponent } from '../lib/analyzer/shared-parser';
 
 // 默认组件文件匹配模式
 const DEFAULT_INCLUDE = ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'];
@@ -114,11 +115,12 @@ export default class VcCoverageReporter implements Reporter {
         const componentCode = await fs.readFile(componentPath, 'utf-8');
         const testCode = await fs.readFile(testPath, 'utf-8');
 
-        // 1. 分析组件 API
-        const props = analyzeProps(componentCode);
-        const emits = analyzeEmits(componentCode);
-        const slots = analyzeSlots(componentCode);
-        const exposes = analyzeExpose(componentCode);
+        // 1. 分析组件 API - 使用共享的 AST
+        const parsedContent = parseComponent(componentCode);
+        const props = analyzeProps(componentCode, parsedContent.ast);
+        const emits = analyzeEmits(componentCode, parsedContent.ast);
+        const slots = analyzeSlots(componentCode, parsedContent);
+        const exposes = analyzeExpose(componentCode, parsedContent.ast);
         const analysis: ComponentAnalysis = { props, emits, slots, exposes };
 
         // 2. 匹配测试覆盖
