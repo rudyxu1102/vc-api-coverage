@@ -4,6 +4,17 @@ import type { NodePath } from '@babel/traverse';
 import type { ParseResult } from '@babel/parser';
 import type { File } from '@babel/types';
 import { parseComponent } from '../common/shared-parser';
+import * as fs from 'fs';
+import * as path from 'path';
+import { 
+  ImportInfo, 
+  collectImportDeclarations, 
+  findExportedObjectAndImports, 
+  processIdentifierReference 
+} from '../common/import-analyzer';
+import { logDebug, logError } from '../common/utils';
+
+const moduleName = 'slots-analyzer';
 
 /**
  * 从模板中提取插槽名称
@@ -32,11 +43,15 @@ class SlotsAnalyzer {
   private hasTemplateSlots: boolean = false;
   private templateContent: string;
   private ast: ParseResult<File>;
+  private importDeclarations: Record<string, ImportInfo> = {};
+  private filePath?: string;
 
-  constructor(code: string, parsedContent?: { ast: ParseResult<File>; templateContent: string }) {
+  constructor(code: string, parsedContent?: { ast: ParseResult<File>; templateContent: string }, filePath?: string) {
     const parsed = parsedContent || parseComponent(code);
     this.templateContent = parsed.templateContent;
     this.ast = parsed.ast;
+    this.filePath = filePath;
+    collectImportDeclarations(this.ast, this.importDeclarations);
   }
 
   /**
@@ -125,8 +140,12 @@ class SlotsAnalyzer {
       t.isIdentifier(path.node.key) && 
       path.node.key.name === 'slots'
     ) {
+      // 处理 slots: identifier 形式，可能是导入的变量
+      if (t.isIdentifier(path.node.value)) {
+        this.analyzeIdentifierSlots(path.node.value, path);
+      }
       // 处理 Object as SlotsType<{...}> 形式
-      if (
+      else if (
         t.isTSAsExpression(path.node.value) &&
         t.isTSTypeReference(path.node.value.typeAnnotation)
       ) {
@@ -136,6 +155,26 @@ class SlotsAnalyzer {
       else if (t.isTSTypeReference(path.node.value)) {
         this.analyzeSlotsTypeReference(path.node.value as t.TSTypeReference);
       }
+    }
+  }
+
+  /**
+   * 分析 slots: identifier 形式
+   */
+  private analyzeIdentifierSlots(identifier: t.Identifier, path: NodePath<t.ObjectProperty>): void {
+    const slotsVarName = identifier.name;
+    logDebug(moduleName, `Found slots variable reference: ${slotsVarName}`);
+    
+    if (this.filePath) {
+      // 处理标识符引用，可能是导入的变量
+      processIdentifierReference(
+        identifier,
+        path,
+        this.slots,
+        this.importDeclarations,
+        this.filePath,
+        processImportedSlots
+      );
     }
   }
 
@@ -173,7 +212,69 @@ class SlotsAnalyzer {
 /**
  * 分析组件的插槽
  */
-export function analyzeSlots(code: string, parsedContent?: { ast: ParseResult<File>; templateContent: string }): string[] {
-  const analyzer = new SlotsAnalyzer(code, parsedContent);
+export function analyzeSlots(code: string, parsedContent?: { ast: ParseResult<File>; templateContent: string }, filePath?: string): string[] {
+  const analyzer = new SlotsAnalyzer(code, parsedContent, filePath);
   return analyzer.analyze();
+}
+
+/**
+ * 处理导入的插槽
+ */
+function processImportedSlots(
+  importInfo: ImportInfo,
+  filePath: string,
+  slotsSet: Set<string> | string[]
+): void {
+  const importSource = importInfo.source;
+  const importedName = importInfo.importedName;
+  
+  try {
+    // 解析导入的文件路径
+    const currentDir = path.dirname(filePath);
+    const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') || importSource.endsWith('.js') ? '' : '.ts'));
+    
+    logDebug(moduleName, `Trying to resolve imported slots from ${importFilePath}, imported name: ${importedName}`);
+    
+    // 读取并解析导入文件
+    if (fs.existsSync(importFilePath)) {
+      const importedCode = fs.readFileSync(importFilePath, 'utf-8');
+      const importedAst = parseComponent(importedCode).ast;
+      
+      // 从导入的文件中找到对应的导出变量
+      const [exportedObject] = findExportedObjectAndImports(importedAst, importedName);
+      
+      if (exportedObject) {
+        // 如果是 TSAsExpression (Object as SlotsType<{...}>)
+        if (t.isTSAsExpression(exportedObject)) {
+          if (t.isTSTypeReference(exportedObject.typeAnnotation)) {
+            analyzeExportedSlotsTypeReference(exportedObject.typeAnnotation, slotsSet);
+          }
+        }
+      }
+    } else {
+      logDebug(moduleName, `Import file not found: ${importFilePath}`);
+    }
+  } catch (error) {
+    logError(moduleName, `Error analyzing imported slots:`, error);
+  }
+}
+
+/**
+ * 分析导出的 SlotsType<{...}> 类型引用
+ */
+function analyzeExportedSlotsTypeReference(typeRef: t.TSTypeReference, slotsSet: Set<string> | string[]): void {
+  if (t.isIdentifier(typeRef.typeName) && typeRef.typeName.name === 'SlotsType') {
+    const typeParameter = typeRef.typeParameters?.params[0];
+    if (t.isTSTypeLiteral(typeParameter)) {
+      typeParameter.members.forEach(member => {
+        if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
+          if (slotsSet instanceof Set) {
+            slotsSet.add(member.key.name);
+          } else if (Array.isArray(slotsSet) && !slotsSet.includes(member.key.name)) {
+            slotsSet.push(member.key.name);
+          }
+        }
+      });
+    }
+  }
 } 

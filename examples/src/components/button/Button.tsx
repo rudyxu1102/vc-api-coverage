@@ -1,4 +1,4 @@
-import { defineComponent, ref, SlotsType, VNode } from 'vue';
+import { defineComponent } from 'vue';
 import { buttonProps, buttonEmits, buttonExpose, buttonSlots } from './props';
 
 
@@ -34,8 +34,6 @@ export default defineComponent({
         onClick={this.handleClick}
         onMouseover={() => this.$emit('hover')}
       >
-        {this.$slots.default ? this.$slots.default() : this.label}
-        {this.$slots.icon?.()}
       </button>
     );
   },

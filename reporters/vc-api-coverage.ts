@@ -106,25 +106,63 @@ export default class VcCoverageReporter implements Reporter {
       const relativeComponentPath = path.relative(rootDir, componentPath);
       const testPath = await this.findTestFile(componentPath);
 
-      if (!testPath) {
-        console.warn(chalk.yellow(`[vc-api-coverage] Skipping: No test file found for ${relativeComponentPath}`));
+      // 检查是否是一个组件文件，忽略一些明显的非组件文件
+      const isExcludedFile = [
+        '.test.', '.spec.', 'utils.', 'types.', 'constants.', 'config.', 'helpers.', 'hooks.',
+      ].some(pattern => relativeComponentPath.includes(pattern));
+
+      if (isExcludedFile) {
+        console.warn(chalk.yellow(`[vc-api-coverage] Skipping non-component file: ${relativeComponentPath}`));
         continue;
       }
 
       try {
+        // 分析组件代码
         const componentCode = await fs.readFile(componentPath, 'utf-8');
-        const testCode = await fs.readFile(testPath, 'utf-8');
-
+        
         // 1. 分析组件 API - 使用共享的 AST
         const parsedContent = parseComponent(componentCode);
-        const props = analyzeProps(componentCode, parsedContent.ast);
-        const emits = analyzeEmits(componentCode, parsedContent.ast);
-        const slots = analyzeSlots(componentCode, parsedContent);
-        const exposes = analyzeExpose(componentCode, parsedContent.ast);
-        const analysis: ComponentAnalysis = { props, emits, slots, exposes };
+        
+        // 检查文件是否包含组件定义
+        const hasComponent = componentCode.includes('defineComponent') || 
+                          componentCode.includes('export default') || 
+                          componentCode.includes('render') ||
+                          componentCode.includes('setup');
+        
+        if (!hasComponent) {
+          console.warn(chalk.yellow(`[vc-api-coverage] Skipping: File doesn't appear to be a component ${relativeComponentPath}`));
+          continue;
+        }
 
-        // 2. 匹配测试覆盖
-        const coverage = matchTestCoverage(analysis, testCode);
+        // 分析组件API
+        const props = analyzeProps(componentCode, parsedContent.ast, componentPath);  // 传入文件路径
+        const emits = analyzeEmits(componentCode, parsedContent.ast, componentPath);
+        const slots = analyzeSlots(componentCode, parsedContent, componentPath);
+        const exposes = analyzeExpose(componentCode, parsedContent.ast, componentPath);
+        const analysis: ComponentAnalysis = { props, emits, slots, exposes };
+        
+        // 先记录组件分析结果
+        console.log(chalk.blue(`[vc-api-coverage] Analyzed component ${relativeComponentPath}:`));
+        console.log(chalk.blue(`  - Props: ${props.length}`));
+        console.log(chalk.blue(`  - Emits: ${emits.length}`));
+        console.log(chalk.blue(`  - Slots: ${slots.length}`));
+        console.log(chalk.blue(`  - Exposes: ${exposes.length}`));
+
+        // 2. 匹配测试覆盖（如果有测试文件）
+        let coverage;
+        if (testPath) {
+          const testCode = await fs.readFile(testPath, 'utf-8');
+          coverage = matchTestCoverage(analysis, testCode);
+        } else {
+          console.warn(chalk.yellow(`[vc-api-coverage] No test file found for ${relativeComponentPath}, reporting API without coverage`));
+          // 创建一个没有覆盖率的分析结果
+          coverage = {
+            props: props.map(p => ({ name: p, covered: false })),
+            emits: emits.map(e => ({ name: e, covered: false })),
+            slots: slots.map(s => ({ name: s, covered: false })),
+            exposes: exposes.map(ex => ({ name: ex, covered: false }))
+          };
+        }
 
         // 3. 生成并存储报告
         const report = generateCliReport(coverage, relativeComponentPath);
