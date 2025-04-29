@@ -44,10 +44,10 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, fileP
                               code.includes('{ expose }') || 
                               code.includes('context.expose'))
   if (hasExposeContextCall) {
-    logDebug('Detected expose context call')
+    logDebug('expose-analyzer', 'Detected expose context call')
     const matches = code.match(/expose\(\s*\{([^}]+)\}\s*\)/g)
     if (matches && matches.length > 0) {
-      logDebug('Found expose calls', matches)
+      logDebug('expose-analyzer', 'Found expose calls', matches)
       for (const match of matches) {
         const propsStr = match.replace(/expose\(\s*\{/, '').replace(/\}\s*\)/, '')
         const propMatches = propsStr.match(/(\w+),?/g)
@@ -483,7 +483,7 @@ function processImportedExpose(
     const currentDir = path.dirname(filePath);
     const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
     
-    logDebug(`Trying to resolve imported expose from ${importFilePath}, imported name: ${importedName}`);
+    logDebug('expose-analyzer', `Trying to resolve imported expose from ${importFilePath}, imported name: ${importedName}`);
     
     if (fs.existsSync(importFilePath)) {
       const importedCode = fs.readFileSync(importFilePath, 'utf-8');
@@ -523,10 +523,10 @@ function processImportedExpose(
           );
         }
       } else {
-        logDebug(`Could not find export named ${importedName} in ${importFilePath}`);
+        logDebug('expose-analyzer', `Could not find export named ${importedName} in ${importFilePath}`);
       }
     } else {
-      logDebug(`Import file not found: ${importFilePath}`);
+      logDebug('expose-analyzer', `Import file not found: ${importFilePath}`);
     }
   } catch (error) {
     console.error(`[expose-analyzer] Error analyzing imported expose:`, error);

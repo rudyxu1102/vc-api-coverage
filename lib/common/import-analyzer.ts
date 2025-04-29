@@ -2,12 +2,7 @@ import traverse from '@babel/traverse'
 import * as t from '@babel/types'
 import type { NodePath } from '@babel/traverse'
 import type { File } from '@babel/types'
-
-function logDebug(moduleName: string, message: string, ...args: any[]) {
-  if (process.env.DEBUG) {
-    console.log(`[${moduleName}] ${message}`, ...args);
-  }
-}
+import { logDebug } from './utils'
 
 export interface ImportInfo {
   source: string;

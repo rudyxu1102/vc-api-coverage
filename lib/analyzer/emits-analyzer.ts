@@ -146,7 +146,7 @@ function processImportedEmits(
     const currentDir = path.dirname(filePath);
     const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
     
-    logDebug(`Trying to resolve imported emits from ${importFilePath}, imported name: ${importedName}`);
+    logDebug('emits-analyzer', `Trying to resolve imported emits from ${importFilePath}, imported name: ${importedName}`);
     
     if (fs.existsSync(importFilePath)) {
       const importedCode = fs.readFileSync(importFilePath, 'utf-8');
@@ -165,10 +165,10 @@ function processImportedEmits(
           processObjectProperties(exportedEmitsObject.properties, emits, importFilePath, nestedImportDeclarations, 'emits', processImportedEmits);
         }
       } else {
-        logDebug(`Could not find export named ${importedName} in ${importFilePath}`);
+        logDebug('emits-analyzer', `Could not find export named ${importedName} in ${importFilePath}`);
       }
     } else {
-      logDebug(`Import file not found: ${importFilePath}`);
+      logDebug('emits-analyzer', `Import file not found: ${importFilePath}`);
     }
   } catch (error) {
     console.error(`[emits-analyzer] Error analyzing imported emits:`, error);

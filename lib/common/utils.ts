@@ -1,7 +1,7 @@
 
-export function logDebug(message: string, ...args: any[]) {
+export function logDebug(moduleName: string, message: string, ...args: any[]) {
   if (process.env.DEBUG) {
-    console.log(`[analyzer] ${message}`, ...args);
+    console.log(`[${moduleName}] ${message}`, ...args);
   }
 }
 

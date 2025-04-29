@@ -54,7 +54,7 @@ export function analyzeProps(code: string, parsedAst?: ParseResult<File>, filePa
           })
         } else if (t.isIdentifier(nodePath.node.value)) {
           const propsVarName = nodePath.node.value.name
-          logDebug(`Found props variable reference: ${propsVarName}`)
+          logDebug('props-analyzer', `Found props variable reference: ${propsVarName}`)
           
           // 使用通用函数处理标识符引用
           processIdentifierReference(
@@ -91,7 +91,7 @@ function processImportedProps(
     const currentDir = path.dirname(filePath);
     const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
     
-    logDebug(`Trying to resolve imported props from ${importFilePath}, imported name: ${importedName}`);
+    logDebug('props-analyzer', `Trying to resolve imported props from ${importFilePath}, imported name: ${importedName}`);
     
     // 读取并解析导入文件
     if (fs.existsSync(importFilePath)) {
@@ -106,7 +106,7 @@ function processImportedProps(
         processObjectProperties(exportedPropsObject.properties, propsSet, importFilePath, nestedImportDeclarations, 'props', processImportedProps);
       }
     } else {
-      logDebug(`Import file not found: ${importFilePath}`);
+      logDebug('props-analyzer', `Import file not found: ${importFilePath}`);
     }
   } catch (error) {
     console.error(`[props-analyzer] Error analyzing imported props:`, error);
