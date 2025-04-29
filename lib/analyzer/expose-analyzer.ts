@@ -4,6 +4,8 @@ import type { NodePath } from '@babel/traverse'
 import type { ParseResult } from '@babel/parser'
 import type { File } from '@babel/types'
 import { parseComponent } from './shared-parser'
+import * as fs from 'fs'
+import * as path from 'path'
 
 export interface ExposeInfo {
   name: string;
@@ -15,7 +17,12 @@ function logDebug(message: string, ...args: any[]) {
   }
 }
 
-export function analyzeExpose(code: string, parsedAst?: ParseResult<File>): string[] {
+interface ImportInfo {
+  source: string;
+  importedName: string;
+}
+
+export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
   logDebug('Analyzing code', code)
   
   const ast = parsedAst || parseComponent(code).ast
@@ -23,6 +30,10 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>): stri
   const exposeOrder: string[] = []
   const optionsExpose = new Set<string>()
   const optionsExposeOrder: string[] = []
+
+  // 收集导入声明
+  const importDeclarations: Record<string, ImportInfo> = {};
+  collectImportDeclarations(ast, importDeclarations);
 
   // Flag to track if we're in a setup function or script setup
   let inSetupContext = false
@@ -164,6 +175,85 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>): stri
   }
 
   traverse(ast, {
+    // 在 Program 级别查找导入的 expose 变量
+    VariableDeclarator(path) {
+      const id = path.node.id;
+      if (t.isIdentifier(id) && id.name === 'expose') {
+        if (t.isArrayExpression(path.node.init)) {
+          path.node.init.elements.forEach(element => {
+            if (t.isStringLiteral(element)) {
+              if (!exposed.has(element.value)) {
+                exposed.add(element.value);
+                exposeOrder.push(element.value);
+                hasExplicitExpose = true;
+              }
+            } else if (t.isIdentifier(element)) {
+              if (!exposed.has(element.name)) {
+                exposed.add(element.name);
+                exposeOrder.push(element.name);
+                hasExplicitExpose = true;
+              }
+            }
+          });
+        } else if (t.isIdentifier(path.node.init) && importDeclarations[path.node.init.name] && filePath) {
+          // 处理导入的 expose 变量
+          const importInfo = importDeclarations[path.node.init.name];
+          processImportedExpose(importInfo, filePath, exposed, exposeOrder);
+          hasExplicitExpose = true;
+        }
+      }
+    },
+
+    // 处理 expose 选项
+    ObjectProperty(path) {
+      if (t.isIdentifier(path.node.key) && path.node.key.name === 'expose') {
+        if (t.isArrayExpression(path.node.value)) {
+          path.node.value.elements.forEach(element => {
+            if (t.isStringLiteral(element)) {
+              if (!optionsExpose.has(element.value)) {
+                optionsExpose.add(element.value);
+                optionsExposeOrder.push(element.value);
+                hasOptionsExpose = true;
+              }
+            } else if (t.isIdentifier(element)) {
+              if (!optionsExpose.has(element.name)) {
+                optionsExpose.add(element.name);
+                optionsExposeOrder.push(element.name);
+                hasOptionsExpose = true;
+              }
+            }
+          });
+        } else if (t.isIdentifier(path.node.value)) {
+          const varName = path.node.value.name;
+          // 如果是本地变量
+          const binding = path.scope.getBinding(varName);
+          if (binding && t.isVariableDeclarator(binding.path.node) && t.isArrayExpression(binding.path.node.init)) {
+            binding.path.node.init.elements.forEach(element => {
+              if (t.isStringLiteral(element)) {
+                if (!optionsExpose.has(element.value)) {
+                  optionsExpose.add(element.value);
+                  optionsExposeOrder.push(element.value);
+                  hasOptionsExpose = true;
+                }
+              } else if (t.isIdentifier(element)) {
+                if (!optionsExpose.has(element.name)) {
+                  optionsExpose.add(element.name);
+                  optionsExposeOrder.push(element.name);
+                  hasOptionsExpose = true;
+                }
+              }
+            });
+          }
+          // 如果是导入的变量
+          else if (importDeclarations[varName] && filePath) {
+            const importInfo = importDeclarations[varName];
+            processImportedExpose(importInfo, filePath, optionsExpose, optionsExposeOrder);
+            hasOptionsExpose = true;
+          }
+        }
+      }
+    },
+
     Program(path) {
       // Handle <script setup> by checking for defineExpose import
       path.node.body.forEach(node => {
@@ -347,42 +437,6 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>): stri
       }
     },
 
-    // Handle expose option in component options
-    ObjectProperty(path) {
-      if (
-        t.isIdentifier(path.node.key) &&
-        path.node.key.name === 'expose'
-      ) {
-        if (t.isArrayExpression(path.node.value)) {
-          path.node.value.elements.forEach(element => {
-            if (t.isStringLiteral(element)) {
-              if (!optionsExpose.has(element.value)) {
-                optionsExpose.add(element.value)
-                optionsExposeOrder.push(element.value)
-                hasOptionsExpose = true
-              }
-            }
-          })
-        } else if (t.isIdentifier(path.node.value)) {
-          const binding = path.scope.getBinding(path.node.value.name)
-          if (binding && t.isVariableDeclarator(binding.path.node)) {
-            const init = binding.path.node.init
-            if (t.isArrayExpression(init)) {
-              init.elements.forEach(element => {
-                if (t.isStringLiteral(element)) {
-                  if (!optionsExpose.has(element.value)) {
-                    optionsExpose.add(element.value)
-                    optionsExposeOrder.push(element.value)
-                    hasOptionsExpose = true
-                  }
-                }
-              })
-            }
-          }
-        }
-      }
-    },
-
     // Handle setup function return value
     ReturnStatement(path) {
       if (inSetupContext && !hasExplicitExpose && !hasOptionsExpose) {
@@ -427,4 +481,149 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>): stri
   }
 
   return exposeOrder
+}
+
+// 收集导入声明
+function collectImportDeclarations(ast: File, importDeclarations: Record<string, ImportInfo>) {
+  traverse(ast, {
+    ImportDeclaration(path) {
+      const source = path.node.source.value;
+      path.node.specifiers.forEach(specifier => {
+        if (t.isImportSpecifier(specifier)) {
+          // 处理命名导入: import { expose } from './consts'
+          const importedName = t.isIdentifier(specifier.imported) ? specifier.imported.name : specifier.imported.value;
+          const localName = specifier.local.name;
+          importDeclarations[localName] = { source, importedName };
+        } else if (t.isImportDefaultSpecifier(specifier)) {
+          // 处理默认导入: import expose from './consts'
+          importDeclarations[specifier.local.name] = { source, importedName: 'default' };
+        }
+      });
+    }
+  });
+}
+
+// 处理导入的 expose
+function processImportedExpose(
+  importInfo: ImportInfo,
+  filePath: string,
+  exposedSet: Set<string>,
+  exposeOrder: string[]
+) {
+  const importSource = importInfo.source;
+  const importedName = importInfo.importedName;
+  
+  try {
+    const currentDir = path.dirname(filePath);
+    const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
+    
+    logDebug(`Trying to resolve imported expose from ${importFilePath}, imported name: ${importedName}`);
+    
+    if (fs.existsSync(importFilePath)) {
+      const importedCode = fs.readFileSync(importFilePath, 'utf-8');
+      const importedAst = parseComponent(importedCode).ast;
+      
+      // 查找导出的变量
+      let found = false;
+      
+      traverse(importedAst, {
+        // 处理 export const expose = ['method1', 'method2']
+        ExportNamedDeclaration(path) {
+          if (found) return;
+          
+          if (t.isVariableDeclaration(path.node.declaration)) {
+            const declarations = path.node.declaration.declarations;
+            for (const decl of declarations) {
+              if (t.isIdentifier(decl.id) && decl.id.name === importedName) {
+                if (t.isArrayExpression(decl.init)) {
+                  decl.init.elements.forEach(element => {
+                    if (t.isStringLiteral(element)) {
+                      const name = element.value;
+                      if (!exposedSet.has(name)) {
+                        exposedSet.add(name);
+                        exposeOrder.push(name);
+                      }
+                    } else if (t.isIdentifier(element)) {
+                      const name = element.name;
+                      if (!exposedSet.has(name)) {
+                        exposedSet.add(name);
+                        exposeOrder.push(name);
+                      }
+                    }
+                  });
+                  found = true;
+                  path.stop();
+                }
+              }
+            }
+          }
+        },
+        
+        // 处理 export { expose }
+        ExportSpecifier(path) {
+          if (found) return;
+          
+          if (t.isIdentifier(path.node.exported) && path.node.exported.name === importedName) {
+            const localName = path.node.local.name;
+            const binding = path.scope.getBinding(localName);
+            
+            if (binding && t.isVariableDeclarator(binding.path.node)) {
+              if (t.isArrayExpression(binding.path.node.init)) {
+                binding.path.node.init.elements.forEach(element => {
+                  if (t.isStringLiteral(element)) {
+                    const name = element.value;
+                    if (!exposedSet.has(name)) {
+                      exposedSet.add(name);
+                      exposeOrder.push(name);
+                    }
+                  } else if (t.isIdentifier(element)) {
+                    const name = element.name;
+                    if (!exposedSet.has(name)) {
+                      exposedSet.add(name);
+                      exposeOrder.push(name);
+                    }
+                  }
+                });
+                found = true;
+                path.stop();
+              }
+            }
+          }
+        },
+        
+        // 处理 export default ['method1', 'method2']
+        ExportDefaultDeclaration(path) {
+          if (found || importedName !== 'default') return;
+          
+          if (t.isArrayExpression(path.node.declaration)) {
+            path.node.declaration.elements.forEach(element => {
+              if (t.isStringLiteral(element)) {
+                const name = element.value;
+                if (!exposedSet.has(name)) {
+                  exposedSet.add(name);
+                  exposeOrder.push(name);
+                }
+              } else if (t.isIdentifier(element)) {
+                const name = element.name;
+                if (!exposedSet.has(name)) {
+                  exposedSet.add(name);
+                  exposeOrder.push(name);
+                }
+              }
+            });
+            found = true;
+            path.stop();
+          }
+        }
+      });
+      
+      if (!found) {
+        logDebug(`Could not find export named ${importedName} in ${importFilePath}`);
+      }
+    } else {
+      logDebug(`Import file not found: ${importFilePath}`);
+    }
+  } catch (error) {
+    console.error(`[expose-analyzer] Error analyzing imported expose:`, error);
+  }
 } 

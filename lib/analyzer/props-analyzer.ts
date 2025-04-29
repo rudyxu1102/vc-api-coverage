@@ -18,7 +18,8 @@ interface ImportInfo {
 }
 
 export function analyzeProps(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
-  const props: string[] = []
+  // 使用Set来避免重复属性
+  const propsSet = new Set<string>()
   const ast = parsedAst || parseComponent(code).ast
 
   // 保存找到的导入声明，用于后续解析
@@ -49,7 +50,7 @@ export function analyzeProps(code: string, parsedAst?: ParseResult<File>, filePa
           if (t.isTSTypeLiteral(typeAnnotation)) {
             typeAnnotation.members.forEach(member => {
               if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-                props.push(member.key.name)
+                propsSet.add(member.key.name)
               }
             })
           }
@@ -66,7 +67,7 @@ export function analyzeProps(code: string, parsedAst?: ParseResult<File>, filePa
         if (t.isArrayExpression(nodePath.node.value)) {
           nodePath.node.value.elements.forEach(element => {
             if (t.isStringLiteral(element)) {
-              props.push(element.value)
+              propsSet.add(element.value)
             }
           })
         } else if (t.isIdentifier(nodePath.node.value)) {
@@ -78,47 +79,39 @@ export function analyzeProps(code: string, parsedAst?: ParseResult<File>, filePa
           if (binding && t.isVariableDeclarator(binding.path.node)) {
             const init = binding.path.node.init
             if (t.isObjectExpression(init)) {
-              processObjectProperties(init.properties, props, filePath, importDeclarations)
+              processObjectProperties(init.properties, propsSet, filePath, importDeclarations)
             }
           } 
           // 2. 如果在当前文件中找不到定义，尝试处理导入的变量
           else if (importDeclarations[propsVarName] && filePath) {
             const importInfo = importDeclarations[propsVarName]
-            processImportedProps(importInfo, filePath, props, importDeclarations)
+            processImportedProps(importInfo, filePath, propsSet, importDeclarations)
           }
         } else if (t.isObjectExpression(nodePath.node.value)) {
           // 直接处理内联对象
-          processObjectProperties(nodePath.node.value.properties, props, filePath, importDeclarations)
+          processObjectProperties(nodePath.node.value.properties, propsSet, filePath, importDeclarations)
         }
       }
     },
 
-    // 处理 props: { prop1: Type, prop2: { type: Type } } 形式
-    ObjectExpression(nodePath) {
-      const parent = nodePath.parent
-      if (
-        t.isObjectProperty(parent) &&
-        t.isIdentifier(parent.key) &&
-        parent.key.name === 'props'
-      ) {
-        processObjectProperties(nodePath.node.properties, props, filePath, importDeclarations)
-      }
-    }
+    // 防止重复处理，我们移除对props对象的直接处理
+    // 因为ObjectProperty处理器已经处理了props对象
   })
 
-  return props
+  // 转换Set为数组返回
+  return Array.from(propsSet)
 }
 
 // 处理对象属性，包括展开运算符
 function processObjectProperties(
   properties: (t.ObjectProperty | t.ObjectMethod | t.SpreadElement)[],
-  props: string[],
+  propsSet: Set<string>,
   filePath?: string,
   importDeclarations?: Record<string, ImportInfo>
 ) {
   for (const prop of properties) {
     if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-      props.push(prop.key.name)
+      propsSet.add(prop.key.name)
     } else if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument) && importDeclarations && filePath) {
       // 处理 ...commonProps 形式的展开导入
       const spreadVarName = prop.argument.name
@@ -127,7 +120,7 @@ function processObjectProperties(
       // 不尝试在当前文件中查找变量，直接检查导入声明
       if (importDeclarations[spreadVarName]) {
         const importInfo = importDeclarations[spreadVarName]
-        processImportedProps(importInfo, filePath, props, importDeclarations)
+        processImportedProps(importInfo, filePath, propsSet, importDeclarations)
       }
     }
   }
@@ -137,7 +130,7 @@ function processObjectProperties(
 function processImportedProps(
   importInfo: ImportInfo,
   filePath: string,
-  props: string[],
+  propsSet: Set<string>,
   _importDeclarations: Record<string, ImportInfo> // 使用下划线前缀表示intentionally unused
 ) {
   const importSource = importInfo.source
@@ -160,7 +153,7 @@ function processImportedProps(
       
       if (exportedPropsObject && t.isObjectExpression(exportedPropsObject)) {
         // 递归处理导入文件中的对象属性，包括可能的展开运算符
-        processObjectProperties(exportedPropsObject.properties, props, importFilePath, nestedImportDeclarations)
+        processObjectProperties(exportedPropsObject.properties, propsSet, importFilePath, nestedImportDeclarations)
       }
     } else {
       logDebug(`Import file not found: ${importFilePath}`)

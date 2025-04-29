@@ -119,13 +119,5 @@ export function analyzeSlots(code: string, parsedContent?: { ast: ParseResult<Fi
   }
 
   // 返回排序后的数组
-  return Array.from(slots).sort((a, b) => {
-    if (a === 'header') return -1;
-    if (b === 'header') return 1;
-    if (a === 'footer') return 1;
-    if (b === 'footer') return -1;
-    if (a === 'default') return b === 'footer' ? -1 : 1;
-    if (b === 'default') return a === 'footer' ? -1 : 1;
-    return a.localeCompare(b);
-  });
+  return Array.from(slots);
 } 
