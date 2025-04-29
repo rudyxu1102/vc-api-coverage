@@ -1,14 +1,12 @@
 import { defineComponent, ref, SlotsType, VNode } from 'vue';
+import { buttonProps } from './props';
+
 const expose = ['focus']
 const emits = ['click', 'hover']
 export default defineComponent({
   name: 'MyButton',
 
-  props: {
-    label: { type: String, required: true },
-    size: { type: String, default: 'md' },
-    disabled: { type: Boolean, default: false },
-  },
+  props: buttonProps,
 
   slots: Object as SlotsType<{
     default?: () => VNode[];

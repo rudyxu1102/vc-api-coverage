@@ -117,7 +117,7 @@ export default class VcCoverageReporter implements Reporter {
 
         // 1. 分析组件 API - 使用共享的 AST
         const parsedContent = parseComponent(componentCode);
-        const props = analyzeProps(componentCode, parsedContent.ast);
+        const props = analyzeProps(componentCode, parsedContent.ast, componentPath);
         const emits = analyzeEmits(componentCode, parsedContent.ast);
         const slots = analyzeSlots(componentCode, parsedContent);
         const exposes = analyzeExpose(componentCode, parsedContent.ast);
