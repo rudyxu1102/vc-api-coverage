@@ -14,7 +14,7 @@ import { generateCliReport } from '../lib/reporter/cli-reporter';
 import { HTMLReporter } from '../lib/reporter/html-reporter';
 import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
-import { parseComponent } from '../lib/analyzer/shared-parser';
+import { parseComponent } from '../lib/common/shared-parser';
 
 // 默认组件文件匹配模式
 const DEFAULT_INCLUDE = ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'];

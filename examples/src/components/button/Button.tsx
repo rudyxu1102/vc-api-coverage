@@ -1,24 +1,18 @@
 import { defineComponent, ref, SlotsType, VNode } from 'vue';
-const expose = ['focus']
-const emits = ['click', 'hover']
+import { buttonProps, buttonEmits, buttonExpose, buttonSlots } from './props';
+
+
 export default defineComponent({
   name: 'MyButton',
 
-  props: {
-    label: { type: String, required: true },
-    size: { type: String, default: 'md' },
-    disabled: { type: Boolean, default: false },
-  },
+  props: buttonProps,
 
-  slots: Object as SlotsType<{
-    default?: () => VNode[];
-    icon?: () => VNode[];
-  }>,
+  slots: buttonSlots,
 
   // 2. Emits 定义
-  emits,
+  emits: buttonEmits,
 
-  expose,
+  expose: buttonExpose,
 
   methods: {
     handleClick(event: MouseEvent) {

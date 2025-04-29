@@ -1,7 +1,24 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { analyzeEmits } from '../../lib/analyzer/emits-analyzer'
+import * as fs from 'fs'
+import * as path from 'path'
+
+// Mock fs and path modules for import testing
+vi.mock('fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+}))
+
+vi.mock('path', () => ({
+  dirname: vi.fn().mockReturnValue('/fake/path'),
+  resolve: vi.fn().mockImplementation((...args) => args.join('/')),
+}))
 
 describe('emits-analyzer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('should analyze emits in Vue SFC with type declaration', () => {
     const code = `
       <script setup lang="ts">
@@ -45,7 +62,7 @@ describe('emits-analyzer', () => {
     expect(emits).toEqual(['submit', 'update:modelValue', 'change'])
   })
 
-  it('should analyze emits with runtime validation', () => {
+  it('should analyze emits with variable reference', () => {
     const code = `
       const emits = ['submit', 'update:modelValue', 'change']
       export default {
@@ -64,5 +81,33 @@ describe('emits-analyzer', () => {
     `
     const emits = analyzeEmits(code)
     expect(emits).toEqual([])
+  })
+
+  it('should analyze emits imported from another file', () => {
+    // 模拟导入文件内容
+    const mockImportedFileContent = `
+      export const buttonEmits = ['click', 'hover', 'focus']
+    `
+    
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
+    
+    const code = `
+      import { buttonEmits } from './events'
+      
+      export default defineComponent({
+        name: 'MyButton',
+        emits: buttonEmits,
+      })
+    `
+    
+    const filePath = '/fake/component/Button.tsx'
+    const emits = analyzeEmits(code, undefined, filePath)
+    
+    // 验证
+    expect(path.dirname).toHaveBeenCalledWith(filePath)
+    expect(path.resolve).toHaveBeenCalledWith('/fake/path', './events.ts')
+    expect(fs.readFileSync).toHaveBeenCalled()
+    expect(emits).toEqual(['click', 'hover', 'focus'])
   })
 }) 
