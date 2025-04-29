@@ -34,8 +34,6 @@ export default defineComponent({
         onClick={this.handleClick}
         onMouseover={() => this.$emit('hover')}
       >
-        {this.$slots.default ? this.$slots.default() : this.label}
-        {this.$slots.icon?.()}
       </button>
     );
   },

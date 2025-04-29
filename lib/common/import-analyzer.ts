@@ -37,8 +37,8 @@ export function collectImportDeclarations(ast: File, importDeclarations: Record<
 export function findExportedObjectAndImports(
   ast: File, 
   exportName: string,
-): [t.ObjectExpression | t.ArrayExpression | null, Record<string, ImportInfo>] {
-  let result: t.ObjectExpression | t.ArrayExpression | null = null;
+): [t.ObjectExpression | t.ArrayExpression | t.TSAsExpression | null, Record<string, ImportInfo>] {
+  let result: t.ObjectExpression | t.ArrayExpression | t.TSAsExpression | null = null;
   const nestedImportDeclarations: Record<string, ImportInfo> = {};
   
   // 先收集导入声明
@@ -46,7 +46,7 @@ export function findExportedObjectAndImports(
   
   // 然后查找导出对象
   traverse(ast, {
-    // 处理 export const name = { ... } 或 export const name = [ ... ]
+    // 处理 export const name = { ... } 或 export const name = [ ... ] 或 export const name = Object as ...
     ExportNamedDeclaration(nodePath) {
       if (t.isVariableDeclaration(nodePath.node.declaration)) {
         const declarations = nodePath.node.declaration.declarations;
@@ -54,9 +54,9 @@ export function findExportedObjectAndImports(
           if (
             t.isIdentifier(decl.id) && 
             decl.id.name === exportName && 
-            (t.isObjectExpression(decl.init) || t.isArrayExpression(decl.init))
+            (t.isObjectExpression(decl.init) || t.isArrayExpression(decl.init) || t.isTSAsExpression(decl.init))
           ) {
-            result = decl.init;
+            result = decl.init as t.ObjectExpression | t.ArrayExpression | t.TSAsExpression;
             nodePath.stop();
             return;
           }
@@ -71,8 +71,12 @@ export function findExportedObjectAndImports(
         const binding = nodePath.scope.getBinding(localName);
         
         if (binding && t.isVariableDeclarator(binding.path.node)) {
-          if (t.isObjectExpression(binding.path.node.init) || t.isArrayExpression(binding.path.node.init)) {
-            result = binding.path.node.init;
+          if (
+            t.isObjectExpression(binding.path.node.init) || 
+            t.isArrayExpression(binding.path.node.init) ||
+            t.isTSAsExpression(binding.path.node.init)
+          ) {
+            result = binding.path.node.init as t.ObjectExpression | t.ArrayExpression | t.TSAsExpression;
             nodePath.stop();
             return;
           }
@@ -83,8 +87,12 @@ export function findExportedObjectAndImports(
     // 处理 export default { ... } 或 export default [ ... ]
     ExportDefaultDeclaration(nodePath) {
       if (exportName === 'default') {
-        if (t.isObjectExpression(nodePath.node.declaration) || t.isArrayExpression(nodePath.node.declaration)) {
-          result = nodePath.node.declaration;
+        if (
+          t.isObjectExpression(nodePath.node.declaration) || 
+          t.isArrayExpression(nodePath.node.declaration) ||
+          t.isTSAsExpression(nodePath.node.declaration)
+        ) {
+          result = nodePath.node.declaration as t.ObjectExpression | t.ArrayExpression | t.TSAsExpression;
           nodePath.stop();
           return;
         }

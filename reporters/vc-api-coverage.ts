@@ -137,7 +137,7 @@ export default class VcCoverageReporter implements Reporter {
         // 分析组件API
         const props = analyzeProps(componentCode, parsedContent.ast, componentPath);  // 传入文件路径
         const emits = analyzeEmits(componentCode, parsedContent.ast, componentPath);
-        const slots = analyzeSlots(componentCode, parsedContent);
+        const slots = analyzeSlots(componentCode, parsedContent, componentPath);
         const exposes = analyzeExpose(componentCode, parsedContent.ast, componentPath);
         const analysis: ComponentAnalysis = { props, emits, slots, exposes };
         
