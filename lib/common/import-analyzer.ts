@@ -109,7 +109,6 @@ export function processIdentifierReference(
   collection: string[] | Set<string>,
   importDeclarations: Record<string, ImportInfo>,
   filePath?: string,
-  moduleType: 'props' | 'emits' | 'expose' = 'props',
   processFunction?: (importInfo: ImportInfo, filePath: string, collection: string[] | Set<string>) => void
 ) {
   const varName = identifier.name;

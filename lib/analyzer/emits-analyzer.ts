@@ -13,13 +13,8 @@ import {
   processArrayElements,
   processObjectProperties,
   processIdentifierReference
-} from './import-analyzer';
-
-function logDebug(message: string, ...args: any[]) {
-  if (process.env.DEBUG) {
-    console.log(`[emits-analyzer] ${message}`, ...args);
-  }
-}
+} from '../common/import-analyzer';
+import { logDebug } from '../common/utils';
 
 export function analyzeEmits(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
   const ast = parsedAst || parseComponent(code).ast;
@@ -65,7 +60,6 @@ export function analyzeEmits(code: string, parsedAst?: ParseResult<File>, filePa
               emits, 
               importDeclarations, 
               filePath, 
-              'emits', 
               processImportedEmits
             );
           }
@@ -94,7 +88,6 @@ export function analyzeEmits(code: string, parsedAst?: ParseResult<File>, filePa
               emits, 
               importDeclarations, 
               filePath, 
-              'emits', 
               processImportedEmits
             );
           }

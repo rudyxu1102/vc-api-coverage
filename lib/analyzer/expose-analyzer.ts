@@ -13,16 +13,11 @@ import {
   processArrayElements,
   processObjectProperties,
   processIdentifierReference
-} from './import-analyzer'
+} from '../common/import-analyzer'
+import { logDebug } from '../common/utils'
 
 export interface ExposeInfo {
   name: string;
-}
-
-function logDebug(message: string, ...args: any[]) {
-  if (process.env.DEBUG) {
-    console.log(`[expose-analyzer] ${message}`, ...args);
-  }
 }
 
 export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
@@ -204,7 +199,6 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, fileP
             exposed, 
             importDeclarations, 
             filePath, 
-            'expose', 
             processImportedExpose
           );
           hasExplicitExpose = true;
@@ -231,7 +225,6 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, fileP
             optionsExpose, 
             importDeclarations, 
             filePath, 
-            'expose', 
             processImportedExpose
           );
           // 同步更新 optionsExposeOrder 数组

@@ -11,13 +11,8 @@ import {
   findExportedObjectAndImports, 
   processObjectProperties, 
   processIdentifierReference 
-} from './import-analyzer'
-
-function logDebug(message: string, ...args: any[]) {
-  if (process.env.DEBUG) {
-    console.log(`[props-analyzer] ${message}`, ...args);
-  }
-}
+} from '../common/import-analyzer'
+import { logDebug } from '../common/utils'
 
 export function analyzeProps(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
   // 使用Set来避免重复属性
@@ -68,7 +63,6 @@ export function analyzeProps(code: string, parsedAst?: ParseResult<File>, filePa
             propsSet, 
             importDeclarations, 
             filePath,
-            'props',
             processImportedProps
           )
         } else if (t.isObjectExpression(nodePath.node.value)) {
