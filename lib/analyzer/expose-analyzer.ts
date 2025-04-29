@@ -6,6 +6,14 @@ import type { File } from '@babel/types'
 import { parseComponent } from './shared-parser'
 import * as fs from 'fs'
 import * as path from 'path'
+import { 
+  ImportInfo, 
+  collectImportDeclarations, 
+  findExportedObjectAndImports, 
+  processArrayElements,
+  processObjectProperties,
+  processIdentifierReference
+} from './import-analyzer'
 
 export interface ExposeInfo {
   name: string;
@@ -15,11 +23,6 @@ function logDebug(message: string, ...args: any[]) {
   if (process.env.DEBUG) {
     console.log(`[expose-analyzer] ${message}`, ...args);
   }
-}
-
-interface ImportInfo {
-  source: string;
-  importedName: string;
 }
 
 export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
@@ -180,25 +183,30 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, fileP
       const id = path.node.id;
       if (t.isIdentifier(id) && id.name === 'expose') {
         if (t.isArrayExpression(path.node.init)) {
+          processArrayElements(path.node.init.elements, exposed);
           path.node.init.elements.forEach(element => {
-            if (t.isStringLiteral(element)) {
-              if (!exposed.has(element.value)) {
+            if (t.isStringLiteral(element) || t.isIdentifier(element)) {
+              if (t.isStringLiteral(element) && !exposed.has(element.value)) {
                 exposed.add(element.value);
                 exposeOrder.push(element.value);
-                hasExplicitExpose = true;
-              }
-            } else if (t.isIdentifier(element)) {
-              if (!exposed.has(element.name)) {
+              } else if (t.isIdentifier(element) && !exposed.has(element.name)) {
                 exposed.add(element.name);
                 exposeOrder.push(element.name);
-                hasExplicitExpose = true;
               }
+              hasExplicitExpose = true;
             }
           });
         } else if (t.isIdentifier(path.node.init) && importDeclarations[path.node.init.name] && filePath) {
           // 处理导入的 expose 变量
-          const importInfo = importDeclarations[path.node.init.name];
-          processImportedExpose(importInfo, filePath, exposed, exposeOrder);
+          processIdentifierReference(
+            path.node.init, 
+            path, 
+            exposed, 
+            importDeclarations, 
+            filePath, 
+            'expose', 
+            processImportedExpose
+          );
           hasExplicitExpose = true;
         }
       }
@@ -208,48 +216,31 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, fileP
     ObjectProperty(path) {
       if (t.isIdentifier(path.node.key) && path.node.key.name === 'expose') {
         if (t.isArrayExpression(path.node.value)) {
-          path.node.value.elements.forEach(element => {
-            if (t.isStringLiteral(element)) {
-              if (!optionsExpose.has(element.value)) {
-                optionsExpose.add(element.value);
-                optionsExposeOrder.push(element.value);
-                hasOptionsExpose = true;
-              }
-            } else if (t.isIdentifier(element)) {
-              if (!optionsExpose.has(element.name)) {
-                optionsExpose.add(element.name);
-                optionsExposeOrder.push(element.name);
-                hasOptionsExpose = true;
-              }
+          processArrayElements(path.node.value.elements, optionsExpose);
+          // 同步更新 optionsExposeOrder 数组
+          Array.from(optionsExpose).forEach(item => {
+            if (!optionsExposeOrder.includes(item)) {
+              optionsExposeOrder.push(item);
             }
           });
+          hasOptionsExpose = true;
         } else if (t.isIdentifier(path.node.value)) {
-          const varName = path.node.value.name;
-          // 如果是本地变量
-          const binding = path.scope.getBinding(varName);
-          if (binding && t.isVariableDeclarator(binding.path.node) && t.isArrayExpression(binding.path.node.init)) {
-            binding.path.node.init.elements.forEach(element => {
-              if (t.isStringLiteral(element)) {
-                if (!optionsExpose.has(element.value)) {
-                  optionsExpose.add(element.value);
-                  optionsExposeOrder.push(element.value);
-                  hasOptionsExpose = true;
-                }
-              } else if (t.isIdentifier(element)) {
-                if (!optionsExpose.has(element.name)) {
-                  optionsExpose.add(element.name);
-                  optionsExposeOrder.push(element.name);
-                  hasOptionsExpose = true;
-                }
-              }
-            });
-          }
-          // 如果是导入的变量
-          else if (importDeclarations[varName] && filePath) {
-            const importInfo = importDeclarations[varName];
-            processImportedExpose(importInfo, filePath, optionsExpose, optionsExposeOrder);
-            hasOptionsExpose = true;
-          }
+          processIdentifierReference(
+            path.node.value, 
+            path, 
+            optionsExpose, 
+            importDeclarations, 
+            filePath, 
+            'expose', 
+            processImportedExpose
+          );
+          // 同步更新 optionsExposeOrder 数组
+          Array.from(optionsExpose).forEach(item => {
+            if (!optionsExposeOrder.includes(item)) {
+              optionsExposeOrder.push(item);
+            }
+          });
+          hasOptionsExpose = true;
         }
       }
     },
@@ -483,35 +474,17 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, fileP
   return exposeOrder
 }
 
-// 收集导入声明
-function collectImportDeclarations(ast: File, importDeclarations: Record<string, ImportInfo>) {
-  traverse(ast, {
-    ImportDeclaration(path) {
-      const source = path.node.source.value;
-      path.node.specifiers.forEach(specifier => {
-        if (t.isImportSpecifier(specifier)) {
-          // 处理命名导入: import { expose } from './consts'
-          const importedName = t.isIdentifier(specifier.imported) ? specifier.imported.name : specifier.imported.value;
-          const localName = specifier.local.name;
-          importDeclarations[localName] = { source, importedName };
-        } else if (t.isImportDefaultSpecifier(specifier)) {
-          // 处理默认导入: import expose from './consts'
-          importDeclarations[specifier.local.name] = { source, importedName: 'default' };
-        }
-      });
-    }
-  });
-}
-
 // 处理导入的 expose
 function processImportedExpose(
   importInfo: ImportInfo,
   filePath: string,
-  exposedSet: Set<string>,
-  exposeOrder: string[]
-) {
+  exposedCollection: Set<string> | string[]
+): void {
   const importSource = importInfo.source;
   const importedName = importInfo.importedName;
+  const isSet = exposedCollection instanceof Set;
+  const exposedSet = isSet ? exposedCollection as Set<string> : new Set<string>();
+  const exposeOrder = isSet ? [] : exposedCollection as string[];
   
   try {
     const currentDir = path.dirname(filePath);
@@ -524,100 +497,39 @@ function processImportedExpose(
       const importedAst = parseComponent(importedCode).ast;
       
       // 查找导出的变量
-      let found = false;
+      const [exportedExposeObject, nestedImportDeclarations] = findExportedObjectAndImports(
+        importedAst, 
+        importedName, 
+      );
       
-      traverse(importedAst, {
-        // 处理 export const expose = ['method1', 'method2']
-        ExportNamedDeclaration(path) {
-          if (found) return;
-          
-          if (t.isVariableDeclaration(path.node.declaration)) {
-            const declarations = path.node.declaration.declarations;
-            for (const decl of declarations) {
-              if (t.isIdentifier(decl.id) && decl.id.name === importedName) {
-                if (t.isArrayExpression(decl.init)) {
-                  decl.init.elements.forEach(element => {
-                    if (t.isStringLiteral(element)) {
-                      const name = element.value;
-                      if (!exposedSet.has(name)) {
-                        exposedSet.add(name);
-                        exposeOrder.push(name);
-                      }
-                    } else if (t.isIdentifier(element)) {
-                      const name = element.name;
-                      if (!exposedSet.has(name)) {
-                        exposedSet.add(name);
-                        exposeOrder.push(name);
-                      }
-                    }
-                  });
-                  found = true;
-                  path.stop();
-                }
+      if (exportedExposeObject) {
+        if (t.isArrayExpression(exportedExposeObject)) {
+          exportedExposeObject.elements.forEach(element => {
+            if (t.isStringLiteral(element)) {
+              const name = element.value;
+              if (!exposedSet.has(name)) {
+                exposedSet.add(name);
+                if (!isSet) exposeOrder.push(name);
+              }
+            } else if (t.isIdentifier(element)) {
+              const name = element.name;
+              if (!exposedSet.has(name)) {
+                exposedSet.add(name);
+                if (!isSet) exposeOrder.push(name);
               }
             }
-          }
-        },
-        
-        // 处理 export { expose }
-        ExportSpecifier(path) {
-          if (found) return;
-          
-          if (t.isIdentifier(path.node.exported) && path.node.exported.name === importedName) {
-            const localName = path.node.local.name;
-            const binding = path.scope.getBinding(localName);
-            
-            if (binding && t.isVariableDeclarator(binding.path.node)) {
-              if (t.isArrayExpression(binding.path.node.init)) {
-                binding.path.node.init.elements.forEach(element => {
-                  if (t.isStringLiteral(element)) {
-                    const name = element.value;
-                    if (!exposedSet.has(name)) {
-                      exposedSet.add(name);
-                      exposeOrder.push(name);
-                    }
-                  } else if (t.isIdentifier(element)) {
-                    const name = element.name;
-                    if (!exposedSet.has(name)) {
-                      exposedSet.add(name);
-                      exposeOrder.push(name);
-                    }
-                  }
-                });
-                found = true;
-                path.stop();
-              }
-            }
-          }
-        },
-        
-        // 处理 export default ['method1', 'method2']
-        ExportDefaultDeclaration(path) {
-          if (found || importedName !== 'default') return;
-          
-          if (t.isArrayExpression(path.node.declaration)) {
-            path.node.declaration.elements.forEach(element => {
-              if (t.isStringLiteral(element)) {
-                const name = element.value;
-                if (!exposedSet.has(name)) {
-                  exposedSet.add(name);
-                  exposeOrder.push(name);
-                }
-              } else if (t.isIdentifier(element)) {
-                const name = element.name;
-                if (!exposedSet.has(name)) {
-                  exposedSet.add(name);
-                  exposeOrder.push(name);
-                }
-              }
-            });
-            found = true;
-            path.stop();
-          }
+          });
+        } else if (t.isObjectExpression(exportedExposeObject)) {
+          processObjectProperties(
+            exportedExposeObject.properties, 
+            exposedCollection, 
+            importFilePath, 
+            nestedImportDeclarations, 
+            'expose', 
+            processImportedExpose
+          );
         }
-      });
-      
-      if (!found) {
+      } else {
         logDebug(`Could not find export named ${importedName} in ${importFilePath}`);
       }
     } else {
