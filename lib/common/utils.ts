@@ -5,3 +5,6 @@ export function logDebug(moduleName: string, message: string, ...args: any[]) {
   }
 }
 
+export function logError(moduleName: string, message: string, ...args: any[]) {
+  console.error(`[${moduleName}] ${message}`, ...args);
+}
