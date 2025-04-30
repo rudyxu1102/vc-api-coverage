@@ -13,7 +13,7 @@ describe('Button.tsx', () => {
       },
       slots: {
         default: '<span>Slot Content</span>',
-        // icon: '<i>Icon</i>', // icon slot 未覆盖
+        icon: '<i>Icon</i>', // icon slot 未覆盖
       }
     });
 

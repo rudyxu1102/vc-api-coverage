@@ -76,31 +76,87 @@ export default defineConfig({
 
 ### 1. CLI Format
 ```
-   ╭─────────────────── VC Coverage Reporter ───────────────────╮
-   │                                                            │
-   │   [Coverage Report for src/components/button/Button.tsx]   │
-   │                                                            │
-   │   Props Coverage: 1 / 3 (33.3%)                            │
-   │     label           ✅                                     │
-   │     size            ❌                                     │
-   │     disabled        ❌                                     │
-   │                                                            │
-   │   Events Coverage: 1 / 2 (50%)                             │
-   │     click           ✅                                     │
-   │     hover           ❌                                     │
-   │                                                            │
-   │   Slots Coverage: 1 / 2 (50%)                              │
-   │     default         ✅                                     │
-   │     icon            ❌                                     │
-   │                                                            │
-   │   Methods Coverage: 0 / 1 (0%)                             │
-   │     focus           ❌                                     │
-   │                                                            │
-   ╰────────────────────────────────────────────────────────────╯
+------------------|---------|----------|---------|-----------|-------------------------------
+Components        |   Props |  Emits   | Slots   |  Exposes  | Uncovered API
+All               |   80%   |   83%    |   100%  |   0%      |
+Button.tsx        |   2/4   |   1/2    |   2/2   |   0/1     | loading, disabled, hover, focus
+Input.tsx         |   6/6   |   4/4    |   3/3   |   0/3     | focus, select, clear
+------------------|---------|----------|---------|-----------|-------------------------------
 ```
 
 ### 2. HTML Format
 ![](./examples/src/assets/image.png)
+
+
+### 3. JSON Format
+```json
+{
+  "summary": {
+    "totalComponents": 1,
+    "totalProps": 10,
+    "coveredProps": 8,
+    "totalEmits": 6,
+    "coveredEmits": 5,
+    "totalSlots": 5,
+    "coveredSlots": 5,
+    "totalExposes": 4,
+    "coveredExposes": 0
+  },
+  "stats": {
+    "props": 80,
+    "events": 83,
+    "slots": 100,
+    "methods": 0,
+    "total": 72
+  },
+  "components": [
+    {
+      "name": "Button.tsx",
+      "file": "src/components/button/Button.tsx",
+      "props": {
+        "total": 4,
+        "covered": 2,
+        "details": [
+          {
+            "name": "loading",
+            "covered": false
+          },
+        ]
+      },
+      "emits": {
+        "total": 2,
+        "covered": 1,
+        "details": [
+          {
+            "name": "click",
+            "covered": true
+          },
+        ]
+      },
+      "slots": {
+        "total": 2,
+        "covered": 2,
+        "details": [
+          {
+            "name": "default",
+            "covered": true
+          },
+        ]
+      },
+      "exposes": {
+        "total": 1,
+        "covered": 0,
+        "details": [
+          {
+            "name": "focus",
+            "covered": false
+          }
+        ]
+      }
+    },
+  ]
+}
+```
 
 
 ## Understanding the Report
