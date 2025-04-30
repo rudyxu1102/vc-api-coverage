@@ -40,12 +40,21 @@ export class HTMLReporter {
 
   public async generateReport() {
     const reportDir = path.resolve(process.cwd(), this.outputDir)
-    if (!fs.existsSync(reportDir)) {
-      fs.mkdirSync(reportDir, { recursive: true })
+    
+    try {
+      // Ensure directory exists with better error handling
+      if (!fs.existsSync(reportDir)) {
+        fs.mkdirSync(reportDir, { recursive: true })
+      }
+  
+      const htmlContent = this.generateHTML()
+      const filePath = path.join(reportDir, 'index.html')
+      fs.writeFileSync(filePath, htmlContent)
+      return filePath
+    } catch (error) {
+      console.error(`Failed to generate report: ${error as Error}.message`)
+      throw error
     }
-
-    const htmlContent = this.generateHTML()
-    fs.writeFileSync(path.join(reportDir, 'index.html'), htmlContent)
   }
 
   private generateHTML(): string {

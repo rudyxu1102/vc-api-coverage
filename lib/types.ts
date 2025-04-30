@@ -13,3 +13,29 @@ export interface ComponentCoverage {
 }
 
 export type ReportFormat = 'cli' | 'html' | 'json' 
+
+
+export interface VcCoverageData {
+  name: string;
+  file: string;
+  props: {
+    total: number;
+    covered: number;
+    details: Array<{ name: string; covered: boolean }>;
+  };
+  emits: {
+    total: number;
+    covered: number;
+    details: Array<{ name: string; covered: boolean }>;
+  };
+  slots: {
+    total: number;
+    covered: number;
+    details: Array<{ name: string; covered: boolean }>;
+  };
+  exposes: {
+    total: number;
+    covered: number;
+    details: Array<{ name: string; covered: boolean }>;
+  };
+}

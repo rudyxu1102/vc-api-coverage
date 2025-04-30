@@ -9,48 +9,26 @@ import { analyzeProps } from '../lib/analyzer/props-analyzer';
 import { analyzeEmits } from '../lib/analyzer/emits-analyzer';
 import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
 import { analyzeExpose } from '../lib/analyzer/expose-analyzer';
-import { matchTestCoverage, ComponentAnalysis } from '../lib/matcher/test-coverage-matcher';
+import { matchTestCoverage, ComponentAnalysis, type TestCoverage } from '../lib/matcher/test-coverage-matcher';
 import { generateCliReport } from '../lib/reporter/cli-reporter';
 import { HTMLReporter } from '../lib/reporter/html-reporter';
 import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
 import { parseComponent } from '../lib/common/shared-parser';
+import type { VcCoverageData } from '../lib/types';
 
 // 默认组件文件匹配模式
 const DEFAULT_INCLUDE = ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'];
 // 默认测试文件后缀
 const DEFAULT_TEST_SUFFIXES = ['.spec.ts', '.test.ts', '.spec.tsx', '.test.tsx'];
 
+
 export default class VcCoverageReporter implements Reporter {
   private ctx!: Vitest;
   private options: VcCoverageOptions;
-  private allReports: string[] = [];
   private htmlReporter: HTMLReporter;
   private jsonReporter: JSONReporter;
-  private coverageData: Array<{
-    name: string;
-    file: string;
-    props: {
-      total: number;
-      covered: number;
-      details: Array<{ name: string; covered: boolean }>;
-    };
-    emits: {
-      total: number;
-      covered: number;
-      details: Array<{ name: string; covered: boolean }>;
-    };
-    slots: {
-      total: number;
-      covered: number;
-      details: Array<{ name: string; covered: boolean }>;
-    };
-    exposes: {
-      total: number;
-      covered: number;
-      details: Array<{ name: string; covered: boolean }>;
-    };
-  }> = [];
+  private coverageData: Array<VcCoverageData> = [];
 
   constructor(options: VcCoverageOptions = {}) {
     this.options = {
@@ -67,6 +45,31 @@ export default class VcCoverageReporter implements Reporter {
   onInit(ctx: Vitest): void {
     this.ctx = ctx;
     console.log('\n[vc-api-coverage] Initialized.');
+  }
+
+
+  private mergeCoverage(a: TestCoverage, b: TestCoverage): TestCoverage {
+    const result: TestCoverage = {
+      props: [], emits: [], slots: [], exposes: []
+    };
+    
+    // 为每个API类型合并覆盖率信息
+    (['props', 'emits', 'slots', 'exposes'] as const).forEach(key => {
+      // 创建名称到覆盖状态的映射
+      const coveredMap = new Map<string, boolean>();
+      
+      // 从两个覆盖率对象收集覆盖状态
+      [...a[key], ...b[key]].forEach(item => {
+        // 如果名称已存在且已被覆盖，或者当前项被覆盖，则标记为已覆盖
+        coveredMap.set(item.name, coveredMap.get(item.name) || item.covered);
+      });
+      
+      // 转换回数组格式
+      result[key] = [...new Set([...a[key], ...b[key]].map(item => item.name))]
+        .map(name => ({ name, covered: coveredMap.get(name) || false }));
+    });
+    
+    return result;
   }
 
   async onFinished(_files?: File[], _errors?: unknown[]): Promise<void> {
@@ -104,15 +107,16 @@ export default class VcCoverageReporter implements Reporter {
 
     for (const componentPath of componentFiles) {
       const relativeComponentPath = path.relative(rootDir, componentPath);
-      const testPath = await this.findTestFile(componentPath);
+      const testPaths = await this.findTestFiles(componentPath);
+      // 后缀名
+      const suffix = path.extname(componentPath);
 
       // 检查是否是一个组件文件，忽略一些明显的非组件文件
-      const isExcludedFile = [
-        '.test.', '.spec.', 'utils.', 'types.', 'constants.', 'config.', 'helpers.', 'hooks.',
-      ].some(pattern => relativeComponentPath.includes(pattern));
+      const isInclude = [
+        '.tsx', '.vue',
+      ].some(pattern => suffix.includes(pattern));
 
-      if (isExcludedFile) {
-        console.warn(chalk.yellow(`[vc-api-coverage] Skipping non-component file: ${relativeComponentPath}`));
+      if (!isInclude) {
         continue;
       }
 
@@ -123,17 +127,6 @@ export default class VcCoverageReporter implements Reporter {
         // 1. 分析组件 API - 使用共享的 AST
         const parsedContent = parseComponent(componentCode);
         
-        // 检查文件是否包含组件定义
-        const hasComponent = componentCode.includes('defineComponent') || 
-                          componentCode.includes('export default') || 
-                          componentCode.includes('render') ||
-                          componentCode.includes('setup');
-        
-        if (!hasComponent) {
-          console.warn(chalk.yellow(`[vc-api-coverage] Skipping: File doesn't appear to be a component ${relativeComponentPath}`));
-          continue;
-        }
-
         // 分析组件API
         const props = analyzeProps(componentCode, parsedContent.ast, componentPath);  // 传入文件路径
         const emits = analyzeEmits(componentCode, parsedContent.ast, componentPath);
@@ -141,34 +134,24 @@ export default class VcCoverageReporter implements Reporter {
         const exposes = analyzeExpose(componentCode, parsedContent.ast, componentPath);
         const analysis: ComponentAnalysis = { props, emits, slots, exposes };
         
-        // 先记录组件分析结果
-        console.log(chalk.blue(`[vc-api-coverage] Analyzed component ${relativeComponentPath}:`));
-        console.log(chalk.blue(`  - Props: ${props.length}`));
-        console.log(chalk.blue(`  - Emits: ${emits.length}`));
-        console.log(chalk.blue(`  - Slots: ${slots.length}`));
-        console.log(chalk.blue(`  - Exposes: ${exposes.length}`));
-
         // 2. 匹配测试覆盖（如果有测试文件）
-        let coverage;
-        if (testPath) {
-          const testCode = await fs.readFile(testPath, 'utf-8');
-          coverage = matchTestCoverage(analysis, testCode);
+        let coverage: TestCoverage = {
+          props: props.map(p => ({ name: p, covered: false })),
+          emits: emits.map(e => ({ name: e, covered: false })),
+          slots: slots.map(s => ({ name: s, covered: false })),
+          exposes: exposes.map(ex => ({ name: ex, covered: false }))
+        }; 
+        if (testPaths.length > 0) {
+          for (const testPath of testPaths) {
+            const testCode = await fs.readFile(testPath, 'utf-8');
+            const res = matchTestCoverage(analysis, testCode);
+            coverage =  this.mergeCoverage(coverage, res);
+          }
         } else {
           console.warn(chalk.yellow(`[vc-api-coverage] No test file found for ${relativeComponentPath}, reporting API without coverage`));
-          // 创建一个没有覆盖率的分析结果
-          coverage = {
-            props: props.map(p => ({ name: p, covered: false })),
-            emits: emits.map(e => ({ name: e, covered: false })),
-            slots: slots.map(s => ({ name: s, covered: false })),
-            exposes: exposes.map(ex => ({ name: ex, covered: false }))
-          };
         }
 
-        // 3. 生成并存储报告
-        const report = generateCliReport(coverage, relativeComponentPath);
-        this.allReports.push(report);
-
-        // 4. 收集覆盖率数据
+        // 3. 收集覆盖率数据
         this.coverageData.push({
           name: path.basename(relativeComponentPath),
           file: relativeComponentPath,
@@ -199,12 +182,15 @@ export default class VcCoverageReporter implements Reporter {
       }
     }
 
-    // 5. 根据配置生成不同格式的报告
+    // 4. 根据配置生成不同格式的报告
     const format = this.options.format || [];
     const shouldGenerateFormat = (f: ReportFormat) => format.includes(f);
 
-    if (shouldGenerateFormat('cli') && this.allReports.length > 0) {
-      console.log('\n' + this.allReports.join('\n'));
+    if (shouldGenerateFormat('cli')) {
+      // 计算总体覆盖率
+      const report = generateCliReport(this.coverageData);
+      
+      console.log('\n' + report);
     }
 
     if (shouldGenerateFormat('html')) {
@@ -225,41 +211,16 @@ export default class VcCoverageReporter implements Reporter {
   }
 
   // 辅助函数：寻找测试文件
-  private async findTestFile(componentPath: string): Promise<string | null> {
+  private async findTestFiles(componentPath: string): Promise<string[]> {
     const parsedPath = path.parse(componentPath);
-    const baseNameWithoutExt = parsedPath.name;
     const dirName = parsedPath.dir;
-
+    const testFiles = await this.ctx.globTestFiles([`${dirName}`])
     const potentialTestPaths: string[] = [];
-
-    // 1. 同目录下，不同后缀
-    DEFAULT_TEST_SUFFIXES.forEach(suffix => {
-      potentialTestPaths.push(path.join(dirName, `${baseNameWithoutExt}${suffix}`));
-    });
-
-    // 2. 同目录下 __tests__ 子目录
-    DEFAULT_TEST_SUFFIXES.forEach(suffix => {
-      potentialTestPaths.push(path.join(dirName, '__tests__', `${baseNameWithoutExt}${suffix}`));
-      potentialTestPaths.push(path.join(dirName, 'tests', `${baseNameWithoutExt}${suffix}`)); // 也检查 tests 目录
-    });
-
-    // 3. 上一级目录的 __tests__ 子目录 (针对 src/components/Button/index.tsx -> src/components/Button/__tests__/Button.spec.ts)
-    const parentDir = path.dirname(dirName);
-    DEFAULT_TEST_SUFFIXES.forEach(suffix => {
-      potentialTestPaths.push(path.join(parentDir, '__tests__', `${baseNameWithoutExt}${suffix}`));
-      potentialTestPaths.push(path.join(parentDir, 'tests', `${baseNameWithoutExt}${suffix}`));
-    });
-
-    for (const testPath of potentialTestPaths) {
-      try {
-        await fs.access(testPath); // 检查文件是否存在且可访问
-        return testPath;
-      } catch {
-        // 文件不存在或不可访问，继续尝试下一个
-      }
+    for (const testFile of testFiles) {
+      const filePath = testFile[1];
+      potentialTestPaths.push(filePath)
     }
-
-    return null; // 未找到
+    return potentialTestPaths;
   }
 
   // 其他 Reporter 方法 (可以为空或添加日志)
@@ -270,4 +231,4 @@ export default class VcCoverageReporter implements Reporter {
   onServerRestart(_reason?: string | undefined): void {}
   onCollected(_files?: File[] | undefined): void {}
   onProcessTerminated(_signal: string, _code: number | null): void {}
-} 
+}
