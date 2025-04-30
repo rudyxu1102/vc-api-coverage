@@ -8,6 +8,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
+  plugins: [
+    vue(),
+    vueJsx(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

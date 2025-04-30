@@ -3,12 +3,6 @@ import { describe, it, expect } from 'vitest';
 import Button from '../Button';
 
 describe('Button.tsx', () => {
-  it('mock', () => {
-    const mock = vi.fn();
-    mock.mockReturnValue('test');
-    expect(mock()).toBe('test');
-  })
-  
   it('renders label and emits click', async () => {
     const labelText = 'Click Me';
     const wrapper = mount(Button, {

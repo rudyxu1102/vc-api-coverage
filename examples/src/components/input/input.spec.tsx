@@ -19,7 +19,7 @@ describe('Input.tsx', () => {
       props: {
         modelValue: 'test value',
         placeholder: 'Enter text',
-        // disabled: true,
+        disabled: true,
         type: 'password',
         size: 'sm',
         clearable: true,
@@ -85,8 +85,8 @@ describe('Input.tsx', () => {
     const wrapper = mount(Input, {
       slots: {
         prefix: '<span class="prefix">$</span>',
-        // suffix: '<span class="suffix">USD</span>',
-        // clearIcon: '<span class="custom-clear">Clear</span>'
+        suffix: '<span class="suffix">USD</span>',
+        clearIcon: '<span class="custom-clear">Clear</span>'
       },
       props: {
         modelValue: 'test',
