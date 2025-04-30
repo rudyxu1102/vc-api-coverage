@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest'
 import { HTMLReporter } from '../../lib/reporter/html-reporter'
 import { promises as fs } from 'fs'
 import path from 'path'
 
 describe('html-reporter', () => {
-  const testOutputDir = 'test-coverage'
+  const testOutputDir = './test/coverage'
   let reporter: HTMLReporter
 
   beforeEach(async () => {
@@ -15,14 +15,6 @@ describe('html-reporter', () => {
       // Ignore if directory exists
     }
     reporter = new HTMLReporter(testOutputDir)
-  })
-
-  afterEach(async () => {
-    try {
-      await fs.rm(testOutputDir, { recursive: true, force: true })
-    } catch (error) {
-      // Ignore error if directory doesn't exist
-    }
   })
 
   it('should generate HTML report with coverage data', async () => {
