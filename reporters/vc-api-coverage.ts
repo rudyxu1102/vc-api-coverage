@@ -230,12 +230,18 @@ export default class VcCoverageReporter implements Reporter {
       const coveredExposes = this.coverageData.reduce((acc, item) => acc + item.exposes.covered, 0);
       const exposesCoverage = totalExposes > 0 ? Math.round((coveredExposes / totalExposes) * 100) : 100;
       
+      // 为百分比添加颜色
+      const colorProps = colorizePercentage(propsCoverage);
+      const colorEmits = colorizePercentage(emitsCoverage);
+      const colorSlots = colorizePercentage(slotsCoverage);
+      const colorExposes = colorizePercentage(exposesCoverage);
+      
       // 表格头部和分割线
       const headerLine = "------------------|---------|----------|---------|-----------|-------------------------------";
       const header = "Components        |   Props |  Emits   | Slots   |  Exposes  | Uncovered API";
       
       // 添加总体覆盖行
-      const totalRow = `All               |   ${propsCoverage}%   |    ${emitsCoverage}%   |   ${slotsCoverage}%   |   ${exposesCoverage}%     |`;
+      const totalRow = `All               |   ${colorProps}   |    ${colorEmits}   |   ${colorSlots}   |   ${colorExposes}     |`;
       
       // 生成最终表格
       const tableReport = [
@@ -287,4 +293,21 @@ export default class VcCoverageReporter implements Reporter {
   onServerRestart(_reason?: string | undefined): void {}
   onCollected(_files?: File[] | undefined): void {}
   onProcessTerminated(_signal: string, _code: number | null): void {}
+}
+
+// 为百分比添加颜色
+function colorizePercentage(percentage: number): string {
+  if (percentage === 100) {
+    // 100% 覆盖率，绿色
+    return chalk.green(`${percentage}%`);
+  } else if (percentage >= 80) {
+    // 80%+ 覆盖率，青色
+    return chalk.cyan(`${percentage}%`);
+  } else if (percentage >= 50) {
+    // 50%+ 覆盖率，黄色
+    return chalk.yellow(`${percentage}%`);
+  } else {
+    // 低于 50%，红色
+    return chalk.red(`${percentage}%`);
+  }
 } 

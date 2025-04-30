@@ -94,8 +94,40 @@ export function generateCliReport(coverageData: TestCoverage, componentPath: str
     return `${componentPath.padEnd(20)}|   N/A   |    N/A   |   N/A   |    N/A    | No API found`;
   }
   
+  // 为覆盖率添加颜色
+  const colorPropsCoverage = formatCoverageWithColor(propsStats.covered, propsStats.total);
+  const colorEmitsCoverage = formatCoverageWithColor(emitsStats.covered, emitsStats.total);
+  const colorSlotsCoverage = formatCoverageWithColor(slotsStats.covered, slotsStats.total);
+  const colorExposesCoverage = formatCoverageWithColor(exposeStats.covered, exposeStats.total);
+  
   // 创建表格行
-  const row = `${componentPath.padEnd(20)}|  ${propsStats.covered} / ${propsStats.total}  |   ${emitsStats.covered} / ${emitsStats.total}  |   ${slotsStats.covered} / ${slotsStats.total} |   ${exposeStats.covered} / ${exposeStats.total}   | ${uncoveredAPIs}`;
+  const row = `${componentPath.padEnd(20)}|  ${colorPropsCoverage}  |   ${colorEmitsCoverage}  |   ${colorSlotsCoverage} |   ${colorExposesCoverage}   | ${chalk.yellow(uncoveredAPIs)}`;
   
   return row;
+}
+
+// 根据覆盖率添加颜色
+function formatCoverageWithColor(covered: number, total: number): string {
+  if (total === 0) {
+    return chalk.dim('N/A');
+  }
+  
+  const ratio = covered / total;
+  let coloredText;
+  
+  if (ratio === 1) {
+    // 100% 覆盖率，绿色
+    coloredText = chalk.green(`${covered} / ${total}`);
+  } else if (ratio >= 0.8) {
+    // 80%+ 覆盖率，青色
+    coloredText = chalk.cyan(`${covered} / ${total}`);
+  } else if (ratio >= 0.5) {
+    // 50%+ 覆盖率，黄色
+    coloredText = chalk.yellow(`${covered} / ${total}`);
+  } else {
+    // 低于 50%，红色
+    coloredText = chalk.red(`${covered} / ${total}`);
+  }
+  
+  return coloredText;
 } 
