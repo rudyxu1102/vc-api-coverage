@@ -76,12 +76,16 @@ export default defineConfig({
 
 ### 1. CLI Format
 ```
-------------------|---------|----------|---------|-----------|-------------------------------
-Components        |   Props |  Emits   | Slots   |  Exposes  | Uncovered API
-All               |   80%   |   83%    |   100%  |   0%      |
-Button.tsx        |   2/4   |   1/2    |   2/2   |   0/1     | loading, disabled, hover, focus
-Input.tsx         |   6/6   |   4/4    |   3/3   |   0/3     | focus, select, clear
-------------------|---------|----------|---------|-----------|-------------------------------
+╔═══════════════╤═══════════╤════════════╤═══════════╤════════════╤═══════════════════════╗
+║ Components    │ Props     │ Emits      │ Slots     │ Exposes    │ Uncovered APIs        ║
+╟───────────────┼───────────┼────────────┼───────────┼────────────┼───────────────────────╢
+║ All           │ 80%       │ 83%        │ 100%      │ 0%         │                       ║
+╟───────────────┼───────────┼────────────┼───────────┼────────────┼───────────────────────╢
+║ Button.tsx    │ 2/4       │ 1/2        │ 2/2       │ 0/1        │ loading, disabled,    ║
+║               │           │            │           │            │ hover, focus          ║
+╟───────────────┼───────────┼────────────┼───────────┼────────────┼───────────────────────╢
+║ Input.tsx     │ 6/6       │ 4/4        │ 3/3       │ 0/3        │ focus, select, clear  ║
+╚═══════════════╧═══════════╧════════════╧═══════════╧════════════╧═══════════════════════╝
 ```
 
 ### 2. HTML Format
@@ -157,14 +161,6 @@ Input.tsx         |   6/6   |   4/4    |   3/3   |   0/3     | focus, select, cl
   ]
 }
 ```
-
-
-## Understanding the Report
-
-- ✅ indicates the API is covered by tests
-- ❌ indicates the API needs test coverage
-- Coverage percentages are shown for each API category
-- The report clearly shows which specific props, emits, slots, and exposed methods need attention
 
 ## Contributing
 

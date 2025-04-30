@@ -1,106 +1,91 @@
 import { describe, it, expect } from 'vitest'
-import { generateCliReport, generateRowReport } from '../../lib/reporter/cli-reporter'
-import type { ComponentCoverage, VcCoverageData } from '../../lib/types'
+import { generateCliReport } from '../../lib/reporter/cli-reporter'
+import type { VcCoverageData } from '../../lib/types'
 
 describe('cli-reporter', () => {
-  it('should generate CLI report for full coverage', () => {
-    const coverage: ComponentCoverage = {
-      props: [
-        { name: 'title', covered: true },
-        { name: 'count', covered: true }
-      ],
-      emits: [
-        { name: 'change', covered: true },
-        { name: 'submit', covered: true }
-      ],
-      slots: [
-        { name: 'header', covered: true },
-        { name: 'footer', covered: true }
-      ],
-      exposes: [
-        { name: 'reset', covered: true },
-        { name: 'validate', covered: true }
-      ]
-    }
-
-    // Convert to VcCoverageData format
+  it('should generate CLI report with full coverage component', () => {
     const vcCoverage: VcCoverageData = {
       name: 'MyComponent.vue',
       file: 'src/components/MyComponent.vue',
       props: {
-        total: coverage.props.length,
-        covered: coverage.props.filter(p => p.covered).length,
-        details: coverage.props
+        total: 2,
+        covered: 2,
+        details: [
+          { name: 'title', covered: true },
+          { name: 'count', covered: true }
+        ]
       },
       emits: {
-        total: coverage.emits.length,
-        covered: coverage.emits.filter(e => e.covered).length,
-        details: coverage.emits
+        total: 2,
+        covered: 2,
+        details: [
+          { name: 'change', covered: true },
+          { name: 'submit', covered: true }
+        ]
       },
       slots: {
-        total: coverage.slots.length,
-        covered: coverage.slots.filter(s => s.covered).length,
-        details: coverage.slots
+        total: 2,
+        covered: 2,
+        details: [
+          { name: 'header', covered: true },
+          { name: 'footer', covered: true }
+        ]
       },
       exposes: {
-        total: coverage.exposes.length,
-        covered: coverage.exposes.filter(ex => ex.covered).length,
-        details: coverage.exposes
+        total: 2,
+        covered: 2,
+        details: [
+          { name: 'reset', covered: true },
+          { name: 'validate', covered: true }
+        ]
       }
     }
 
-    const report = generateRowReport(vcCoverage)
+    const report = generateCliReport([vcCoverage])
     expect(report).toContain('MyComponent.vue')
     expect(report).toContain('2/2')
+    expect(report).not.toContain('Uncovered API')
   })
 
-  it('should generate CLI report for partial coverage', () => {
-    const coverage: ComponentCoverage = {
-      props: [
-        { name: 'title', covered: true },
-        { name: 'count', covered: false }
-      ],
-      emits: [
-        { name: 'change', covered: true },
-        { name: 'submit', covered: false }
-      ],
-      slots: [
-        { name: 'header', covered: false },
-        { name: 'footer', covered: true }
-      ],
-      exposes: [
-        { name: 'reset', covered: true },
-        { name: 'validate', covered: false }
-      ]
-    }
-
-    // Convert to VcCoverageData format
+  it('should generate CLI report with partial coverage component', () => {
     const vcCoverage: VcCoverageData = {
       name: 'MyComponent.vue',
       file: 'src/components/MyComponent.vue',
       props: {
-        total: coverage.props.length,
-        covered: coverage.props.filter(p => p.covered).length,
-        details: coverage.props
+        total: 2,
+        covered: 1,
+        details: [
+          { name: 'title', covered: true },
+          { name: 'count', covered: false }
+        ]
       },
       emits: {
-        total: coverage.emits.length,
-        covered: coverage.emits.filter(e => e.covered).length,
-        details: coverage.emits
+        total: 2,
+        covered: 1,
+        details: [
+          { name: 'change', covered: true },
+          { name: 'submit', covered: false }
+        ]
       },
       slots: {
-        total: coverage.slots.length,
-        covered: coverage.slots.filter(s => s.covered).length,
-        details: coverage.slots
+        total: 2,
+        covered: 1,
+        details: [
+          { name: 'header', covered: false },
+          { name: 'footer', covered: true }
+        ]
       },
       exposes: {
-        total: coverage.exposes.length,
-        covered: coverage.exposes.filter(ex => ex.covered).length,
-        details: coverage.exposes
+        total: 2,
+        covered: 1,
+        details: [
+          { name: 'reset', covered: true },
+          { name: 'validate', covered: false }
+        ]
       }
     }
 
-    const report = generateRowReport(vcCoverage)
+    const report = generateCliReport([vcCoverage])
     expect(report).toContain('MyComponent.vue')
     expect(report).toContain('1/2')
     expect(report).toContain('count')
@@ -109,47 +94,39 @@ describe('cli-reporter', () => {
     expect(report).toContain('validate')
   })
 
-  it('should generate CLI report for no coverage', () => {
-    const coverage: ComponentCoverage = {
-      props: [
-        { name: 'title', covered: false },
-        { name: 'count', covered: false }
-      ],
-      emits: [
-        { name: 'change', covered: false },
-        { name: 'submit', covered: false }
-      ],
-      slots: [],
-      exposes: []
-    }
-
-    // Convert to VcCoverageData format
+  it('should generate CLI report with no coverage component', () => {
     const vcCoverage: VcCoverageData = {
       name: 'MyComponent.vue',
       file: 'src/components/MyComponent.vue',
       props: {
-        total: coverage.props.length,
-        covered: coverage.props.filter(p => p.covered).length,
-        details: coverage.props
+        total: 2,
+        covered: 0,
+        details: [
+          { name: 'title', covered: false },
+          { name: 'count', covered: false }
+        ]
       },
       emits: {
-        total: coverage.emits.length,
-        covered: coverage.emits.filter(e => e.covered).length,
-        details: coverage.emits
+        total: 2,
+        covered: 0,
+        details: [
+          { name: 'change', covered: false },
+          { name: 'submit', covered: false }
+        ]
       },
       slots: {
-        total: coverage.slots.length,
-        covered: coverage.slots.filter(s => s.covered).length,
-        details: coverage.slots
+        total: 0,
+        covered: 0,
+        details: []
       },
       exposes: {
-        total: coverage.exposes.length,
-        covered: coverage.exposes.filter(ex => ex.covered).length,
-        details: coverage.exposes
+        total: 0,
+        covered: 0,
+        details: []
       }
     }
 
-    const report = generateRowReport(vcCoverage)
+    const report = generateCliReport([vcCoverage])
     expect(report).toContain('MyComponent.vue')
     expect(report).toContain('0/2')
     expect(report).toContain('title')
@@ -159,14 +136,6 @@ describe('cli-reporter', () => {
   })
 
   it('should handle empty component', () => {
-    const coverage: ComponentCoverage = {
-      props: [],
-      emits: [],
-      slots: [],
-      exposes: []
-    }
-
-    // Convert to VcCoverageData format
     const vcCoverage: VcCoverageData = {
       name: 'EmptyComponent.vue',
       file: 'src/components/EmptyComponent.vue',
@@ -192,8 +161,9 @@ describe('cli-reporter', () => {
       }
     }
 
-    const report = generateRowReport(vcCoverage)
+    const report = generateCliReport([vcCoverage])
     expect(report).toContain('EmptyComponent.vue')
+    expect(report).toContain('N/A')
     expect(report).toContain('No API found')
   })
 
@@ -275,5 +245,9 @@ describe('cli-reporter', () => {
     expect(report).toContain('Component1.vue')
     expect(report).toContain('Component2.vue')
     expect(report).toContain('All')
+    expect(report).toContain('propB')
+    expect(report).toContain('propC')
+    expect(report).toContain('emitA')
+    expect(report).toContain('methodB')
   })
 }) 

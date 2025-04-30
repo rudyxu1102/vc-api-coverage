@@ -99,12 +99,18 @@ export function matchTestCoverage(
         }
       }
 
-      // 3. 查找 wrapper.vm.method()
+      // 3. 查找 wrapper.vm.method() 和 (wrapper.vm as any).method()
       if (t.isMemberExpression(path.node.callee) || t.isOptionalMemberExpression(path.node.callee)) {
         const callee = path.node.callee;
         if (t.isIdentifier(callee.property)) {
           // 检查是否是 .vm.method 或者 .vm?.method
           let baseObject = callee.object;
+          
+          // 处理 TypeScript 的 as any 类型转换
+          if (t.isTSAsExpression(baseObject)) {
+            baseObject = baseObject.expression;
+          }
+          
           if (t.isMemberExpression(baseObject) || t.isOptionalMemberExpression(baseObject)) {
             if (t.isIdentifier(baseObject.property, { name: 'vm' })) {
               foundExposes.add(callee.property.name);
@@ -113,6 +119,39 @@ export function matchTestCoverage(
         }
       }
     },
+    
+    // 4. 处理 expect((wrapper.vm as any).method).toBeDefined() 这样的语句
+    MemberExpression(path: NodePath<t.MemberExpression>) {
+      if (t.isIdentifier(path.node.property, { name: 'toBeDefined' }) || 
+          t.isIdentifier(path.node.property, { name: 'toBeTruthy' }) ||
+          t.isIdentifier(path.node.property, { name: 'toBe' }) ||
+          t.isIdentifier(path.node.property, { name: 'toEqual' })) {
+        
+        // 检查是否是 expect(...) 调用
+        const object = path.node.object;
+        if (t.isCallExpression(object) && t.isIdentifier(object.callee, { name: 'expect' })) {
+          const arg = object.arguments[0];
+          
+          // 处理 (wrapper.vm as any).method
+          if (t.isMemberExpression(arg)) {
+            if (t.isIdentifier(arg.property)) {
+              let baseObject = arg.object;
+              
+              // 处理 TypeScript 的 as any 类型转换
+              if (t.isTSAsExpression(baseObject)) {
+                baseObject = baseObject.expression;
+              }
+              
+              if (t.isMemberExpression(baseObject) || t.isOptionalMemberExpression(baseObject)) {
+                if (t.isIdentifier(baseObject.property, { name: 'vm' })) {
+                  foundExposes.add(arg.property.name);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   });
 
   // 4. 对比分析结果和找到的使用情况
