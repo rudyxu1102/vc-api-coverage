@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import Table from 'cli-table3';
 import type { VcCoverageData } from '../types'
 import { colorizePercentage, roundPercentage } from '../common/utils';
 
@@ -14,109 +15,182 @@ function getUncoveredAPIs(coverageData: VcCoverageData): string {
   return uncoveredAPIs.join(', ');
 }
 
-export function generateHeader(coverageData: VcCoverageData[]) {
-  const totalProps = coverageData.reduce((acc, item) => acc + item.props.total, 0);
-  const coveredProps = coverageData.reduce((acc, item) => acc + item.props.covered, 0);
-  const propsCoverage = roundPercentage(coveredProps, totalProps);
-  
-  const totalEmits = coverageData.reduce((acc, item) => acc + item.emits.total, 0);
-  const coveredEmits = coverageData.reduce((acc, item) => acc + item.emits.covered, 0);
-  const emitsCoverage = roundPercentage(coveredEmits, totalEmits);
-  
-  const totalSlots = coverageData.reduce((acc, item) => acc + item.slots.total, 0);
-  const coveredSlots = coverageData.reduce((acc, item) => acc + item.slots.covered, 0);
-  const slotsCoverage = roundPercentage(coveredSlots, totalSlots);
-  
-  const totalExposes = coverageData.reduce((acc, item) => acc + item.exposes.total, 0);
-  const coveredExposes = coverageData.reduce((acc, item) => acc + item.exposes.covered, 0);
-  const exposesCoverage = roundPercentage(coveredExposes, totalExposes);
-  
-  // 为百分比添加颜色
-  const colorProps = colorizePercentage(propsCoverage);
-  const colorEmits = colorizePercentage(emitsCoverage);
-  const colorSlots = colorizePercentage(slotsCoverage);
-  const colorExposes = colorizePercentage(exposesCoverage);
-  
-  // 表格头部和分割线
-  const headerLine = "------------------|---------|----------|---------|-----------|-------------------------------";
-  const header = chalk.bold("Components        |   Props |  Emits   | Slots   |  Exposes  | Uncovered API");
-  const totalPercentage = roundPercentage(coveredProps + coveredEmits + coveredSlots + coveredExposes, totalProps + totalEmits + totalSlots + totalExposes);
-  
-  // 添加总体覆盖行
-  const totalRow = `${formatNameWithColor('All', totalPercentage)}|   ${colorProps}   |   ${colorEmits}    |   ${colorSlots}  |   ${colorExposes}      |`;
-  return { headerLine, header, totalRow };
-}
-
-export function generateCliReport(allCoverageData: VcCoverageData[]): string {
-  const { headerLine, header, totalRow } = generateHeader(allCoverageData);
-  const rowReports = allCoverageData.map(coverageData => generateRowReport(coverageData));
-  return [headerLine, header, totalRow, ...rowReports].join('\n');
-}
-
-// 新的表格格式报告生成函数
-export function generateRowReport(coverageData: VcCoverageData): string {
-  const propsStats = coverageData.props;
-  const emitsStats = coverageData.emits;
-  const slotsStats = coverageData.slots;
-  const exposeStats = coverageData.exposes;
-  const uncoveredAPIs = getUncoveredAPIs(coverageData);
-  const totalPercentage = roundPercentage(propsStats.covered + emitsStats.covered + slotsStats.covered + exposeStats.covered, propsStats.total + emitsStats.total + slotsStats.total + exposeStats.total);
-  const componentName = coverageData.name;
-  // 检查组件是否有任何API
-  if (coverageData.props.details.length === 0 && coverageData.emits.details.length === 0 && 
-      coverageData.slots.details.length === 0 && coverageData.exposes.details.length === 0) {
-    // 对于没有API的组件，返回特殊标记
-    return `${formatNameWithColor(componentName, totalPercentage)}|   N/A   |    N/A   |   N/A   |    N/A    | No API found`;
-  }
-  
-  // 为覆盖率添加颜色
-  const colorPropsCoverage = formatCoverageWithColor(propsStats.covered, propsStats.total);
-  const colorEmitsCoverage = formatCoverageWithColor(emitsStats.covered, emitsStats.total);
-  const colorSlotsCoverage = formatCoverageWithColor(slotsStats.covered, slotsStats.total);
-  const colorExposesCoverage = formatCoverageWithColor(exposeStats.covered, exposeStats.total);
-  
-  // 创建表格行
-  const row = `${formatNameWithColor(componentName, totalPercentage)}|   ${colorPropsCoverage} |   ${colorEmitsCoverage}  |   ${colorSlotsCoverage} |   ${colorExposesCoverage}   | ${chalk.yellow(uncoveredAPIs)}`;
-  
-  return row;
-}
-
-function formatNameWithColor(name: string, percentage: number): string {
-  let colorText;
-  if (percentage === 100) {
-    colorText = chalk.bold.green(name.padEnd(18));
-  } else if (percentage >= 80) {
-    colorText = chalk.green(name.padEnd(18));
-  } else if (percentage >= 50) {
-    colorText = chalk.yellow(name.padEnd(18));
-  } else {
-    colorText = chalk.red(name.padEnd(18));
-  }
-  return colorText.padEnd(18);
-}
-
-// 根据覆盖率添加颜色
-function formatCoverageWithColor(covered: number, total: number): string {
+// 根据覆盖率获取颜色处理后的文本
+function formatCoverageValue(covered: number, total: number): string {
   if (total === 0) {
     return chalk.dim('N/A');
   }
   
   const ratio = covered / total;
-  let coloredText;
   
   if (ratio === 1) {
     // 100% 覆盖率，绿色加粗
-    coloredText = chalk.bold.green(`${covered}/${total}`);
+    return chalk.bold.green(`${covered}/${total}`);
   } else if (ratio >= 0.8) {
     // 80%+ 覆盖率，绿色
-    coloredText = chalk.green(`${covered}/${total}`);
+    return chalk.green(`${covered}/${total}`);
   } else if (ratio >= 0.5) {
     // 50%+ 覆盖率，黄色
-    coloredText = chalk.bold.yellow(`${covered}/${total}`);
+    return chalk.bold.yellow(`${covered}/${total}`);
   } else {
     // 低于 50%，红色
-    coloredText = chalk.bold.red(`${covered}/${total}`);
+    return chalk.bold.red(`${covered}/${total}`);
+  }
+}
+
+// 根据百分比为组件名称添加颜色
+function formatComponentName(name: string, percentage: number): string {
+  if (percentage === 100) {
+    return chalk.bold.green(name);
+  } else if (percentage >= 80) {
+    return chalk.green(name);
+  } else if (percentage >= 50) {
+    return chalk.yellow(name);
+  } else {
+    return chalk.red(name);
+  }
+}
+
+export function generateCliReport(allCoverageData: VcCoverageData[]): string {
+  // 检查是否有任何未覆盖的API
+  const hasUncoveredApis = allCoverageData.some(data => {
+    return data.props.details.some(p => !p.covered) ||
+           data.emits.details.some(e => !e.covered) ||
+           data.slots.details.some(s => !s.covered) ||
+           data.exposes.details.some(ex => !ex.covered);
+  });
+
+  // 检查是否有空组件（没有任何API的组件）
+  const hasEmptyComponent = allCoverageData.some(data => 
+    data.props.details.length === 0 && 
+    data.emits.details.length === 0 && 
+    data.slots.details.length === 0 && 
+    data.exposes.details.length === 0
+  );
+
+  // 如果有未覆盖的API或空组件，需要添加额外的列
+  const needExtraColumn = hasUncoveredApis || hasEmptyComponent;
+
+  // 表头和列宽设置
+  const tableHeaders = [
+    chalk.bold('Components'),
+    chalk.bold('Props'),
+    chalk.bold('Emits'),
+    chalk.bold('Slots'),
+    chalk.bold('Exposes')
+  ];
+
+  const colWidths = [20, 10, 10, 10, 10];
+  
+  // 如果有未覆盖的API或空组件，添加Uncovered API列
+  if (needExtraColumn) {
+    tableHeaders.push(chalk.bold('Uncovered APIs'));
+    colWidths.push(35);
   }
   
-  return coloredText.padEnd(24);
-} 
+  // 创建表格实例
+  const table = new Table({
+    head: tableHeaders,
+    chars: {
+      'top': '═', 'top-mid': '╤', 'top-left': '╔', 'top-right': '╗',
+      'bottom': '═', 'bottom-mid': '╧', 'bottom-left': '╚', 'bottom-right': '╝',
+      'left': '║', 'left-mid': '╟', 'mid': '─', 'mid-mid': '┼',
+      'right': '║', 'right-mid': '╢', 'middle': '│'
+    },
+    style: {
+      head: [],  // 保持标题颜色，不应用额外样式
+      border: [], // 保持边框颜色
+    },
+    colWidths: colWidths,
+    // 启用文本自动换行
+    wordWrap: true
+  });
+  
+  // 计算总体覆盖率
+  const totalProps = allCoverageData.reduce((acc, item) => acc + item.props.total, 0);
+  const coveredProps = allCoverageData.reduce((acc, item) => acc + item.props.covered, 0);
+  const propsCoverage = roundPercentage(coveredProps, totalProps);
+  
+  const totalEmits = allCoverageData.reduce((acc, item) => acc + item.emits.total, 0);
+  const coveredEmits = allCoverageData.reduce((acc, item) => acc + item.emits.covered, 0);
+  const emitsCoverage = roundPercentage(coveredEmits, totalEmits);
+  
+  const totalSlots = allCoverageData.reduce((acc, item) => acc + item.slots.total, 0);
+  const coveredSlots = allCoverageData.reduce((acc, item) => acc + item.slots.covered, 0);
+  const slotsCoverage = roundPercentage(coveredSlots, totalSlots);
+  
+  const totalExposes = allCoverageData.reduce((acc, item) => acc + item.exposes.total, 0);
+  const coveredExposes = allCoverageData.reduce((acc, item) => acc + item.exposes.covered, 0);
+  const exposesCoverage = roundPercentage(coveredExposes, totalExposes);
+  
+  const totalPercentage = roundPercentage(
+    coveredProps + coveredEmits + coveredSlots + coveredExposes,
+    totalProps + totalEmits + totalSlots + totalExposes
+  );
+  
+  // 添加汇总行
+  const summaryRow = [
+    formatComponentName('All', totalPercentage),
+    colorizePercentage(propsCoverage),
+    colorizePercentage(emitsCoverage),
+    colorizePercentage(slotsCoverage),
+    colorizePercentage(exposesCoverage)
+  ];
+  
+  // 如果有未覆盖的API或空组件，添加空列
+  if (needExtraColumn) {
+    summaryRow.push('');
+  }
+  
+  table.push(summaryRow);
+  
+  // 添加每个组件的行
+  allCoverageData.forEach(data => {
+    const propsStats = data.props;
+    const emitsStats = data.emits;
+    const slotsStats = data.slots;
+    const exposeStats = data.exposes;
+    const uncoveredAPIs = getUncoveredAPIs(data);
+    
+    const totalPercentage = roundPercentage(
+      propsStats.covered + emitsStats.covered + slotsStats.covered + exposeStats.covered,
+      propsStats.total + emitsStats.total + slotsStats.total + exposeStats.total
+    );
+    
+    // 检查组件是否有任何API
+    if (data.props.details.length === 0 && data.emits.details.length === 0 && 
+        data.slots.details.length === 0 && data.exposes.details.length === 0) {
+      // 对于没有API的组件，使用特殊标记
+      const row = [
+        formatComponentName(data.name, totalPercentage),
+        chalk.dim('N/A'),
+        chalk.dim('N/A'),
+        chalk.dim('N/A'),
+        chalk.dim('N/A')
+      ];
+      
+      if (needExtraColumn) {
+        row.push('No API found');
+      }
+      
+      table.push(row);
+    } else {
+      // 正常添加行
+      const row = [
+        formatComponentName(data.name, totalPercentage),
+        formatCoverageValue(propsStats.covered, propsStats.total),
+        formatCoverageValue(emitsStats.covered, emitsStats.total),
+        formatCoverageValue(slotsStats.covered, slotsStats.total),
+        formatCoverageValue(exposeStats.covered, exposeStats.total)
+      ];
+      
+      if (needExtraColumn) {
+        row.push(chalk.yellow(uncoveredAPIs));
+      }
+      
+      table.push(row);
+    }
+  });
+  
+  return table.toString();
+}
