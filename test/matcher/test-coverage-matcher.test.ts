@@ -163,4 +163,40 @@ describe('test-coverage-matcher', () => {
       exposes: []
     })
   })
+
+  it('should handle TypeScript type casting (as any) in expose method tests', () => {
+    const analysis: ComponentAnalysis = {
+      props: [],
+      emits: [],
+      slots: [],
+      exposes: ['focus', 'select', 'clear']
+    }
+
+    const testCode = `
+      describe('Input', () => {
+        it('exposes focus, select and clear methods', () => {
+          const wrapper = mount(Input, {
+            props: {
+              modelValue: 'test value'
+            }
+          });
+          
+          // Check methods are defined with TypeScript casting
+          expect((wrapper.vm as any).focus).toBeDefined();
+          expect((wrapper.vm as any).select).toBeDefined();
+          
+          // Call methods with TypeScript casting
+          (wrapper.vm as any).focus();
+          (wrapper.vm as any).clear();
+        });
+      })
+    `
+
+    const coverage = matchTestCoverage(analysis, testCode)
+    expect(coverage.exposes).toEqual([
+      { name: 'focus', covered: true },
+      { name: 'select', covered: true },
+      { name: 'clear', covered: true }
+    ])
+  })
 }) 

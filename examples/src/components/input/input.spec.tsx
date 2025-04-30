@@ -116,7 +116,7 @@ describe('Input.tsx', () => {
     
     // 调用方法
     (wrapper.vm as any).focus();
-    // wrapper.vm.select();
-    // wrapper.vm.clear();
+    (wrapper.vm as any).select();
+    (wrapper.vm as any).clear();
   });
 });
