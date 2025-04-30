@@ -158,14 +158,6 @@ Input.tsx         |   6/6   |   4/4    |   3/3   |   0/3     | focus, select, cl
 }
 ```
 
-
-## Understanding the Report
-
-- ✅ indicates the API is covered by tests
-- ❌ indicates the API needs test coverage
-- Coverage percentages are shown for each API category
-- The report clearly shows which specific props, emits, slots, and exposed methods need attention
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
