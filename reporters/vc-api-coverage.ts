@@ -173,7 +173,7 @@ export default class VcCoverageReporter implements Reporter {
           console.warn(chalk.yellow(`[vc-api-coverage] No test file found for ${relativeComponentPath}, reporting API without coverage`));
         }
 
-        // 3. 生成并存储报告
+        // 3. 生成并存储报告 (表格行格式)
         const report = generateCliReport(coverage, relativeComponentPath);
         this.allReports.push(report);
 
@@ -213,7 +213,40 @@ export default class VcCoverageReporter implements Reporter {
     const shouldGenerateFormat = (f: ReportFormat) => format.includes(f);
 
     if (shouldGenerateFormat('cli') && this.allReports.length > 0) {
-      console.log('\n' + this.allReports.join('\n'));
+      // 计算总体覆盖率
+      const totalProps = this.coverageData.reduce((acc, item) => acc + item.props.total, 0);
+      const coveredProps = this.coverageData.reduce((acc, item) => acc + item.props.covered, 0);
+      const propsCoverage = totalProps > 0 ? Math.round((coveredProps / totalProps) * 100) : 100;
+      
+      const totalEmits = this.coverageData.reduce((acc, item) => acc + item.emits.total, 0);
+      const coveredEmits = this.coverageData.reduce((acc, item) => acc + item.emits.covered, 0);
+      const emitsCoverage = totalEmits > 0 ? Math.round((coveredEmits / totalEmits) * 100) : 100;
+      
+      const totalSlots = this.coverageData.reduce((acc, item) => acc + item.slots.total, 0);
+      const coveredSlots = this.coverageData.reduce((acc, item) => acc + item.slots.covered, 0);
+      const slotsCoverage = totalSlots > 0 ? Math.round((coveredSlots / totalSlots) * 100) : 100;
+      
+      const totalExposes = this.coverageData.reduce((acc, item) => acc + item.exposes.total, 0);
+      const coveredExposes = this.coverageData.reduce((acc, item) => acc + item.exposes.covered, 0);
+      const exposesCoverage = totalExposes > 0 ? Math.round((coveredExposes / totalExposes) * 100) : 100;
+      
+      // 表格头部和分割线
+      const headerLine = "------------------|---------|----------|---------|-----------|-------------------------------";
+      const header = "Components        |   Props |  Emits   | Slots   |  Exposes  | Uncovered API";
+      
+      // 添加总体覆盖行
+      const totalRow = `All               |   ${propsCoverage}%   |    ${emitsCoverage}%   |   ${slotsCoverage}%   |   ${exposesCoverage}%     |`;
+      
+      // 生成最终表格
+      const tableReport = [
+        headerLine,
+        header,
+        headerLine,
+        totalRow,
+        ...this.allReports
+      ].join('\n');
+      
+      console.log('\n' + tableReport);
     }
 
     if (shouldGenerateFormat('html')) {
