@@ -1,9 +1,12 @@
 {
   "name": "vc-api-coverage",
-  "version": "0.3.1",
+  "version": "0.4.1",
   "description": "Vue Component API Coverage Reporter",
+  "main": "dist/index.js",
+  "types": "dist/types/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "clean": "tsc --clean",
     "example": "npm run build && cd examples && npm run test && cd ..",
     "test": "vitest run",
     "test:watch": "vitest",

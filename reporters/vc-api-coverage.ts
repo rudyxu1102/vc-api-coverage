@@ -1,4 +1,6 @@
-import type { Reporter, Vitest, File, TaskResultPack } from 'vitest';
+import type { Vitest, File, TaskResultPack } from 'vitest';
+import type { TestModule } from 'vitest/node';
+import type { Reporter } from 'vitest/reporters'
 import { promises as fs } from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
@@ -46,7 +48,6 @@ export default class VcCoverageReporter implements Reporter {
     this.ctx = ctx;
     console.log('\n[vc-api-coverage] Initialized.');
   }
-
 
   private mergeCoverage(a: TestCoverage, b: TestCoverage): TestCoverage {
     const result: TestCoverage = {
