@@ -23,42 +23,61 @@ class TestUnitAnalyzer {
 
     public analyze(): TestUnitsResult {
         const result: TestUnitsResult = {};
+        const importedComponents: Map<string, string> = new Map();
+        
+        // 首先收集所有的导入组件
+        traverse(this.ast, {
+            ImportDeclaration: (path) => {
+                const source = path.node.source.value;
+                
+                if (source.endsWith(".tsx") || source.endsWith(".vue") || source.endsWith(".jsx")) {
+                    path.node.specifiers.forEach(specifier => {
+                        if (t.isImportDefaultSpecifier(specifier) && t.isIdentifier(specifier.local)) {
+                            // 保存完整的导入路径
+                            importedComponents.set(specifier.local.name, source);
+                        }
+                    });
+                }
+            }
+        });
         
         traverse(this.ast, {
             CallExpression: (path) => {
-                // 查找 it('[ComponentName] ...', () => {}) 语句
+                // 查找 it('...', () => {}) 语句
                 if (
                     t.isIdentifier(path.node.callee) && 
                     path.node.callee.name === 'it' && 
                     t.isStringLiteral(path.node.arguments[0])
                 ) {
-                    const itDescription = path.node.arguments[0].value;
-                    // 从描述中提取组件名，格式为 '[ComponentName] ...'
-                    const componentNameMatch = itDescription.match(/\[([^\]]+)\]/);
-                    if (componentNameMatch && componentNameMatch[1]) {
-                        const componentName = componentNameMatch[1];
-                        if (!result[componentName]) {
-                            result[componentName] = {};
-                        }
-
-                        // 查找 shallowMount 或 mount 调用
-                        path.traverse({
-                            CallExpression: (mountPath) => {
-                                if (
-                                    t.isIdentifier(mountPath.node.callee) && 
-                                    (mountPath.node.callee.name === 'shallowMount' || mountPath.node.callee.name === 'mount')
-                                ) {
-                                    // 检查第二个参数（选项对象）
-                                    const options = mountPath.node.arguments[1];
-                                    if (options && t.isObjectExpression(options)) {
-                                        this.extractProps(options, result[componentName]);
-                                        this.extractEmits(options, result[componentName]);
-                                        this.extractSlots(options, result[componentName]);
+                    // 查找 shallowMount 或 mount 调用
+                    path.traverse({
+                        CallExpression: (mountPath) => {
+                            if (
+                                t.isIdentifier(mountPath.node.callee) && 
+                                (mountPath.node.callee.name === 'shallowMount' || mountPath.node.callee.name === 'mount')
+                            ) {
+                                const componentArg = mountPath.node.arguments[0];
+                                if (t.isIdentifier(componentArg)) {
+                                    const componentName = componentArg.name;
+                                    const componentFile = importedComponents.get(componentName);
+                                    
+                                    if (componentFile) {
+                                        if (!result[componentFile]) {
+                                            result[componentFile] = {};
+                                        }
+                                        
+                                        // 检查第二个参数（选项对象）
+                                        const options = mountPath.node.arguments[1];
+                                        if (options && t.isObjectExpression(options)) {
+                                            this.extractProps(options, result[componentFile]);
+                                            this.extractEmits(options, result[componentFile]);
+                                            this.extractSlots(options, result[componentFile]);
+                                        }
                                     }
                                 }
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
         });
@@ -81,7 +100,8 @@ class TestUnitAnalyzer {
                 return null;
             }).filter(Boolean) as string[];
 
-            component.props = props;
+            component.props = component.props || [];
+            component.props = [...new Set([...component.props, ...props])];
         }
     }
 
@@ -107,7 +127,8 @@ class TestUnitAnalyzer {
                 .filter(Boolean) as string[];
 
             if (emitProps.length > 0) {
-                component.emits = emitProps;
+                component.emits = component.emits || [];
+                component.emits = [...new Set([...component.emits, ...emitProps])];
             }
         }
     }
@@ -127,7 +148,10 @@ class TestUnitAnalyzer {
                 return null;
             }).filter(Boolean) as string[];
 
-            component.slots = slots;
+            if (slots.length > 0) {
+                component.slots = component.slots || [];
+                component.slots = [...new Set([...component.slots, ...slots])];
+            }
         }
     }
 }

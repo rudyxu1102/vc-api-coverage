@@ -7,12 +7,12 @@ describe('test-units-analyzer', () => {
     })
     it('should analyze props in test units', () => {
         const code = `
-            import Button from "./Button.tsx";
-            import Input from "./Input.tsx";
+            import Button from "src/components/Button.tsx";
+            import Input from "src/components/Input.vue";
             import { describe, it, expect } from 'vitest';
 
-            describe('Button / Input', () => {
-                it('[Button] should render correctly', () => {
+            describe('components', () => {
+                it('should render correctly 1', () => {
                     const wrapper = shallowMount(Button, {
                         props: {
                             size: 'large',
@@ -20,7 +20,7 @@ describe('test-units-analyzer', () => {
                         }
                     })
                 })
-                it('[Input] should render correctly', () => {
+                it('should render correctly 2', () => {
                     const wrapper = shallowMount(Input, {
                         props: {
                             size: 'large',
@@ -31,18 +31,18 @@ describe('test-units-analyzer', () => {
         `
 
         const res = analyzeTestUnits(code)
-        expect(res['Button'].props).toEqual(['size', 'type'])
-        expect(res['Input'].props).toEqual(['size'])
+        expect(res['src/components/Button.tsx'].props).toEqual(['size', 'type'])
+        expect(res['src/components/Input.vue'].props).toEqual(['size'])
     })
 
     it('should analyze emits in test units', () => {
         const code = `
-            import Button from "./Button.tsx";
-            import Input from "./Input.tsx";
+            import Button from "src/components/Button.tsx";
+            import Input from "src/components/Input.vue";
             import { describe, it, expect } from 'vitest';
 
-            describe('Button / Input', () => {
-                it('[Button] should emit click event', () => {
+            describe('components', () => {
+                it('should emit click event 1', () => {
                     const wrapper = shallowMount(Button, {
                         props: {
                             onClick: () => {}
@@ -50,10 +50,11 @@ describe('test-units-analyzer', () => {
                     })
                 })
 
-                it('[Input] should emit input event', () => {
+                it('should emit input event 2', () => {
                     const wrapper = shallowMount(Input, {
                         props: {
-                            onChange: () => {}
+                            onChange: () => {},
+                            'onUpdate:modelValue': () => {}
                         }
                     })
                 })
@@ -61,18 +62,18 @@ describe('test-units-analyzer', () => {
         `
         
         const res = analyzeTestUnits(code)
-        expect(res['Button'].emits).toEqual(['click'])
-        expect(res['Input'].emits).toEqual(['change'])
+        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
+        expect(res['src/components/Input.vue'].emits).toEqual(['change', 'update:modelValue'])
     })
 
     it('should analyze slots in test units', () => {
         const code = `
-            import Button from "./Button.tsx";
-            import Input from "./Input.tsx";
+            import Button from "src/components/Button.tsx";
+            import Input from "src/components/Input.vue";
             import { describe, it, expect } from 'vitest';
 
-            describe('Button', () => {
-                it('[Button] should render correctly', () => {
+            describe('components', () => {
+                it('should render correctly 1', () => {
                     const wrapper = shallowMount(Button, {
                         slots: {
                             default: 'Button'
@@ -80,7 +81,7 @@ describe('test-units-analyzer', () => {
                     })
                 })
 
-                it('[Input] should render correctly', () => {
+                it('should render correctly2', () => {
                     const wrapper = shallowMount(Input, {
                         slots: {
                             default: 'Input'
@@ -91,7 +92,7 @@ describe('test-units-analyzer', () => {
         `
 
         const res = analyzeTestUnits(code)
-        expect(res['Button'].slots).toEqual(['default'])
-        expect(res['Input'].slots).toEqual(['default'])
+        expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
+        expect(res['src/components/Input.vue'].slots).toEqual(['default'])
     })
 })

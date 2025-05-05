@@ -3,8 +3,7 @@ import { describe, it, expect } from 'vitest';
 import Button from '../Button';
 
 describe('Button.tsx', () => {
-  it('renders label and emits click', async () => {
-    const labelText = 'Click Me';
+  it('renders size and slot', async () => {
     const wrapper = mount(Button, {
       props: {
         // label: labelText,
@@ -19,13 +18,17 @@ describe('Button.tsx', () => {
 
     // 检查 props.label 和 slot.default
     expect(wrapper.text()).toContain('Slot Content'); // 验证 slot 优先
-
-    // 触发 click 事件
-    await wrapper.trigger('click');
-
-    // 检查 emits.click
-    expect(wrapper.emitted()).toHaveProperty('click');
-    expect(wrapper.emitted('click')?.[0]?.[0]).toBeInstanceOf(MouseEvent);
   });
+
+  it('renders emits click', async () => {
+    const fn = vi.fn()
+    const wrapper = mount(Button, {
+      props: {
+        onClick: fn
+      }
+    })
+    wrapper.trigger('click')
+    expect(fn).toHaveBeenCalled()
+  })
 
 }); 

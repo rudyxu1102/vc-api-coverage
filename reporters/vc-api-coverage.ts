@@ -6,7 +6,7 @@ import path from 'path';
 import fg from 'fast-glob';
 import chalk from 'chalk';
 import open from 'open';
-
+import _ from 'lodash';
 import { analyzeProps } from '../lib/analyzer/props-analyzer';
 import { analyzeEmits } from '../lib/analyzer/emits-analyzer';
 import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
@@ -75,22 +75,30 @@ export default class VcCoverageReporter implements Reporter {
     return result;
   }
 
-  // onTestRunEnd(testModules: readonly TestModule[], unhandledErrors: readonly SerializedError[], reason: TestRunEndReason) {
-  //   console.log(testModules, unhandledErrors, reason, 111);
-  // }
-
   onTestModuleEnd(testModule: TestModule) {
     const vitenode = testModule.project.vite
     const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
     const code = cache?.transformResult?.code || ''
     const res = analyzeTestUnits(code)
-    console.log(res, 111)
-    this.unitData.a = {
-      props: [],
-      emits: [],
-      slots: [],
-      exposes: []
+    
+    for (const path in res) {
+      if (this.unitData[path]) {
+        this.unitData[path] = _.mergeWith({}, this.unitData[path], res[path], (objValue: unknown, srcValue: unknown) => {
+          if (Array.isArray(objValue) && Array.isArray(srcValue)) {
+            return Array.from(new Set([...objValue, ...srcValue]));
+          }
+          return srcValue;
+        })
+      } else {
+        this.unitData[path] = _.mergeWith({}, {
+          props: [],
+          emits: [],
+          slots: [],
+          exposes: []
+        }, res[path])
+      }
     }
+    console.log(this.unitData)
   }
 
   async onFinished(_files?: File[], _errors?: unknown[]): Promise<void> {
