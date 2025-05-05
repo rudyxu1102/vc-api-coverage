@@ -83,7 +83,8 @@ export default class VcCoverageReporter implements Reporter {
     const vitenode = testModule.project.vite
     const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
     const code = cache?.transformResult?.code || ''
-    analyzeTestUnits(code)
+    const res = analyzeTestUnits(code)
+    console.log(res, 111)
     this.unitData.a = {
       props: [],
       emits: [],
