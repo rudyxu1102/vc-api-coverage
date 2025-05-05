@@ -106,66 +106,90 @@ class TestUnitAnalyzer {
                     return;
                 }
                 
-                // 检查函数调用的第一个参数是否为我们已知的组件
-                if (path.node.arguments.length > 0) {
-                    const componentArg = path.node.arguments[0];
-                    
-                    // 检查组件参数是否为标识符
-                    if (t.isIdentifier(componentArg)) {
-                        const componentName = componentArg.name;
-                        const componentFile = this.importedComponents.get(componentName);
-                        
-                        if (componentFile) {
-                            // 只要函数调用的第一个参数是组件，我们就认为这是一个组件创建函数
-                            // 这样可以捕获 createVNode, h, jsx, _createVNode 等任意名称的函数
-                            
-                            if (!this.result[componentFile]) {
-                                this.result[componentFile] = {};
-                            }
-                            
-                            // 初始化组件对象的各个属性
-                            this.result[componentFile].props = this.result[componentFile].props || [];
-                            this.result[componentFile].emits = this.result[componentFile].emits || [];
-                            this.result[componentFile].slots = this.result[componentFile].slots || [];
-                            
-                            // 检查是否有属性对象（第二个参数）
-                            if (path.node.arguments.length > 1 && t.isObjectExpression(path.node.arguments[1])) {
-                                const propsObject = path.node.arguments[1];
-                                
-                                // 提取属性和事件
-                                propsObject.properties.forEach(prop => {
-                                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                                        const propName = prop.key.name;
-                                        
-                                        // 处理事件处理器 (onClick, onChange, etc.)
-                                        if (propName.startsWith('on') && propName.length > 2) {
-                                            const eventName = propName.charAt(2).toLowerCase() + propName.slice(3);
-                                            this.result[componentFile].emits = [...new Set([...this.result[componentFile].emits!, eventName])];
-                                        } else {
-                                            // 普通属性
-                                            this.result[componentFile].props = [...new Set([...this.result[componentFile].props!, propName])];
-                                        }
-                                    }
-                                });
-                            }
-                            
-                            // 检查是否有插槽对象（第三个参数）
-                            if (path.node.arguments.length > 2 && t.isObjectExpression(path.node.arguments[2])) {
-                                const slotsObject = path.node.arguments[2];
-                                
-                                // 提取插槽名称
-                                slotsObject.properties.forEach(prop => {
-                                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                                        const slotName = prop.key.name;
-                                        this.result[componentFile].slots = [...new Set([...this.result[componentFile].slots!, slotName])];
-                                    }
-                                });
-                            }
+                // 检查是否是render函数调用
+                if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'render') {
+                    // 如果第一个参数是箭头函数
+                    const firstArg = path.node.arguments[0];
+                    if (t.isArrowFunctionExpression(firstArg) && firstArg.body) {
+                        // 如果箭头函数体是一个createVNode调用
+                        if (t.isCallExpression(firstArg.body)) {
+                            this.analyzeComponentCreationNode(firstArg.body);
                         }
+                    }
+                    return;
+                }
+                
+                // 检查函数调用的第一个参数是否为我们已知的组件
+                this.analyzeComponentCreationNode(path.node);
+            }
+        });
+    }
+    
+    private analyzeComponentCreationNode(callExprNode: t.CallExpression) {
+        // 检查函数调用的第一个参数是否为我们已知的组件
+        if (callExprNode.arguments.length > 0) {
+            const componentArg = callExprNode.arguments[0];
+            
+            // 检查组件参数是否为标识符
+            if (t.isIdentifier(componentArg)) {
+                const componentName = componentArg.name;
+                const componentFile = this.importedComponents.get(componentName);
+                
+                if (componentFile) {
+                    // 只要函数调用的第一个参数是组件，我们就认为这是一个组件创建函数
+                    // 这样可以捕获 createVNode, h, jsx, _createVNode 等任意名称的函数
+                    
+                    if (!this.result[componentFile]) {
+                        this.result[componentFile] = {};
+                    }
+                    
+                    // 初始化组件对象的各个属性
+                    this.result[componentFile].props = this.result[componentFile].props || [];
+                    this.result[componentFile].emits = this.result[componentFile].emits || [];
+                    this.result[componentFile].slots = this.result[componentFile].slots || [];
+                    
+                    // 检查是否有属性对象（第二个参数）
+                    if (callExprNode.arguments.length > 1 && t.isObjectExpression(callExprNode.arguments[1])) {
+                        const propsObject = callExprNode.arguments[1];
+                        
+                        // 提取属性和事件
+                        propsObject.properties.forEach(prop => {
+                            if (t.isObjectProperty(prop) && (t.isIdentifier(prop.key) || t.isStringLiteral(prop.key))) {
+                                let propName = '';
+                                
+                                if (t.isIdentifier(prop.key)) {
+                                    propName = prop.key.name;
+                                } else if (t.isStringLiteral(prop.key)) {
+                                    propName = prop.key.value;
+                                }
+                                
+                                // 处理事件处理器 (onClick, onChange, etc.)
+                                if (propName.startsWith('on') && propName.length > 2) {
+                                    const eventName = propName.charAt(2).toLowerCase() + propName.slice(3);
+                                    this.result[componentFile].emits = [...new Set([...this.result[componentFile].emits!, eventName])];
+                                } else {
+                                    // 普通属性
+                                    this.result[componentFile].props = [...new Set([...this.result[componentFile].props!, propName])];
+                                }
+                            }
+                        });
+                    }
+                    
+                    // 检查是否有插槽对象（第三个参数）
+                    if (callExprNode.arguments.length > 2 && t.isObjectExpression(callExprNode.arguments[2])) {
+                        const slotsObject = callExprNode.arguments[2];
+                        
+                        // 提取插槽名称
+                        slotsObject.properties.forEach(prop => {
+                            if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                                const slotName = prop.key.name;
+                                this.result[componentFile].slots = [...new Set([...this.result[componentFile].slots!, slotName])];
+                            }
+                        });
                     }
                 }
             }
-        });
+        }
     }
 
     private extractProps(options: t.ObjectExpression, component: TestUnit) {
