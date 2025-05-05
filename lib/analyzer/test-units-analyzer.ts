@@ -115,13 +115,21 @@ class TestUnitAnalyzer {
         if (propsProperty && t.isObjectProperty(propsProperty) && t.isObjectExpression(propsProperty.value)) {
             // 检查 props 中是否有 onClick 等事件处理器
             const emitProps = propsProperty.value.properties
-                .filter(prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key))
+                .filter(prop => t.isObjectProperty(prop) && (t.isIdentifier(prop.key) || t.isStringLiteral(prop.key)))
                 .map(prop => {
-                    const key = (prop as t.ObjectProperty).key as t.Identifier;
-                    if (key.name.startsWith('on') && key.name.length > 2) {
+                    const key = (prop as t.ObjectProperty).key;
+                    
+                    if (t.isIdentifier(key) && key.name.startsWith('on') && key.name.length > 2) {
                         // 提取 onClick -> click, onChange -> change
                         return key.name.charAt(2).toLowerCase() + key.name.slice(3);
+                    } else if (t.isStringLiteral(key) && key.value.startsWith('on')) {
+                        // 处理 'onUpdate:modelValue' 这样的情况
+                        const eventName = key.value.slice(2); // 移除 'on' 前缀
+                        
+                        // 确保第一个字母是小写
+                        return eventName.charAt(0).toLowerCase() + eventName.slice(1);
                     }
+                    
                     return null;
                 })
                 .filter(Boolean) as string[];
