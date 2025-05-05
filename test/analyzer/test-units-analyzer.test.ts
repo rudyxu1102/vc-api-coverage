@@ -95,4 +95,77 @@ describe('test-units-analyzer', () => {
         expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
         expect(res['src/components/Input.vue'].slots).toEqual(['default'])
     })
+
+
+    it('should analyze props in jsx', () => {
+        const code = `
+            import { render } from '@testing-library/vue';
+            import Button from 'src/components/Button.tsx';
+
+            describe('Button', () => {
+                it('should render correctly', () => {
+                    render(() => <Button size="large" type="primary"/>)
+                })
+            })
+        `
+
+        const res = analyzeTestUnits(code)
+        expect(res['src/components/Button.tsx'].props).toEqual(['size', 'type'])
+    })
+
+    it('should analyze emits in jsx', () => {
+        const code = `
+            import { render } from '@testing-library/vue';
+            import Button from 'src/components/Button.tsx';
+
+            describe('Button', () => {
+                it('should emit click event', () => {
+                    const wrapper = render(() => <Button onClick={() => {}}/>)
+                })
+            })
+        `
+
+        const res = analyzeTestUnits(code)
+        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
+    })
+
+    it('should analyze slots in jsx', () => {
+        const code = `
+            import { render } from '@testing-library/vue';
+            import Button from 'src/components/Button.tsx';
+
+            describe('Button', () => {
+                it('should render correctly', () => {
+                    render(() => <Button>123</Button>)
+                })
+            })
+        `
+        const res = analyzeTestUnits(code)
+        expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
+    })
+
+    it('should analyze slots in jsx', () => {
+        const code = `
+            import { render } from '@testing-library/vue';
+            import Button from 'src/components/Button.vue';
+
+            describe('Button', () => {
+                it('should render correctly', () => {
+                    render(() => (
+                        <Button>
+                            {{
+                                default: () => <div>测试内容</div>,
+                                footer: () => <div>底部内容</div>
+                            }}
+                        </Button>
+                        
+                    ))
+                })
+            })
+        `
+        const res = analyzeTestUnits(code)
+        expect(res['src/components/Button.vue'].slots).toEqual(['default', 'footer'])
+    })
+
+
 })
