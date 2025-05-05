@@ -1,6 +1,6 @@
-import type { Vitest, File, TaskResultPack } from 'vitest';
-import type { TestModule } from 'vitest/node';
+import type { RunnerTestFile as File, RunnerTaskResultPack as TaskResultPack } from 'vitest';
 import type { Reporter } from 'vitest/reporters'
+import type { TestModule, Vitest } from 'vitest/node'
 import { promises as fs } from 'fs';
 import path from 'path';
 import fg from 'fast-glob';
@@ -17,7 +17,8 @@ import { HTMLReporter } from '../lib/reporter/html-reporter';
 import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
 import { parseComponent } from '../lib/common/shared-parser';
-import type { VcCoverageData } from '../lib/types';
+import type { VcCoverageData, VcData } from '../lib/types';
+import { analyzeTestUnits } from '../lib/analyzer/test-units-analyzer';
 
 // 默认组件文件匹配模式
 const DEFAULT_INCLUDE = ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'];
@@ -31,6 +32,7 @@ export default class VcCoverageReporter implements Reporter {
   private htmlReporter: HTMLReporter;
   private jsonReporter: JSONReporter;
   private coverageData: Array<VcCoverageData> = [];
+  private unitData: Record<string, VcData> = {};
 
   constructor(options: VcCoverageOptions = {}) {
     this.options = {
@@ -71,6 +73,23 @@ export default class VcCoverageReporter implements Reporter {
     });
     
     return result;
+  }
+
+  // onTestRunEnd(testModules: readonly TestModule[], unhandledErrors: readonly SerializedError[], reason: TestRunEndReason) {
+  //   console.log(testModules, unhandledErrors, reason, 111);
+  // }
+
+  onTestModuleEnd(testModule: TestModule) {
+    const vitenode = testModule.project.vite
+    const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
+    const code = cache?.transformResult?.code || ''
+    analyzeTestUnits(code)
+    this.unitData.a = {
+      props: [],
+      emits: [],
+      slots: [],
+      exposes: []
+    }
   }
 
   async onFinished(_files?: File[], _errors?: unknown[]): Promise<void> {

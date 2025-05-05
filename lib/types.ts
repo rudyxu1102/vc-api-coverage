@@ -15,6 +15,13 @@ export interface ComponentCoverage {
 export type ReportFormat = 'cli' | 'html' | 'json' 
 
 
+export interface VcData {
+  props: string[],
+  emits:  string[],
+  slots: string[],
+  exposes: string[]
+}
+
 export interface VcCoverageData {
   name: string;
   file: string;
