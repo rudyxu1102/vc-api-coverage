@@ -99,12 +99,15 @@ describe('test-units-analyzer', () => {
 
     it('should analyze props in jsx', () => {
         const code = `
-            import { render } from '@testing-library/vue';
             import Button from 'src/components/Button.tsx';
+            import { createVNode} from 'vue'
 
             describe('Button', () => {
                 it('should render correctly', () => {
-                    render(() => <Button size="large" type="primary"/>)
+                    createVNode(Button, {
+                        size: 'large',
+                        type: 'primary'
+                    })
                 })
             })
         `
@@ -115,12 +118,14 @@ describe('test-units-analyzer', () => {
 
     it('should analyze emits in jsx', () => {
         const code = `
-            import { render } from '@testing-library/vue';
             import Button from 'src/components/Button.tsx';
+            import { createVNode} from 'vue'
 
             describe('Button', () => {
                 it('should emit click event', () => {
-                    const wrapper = render(() => <Button onClick={() => {}}/>)
+                    createVNode(Button, {
+                        onClick: () => {}
+                    })
                 })
             })
         `
@@ -129,14 +134,16 @@ describe('test-units-analyzer', () => {
         expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
     })
 
-    it('should analyze slots in jsx', () => {
+    it('should analyze default slot in jsx', () => {
         const code = `
-            import { render } from '@testing-library/vue';
             import Button from 'src/components/Button.tsx';
+            import { createVNode} from 'vue'
 
             describe('Button', () => {
                 it('should render correctly', () => {
-                    render(() => <Button>123</Button>)
+                    createVNode(Button, {}, {
+                        default: () => '123'
+                    })
                 })
             })
         `
@@ -144,22 +151,17 @@ describe('test-units-analyzer', () => {
         expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
     })
 
-    it('should analyze slots in jsx', () => {
+    it('should analyze muti slots in jsx', () => {
         const code = `
-            import { render } from '@testing-library/vue';
             import Button from 'src/components/Button.vue';
+            import { createVNode } from 'vue'
 
             describe('Button', () => {
                 it('should render correctly', () => {
-                    render(() => (
-                        <Button>
-                            {{
-                                default: () => <div>测试内容</div>,
-                                footer: () => <div>底部内容</div>
-                            }}
-                        </Button>
-                        
-                    ))
+                    createVNode(Button, {}, {
+                        default: () => '123',
+                        footer: () => '456'
+                    })
                 })
             })
         `
@@ -167,5 +169,52 @@ describe('test-units-analyzer', () => {
         expect(res['src/components/Button.vue'].slots).toEqual(['default', 'footer'])
     })
 
+    it('should analyze props in jsx with _createVNode', () => {
+        const code = `
+            import Button from 'src/components/Button.tsx';
+            import { createVNode as _createVNode } from 'vue'
+
+            describe('Button', () => {
+                it('should render correctly', () => {
+                    _createVNode(Button, {
+                        size: 'large',
+                        type: 'primary'
+                    })
+                })
+            })
+        `
+
+        const res = analyzeTestUnits(code)
+        expect(res['src/components/Button.tsx'].props).toEqual(['size', 'type'])
+    })
+
+    it('should analyze props in jsx with h', () => {
+        const code = `
+            import Button from 'src/components/Button.tsx';
+            import { createVNode as _createVNode, createTextVNode as _createTextVNode } from 'vue'
+            import { render, fireEvent } from '@testing-library/vue'
+
+            describe('Button', () => {
+                it('可点击', async () => {
+                    const onClick = vi.fn();
+                    const {
+                        getByRole
+                } = render(() => _createVNode(Button, {
+                    "onClick": onClick  
+                    }, {
+                    default: () => [_createTextVNode("123")]
+                }), {});
+                    const button = getByRole('button');
+                    fireEvent.click(button);
+                    expect(onClick).toHaveBeenCalled();
+                    expect(onClick).toHaveBeenCalledWith(expect.any(MouseEvent));
+                });
+            });
+        `
+
+        const res = analyzeTestUnits(code)
+        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
+        expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
+    })
 
 })

@@ -24,7 +24,19 @@ class TestUnitAnalyzer {
     }
 
     public analyze(): TestUnitsResult {
-        // 首先收集所有的导入组件
+        // 收集所有的导入组件
+        this.collectComponentImports();
+        
+        // 分析传统的挂载方法调用
+        this.analyzeTraditionalMountCalls();
+        
+        // 分析所有的组件创建函数调用 (包括createVNode以及任意函数名)
+        this.analyzeComponentCreationCalls();
+
+        return this.result;
+    }
+    
+    private collectComponentImports() {
         traverse(this.ast, {
             ImportDeclaration: (path) => {
                 const source = path.node.source.value;
@@ -39,14 +51,6 @@ class TestUnitAnalyzer {
                 }
             }
         });
-        
-        // 分析传统的挂载方法调用
-        this.analyzeTraditionalMountCalls();
-        
-        // 分析所有的JSX元素
-        this.analyzeJsxElements();
-
-        return this.result;
     }
     
     private analyzeTraditionalMountCalls() {
@@ -92,83 +96,76 @@ class TestUnitAnalyzer {
         });
     }
     
-    private analyzeJsxElements() {
-        // 直接遍历所有JSX元素
+    private analyzeComponentCreationCalls() {
+        const skipFunctions = new Set(['mount', 'shallowMount', 'it', 'describe', 'test', 'expect']);
+        
         traverse(this.ast, {
-            JSXElement: (jsxPath) => {
-                const jsxOpeningElement = jsxPath.node.openingElement;
+            CallExpression: (path) => {
+                // 排除已知的非组件创建函数
+                if (t.isIdentifier(path.node.callee) && skipFunctions.has(path.node.callee.name)) {
+                    return;
+                }
                 
-                // 获取组件名称
-                if (t.isJSXIdentifier(jsxOpeningElement.name)) {
-                    const componentName = jsxOpeningElement.name.name;
-                    const componentFile = this.importedComponents.get(componentName);
+                // 检查函数调用的第一个参数是否为我们已知的组件
+                if (path.node.arguments.length > 0) {
+                    const componentArg = path.node.arguments[0];
                     
-                    if (componentFile) {
-                        if (!this.result[componentFile]) {
-                            this.result[componentFile] = {};
+                    // 检查组件参数是否为标识符
+                    if (t.isIdentifier(componentArg)) {
+                        const componentName = componentArg.name;
+                        const componentFile = this.importedComponents.get(componentName);
+                        
+                        if (componentFile) {
+                            // 只要函数调用的第一个参数是组件，我们就认为这是一个组件创建函数
+                            // 这样可以捕获 createVNode, h, jsx, _createVNode 等任意名称的函数
+                            
+                            if (!this.result[componentFile]) {
+                                this.result[componentFile] = {};
+                            }
+                            
+                            // 初始化组件对象的各个属性
+                            this.result[componentFile].props = this.result[componentFile].props || [];
+                            this.result[componentFile].emits = this.result[componentFile].emits || [];
+                            this.result[componentFile].slots = this.result[componentFile].slots || [];
+                            
+                            // 检查是否有属性对象（第二个参数）
+                            if (path.node.arguments.length > 1 && t.isObjectExpression(path.node.arguments[1])) {
+                                const propsObject = path.node.arguments[1];
+                                
+                                // 提取属性和事件
+                                propsObject.properties.forEach(prop => {
+                                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                                        const propName = prop.key.name;
+                                        
+                                        // 处理事件处理器 (onClick, onChange, etc.)
+                                        if (propName.startsWith('on') && propName.length > 2) {
+                                            const eventName = propName.charAt(2).toLowerCase() + propName.slice(3);
+                                            this.result[componentFile].emits = [...new Set([...this.result[componentFile].emits!, eventName])];
+                                        } else {
+                                            // 普通属性
+                                            this.result[componentFile].props = [...new Set([...this.result[componentFile].props!, propName])];
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // 检查是否有插槽对象（第三个参数）
+                            if (path.node.arguments.length > 2 && t.isObjectExpression(path.node.arguments[2])) {
+                                const slotsObject = path.node.arguments[2];
+                                
+                                // 提取插槽名称
+                                slotsObject.properties.forEach(prop => {
+                                    if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                                        const slotName = prop.key.name;
+                                        this.result[componentFile].slots = [...new Set([...this.result[componentFile].slots!, slotName])];
+                                    }
+                                });
+                            }
                         }
-                        
-                        // 分析JSX属性
-                        this.extractJsxProps(jsxOpeningElement, this.result[componentFile]);
-                        
-                        // 分析JSX子元素作为插槽
-                        this.extractJsxSlots(jsxPath.node, this.result[componentFile]);
                     }
                 }
             }
         });
-    }
-    
-    private extractJsxProps(jsxElement: t.JSXOpeningElement, component: TestUnit) {
-        // 遍历所有JSX属性
-        jsxElement.attributes.forEach(attr => {
-            if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
-                const attrName = attr.name.name;
-                
-                // 处理事件监听器 (onClick等)
-                if (attrName.startsWith('on') && attrName.length > 2) {
-                    // 提取事件名 (onClick -> click)
-                    const eventName = attrName.charAt(2).toLowerCase() + attrName.slice(3);
-                    
-                    // 添加到组件的emits列表
-                    component.emits = component.emits || [];
-                    component.emits = [...new Set([...component.emits, eventName])];
-                } else {
-                    // 普通属性
-                    component.props = component.props || [];
-                    component.props = [...new Set([...component.props, attrName])];
-                }
-            }
-        });
-    }
-    
-    private extractJsxSlots(jsxElement: t.JSXElement, component: TestUnit) {
-        // 检查是否有子元素
-        if (jsxElement.children && jsxElement.children.length > 0) {
-            // 检查是否有类似 {{default: () => <div>...</div>, footer: () => <div>...</div>}} 的插槽
-            const jsxExprContainer = jsxElement.children.find(child => 
-                t.isJSXExpressionContainer(child) && 
-                t.isObjectExpression((child as t.JSXExpressionContainer).expression)
-            );
-            
-            component.slots = component.slots || [];
-            
-            if (jsxExprContainer && t.isJSXExpressionContainer(jsxExprContainer) && t.isObjectExpression(jsxExprContainer.expression)) {
-                // 提取命名插槽
-                const namedSlots = jsxExprContainer.expression.properties
-                    .filter(prop => t.isObjectProperty(prop) && t.isIdentifier((prop as t.ObjectProperty).key))
-                    .map(prop => {
-                        const key = (prop as t.ObjectProperty).key;
-                        return t.isIdentifier(key) ? key.name : '';
-                    })
-                    .filter(name => name !== '');
-                
-                component.slots = [...new Set([...component.slots, ...namedSlots])];
-            } else {
-                // 如果有普通子元素，则视为默认插槽
-                component.slots = [...new Set([...component.slots, 'default'])];
-            }
-        }
     }
 
     private extractProps(options: t.ObjectExpression, component: TestUnit) {
