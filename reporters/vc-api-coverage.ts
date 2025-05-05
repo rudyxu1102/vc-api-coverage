@@ -14,6 +14,7 @@ import { VcCoverageOptions, ReportFormat } from '../lib/types';
 import { parseComponent } from '../lib/common/shared-parser';
 import type { VcCoverageData, VcData } from '../lib/types';
 import { analyzeTestUnits } from '../lib/analyzer/test-units-analyzer';
+import fs from 'fs';
 
 export default class VcCoverageReporter implements Reporter {
   private ctx!: Vitest;
@@ -70,7 +71,7 @@ export default class VcCoverageReporter implements Reporter {
 
   analyzerComponent() {
     for (const path in this.unitData) {
-      const code = this.ctx.vite.moduleGraph.getModuleById(path)?.transformResult?.code || ''
+      const code = fs.readFileSync(path, 'utf-8')
       const parsedContent = parseComponent(code);
         
       // 分析组件API
