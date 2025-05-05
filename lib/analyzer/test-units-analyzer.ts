@@ -41,10 +41,15 @@ class TestUnitAnalyzer {
             ImportDeclaration: (path) => {
                 const source = path.node.source.value;
                 
-                if (source.endsWith(".tsx") || source.endsWith(".vue") || source.endsWith(".jsx")) {
+                if (source.endsWith(".tsx") || source.endsWith(".vue") || source.endsWith(".jsx") || source.endsWith(".ts")) {
                     path.node.specifiers.forEach(specifier => {
+                        // Handle default imports
                         if (t.isImportDefaultSpecifier(specifier) && t.isIdentifier(specifier.local)) {
                             // 保存完整的导入路径
+                            this.importedComponents.set(specifier.local.name, source);
+                        }
+                        // Handle named imports
+                        else if (t.isImportSpecifier(specifier) && t.isIdentifier(specifier.local)) {
                             this.importedComponents.set(specifier.local.name, source);
                         }
                     });

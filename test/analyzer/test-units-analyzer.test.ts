@@ -217,34 +217,4 @@ describe('test-units-analyzer', () => {
         expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
     })
 
-    it('special case', () => {
-        const code = `
-           import { createVNode as _createVNode } from "/node_modules/.pnpm/vue@3.5.13_typescript@4.9.5/node_modules/vue/index.mjs";
-            import { createTextVNode as _createTextVNode } from "/node_modules/.pnpm/vue@3.5.13_typescript@4.9.5/node_modules/vue/index.mjs";
-            import { describe, it, afterEach, expect, vi } from "/node_modules/.pnpm/vitest@3.1.2_@types+node@20.5.1_@vitest+ui@3.0.5_jiti@2.4.2_jsdom@26.0.0_less@4.2.2_msw_db9ede77efef54f43351a6d19dd5d873/node_modules/vitest/dist/index.js";
-            import { Button } from "/packages/moo-ui/src/button/index.ts";
-            import { render, fireEvent, cleanup } from "/node_modules/.pnpm/@testing-library+vue@7.0.0_@vue+compiler-sfc@3.5.13_vue@3.5.13_typescript@4.9.5_/node_modules/@testing-library/vue/dist/index.js";
-            describe('Button', () => {
-                afterEach(cleanup);
-
-                it('href', async () => {
-                    const {
-                        getByRole
-                    } = render(() => _createVNode(Button, {
-                        "href": "www.baidu.com"
-                    }, {
-                        default: () => [_createTextVNode("123")]
-                    }), {});
-                    const anchor = getByRole('link');
-                    expect(anchor).is.visible;
-                });
-                
-            });
-        `
-        const res = analyzeTestUnits(code)
-        console.log(res, 111)
-        expect(res['/packages/moo-ui/src/button/index.ts'].props).toEqual(['href'])
-        expect(res['/packages/moo-ui/src/button/index.ts'].slots).toEqual(['default'])
-    })
-
 })

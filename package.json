@@ -1,6 +1,6 @@
 {
   "name": "vc-api-coverage",
-  "version": "0.4.5",
+  "version": "0.4.8",
   "description": "Vue Component API Coverage Reporter",
   "main": "dist/index.js",
   "types": "dist/types/index.d.ts",
@@ -10,7 +10,8 @@
     "example": "npm run build && cd examples && npm run test && cd ..",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "cli-table3": "^0.6.5",
