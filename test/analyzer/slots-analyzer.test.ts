@@ -70,6 +70,40 @@ describe('slots-analyzer', () => {
     expect(slots).toEqual(['action'])
   })
 
+  it('should analyze slots in jsx with $slots', () => {
+    const code = `
+      export default {
+        render() {
+          const slots = this.$slots
+          return _createVNode("div", {
+            "class": bem('action')
+          }, [$slots.action?.()])
+        }
+      }
+    `
+    const slots = analyzeSlots(code)
+    expect(slots).toEqual(['action'])
+  })
+
+  it('should analyze slots in jsx with function', () => {
+    const code = `
+      export default {
+        render() {
+          const slots = this.$slots
+          const renderIcon = () => {
+            return slots.action?.()
+          }
+          return _createVNode("div", {
+            "class": bem('action')
+          }, [renderIcon()])
+        }
+      }
+    `
+    const slots = analyzeSlots(code)
+    expect(slots).toEqual(['action'])
+  })
+
+
   it('should analyze slots in setup script', () => {
     const code = `
       <script setup>

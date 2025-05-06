@@ -138,6 +138,7 @@ class SlotsAnalyzer {
    * 分析 this.$slots 或 slots 成员表达式
    */
   private analyzeMemberExpression(path: NodePath<t.MemberExpression>): void {
+    // Check for this.$slots or variables named slots or $slots
     if (
       (t.isThisExpression(path.node.object) && 
        t.isIdentifier(path.node.property) && 
@@ -151,6 +152,15 @@ class SlotsAnalyzer {
       if (t.isMemberExpression(parent) && t.isIdentifier(parent.property)) {
         this.slots.add(parent.property.name);
       }
+    }
+    
+    // Handle the case where $slots is used directly to access a slot property
+    if (
+      t.isIdentifier(path.node.object) && 
+      path.node.object.name === '$slots' &&
+      t.isIdentifier(path.node.property)
+    ) {
+      this.slots.add(path.node.property.name);
     }
   }
 
