@@ -72,7 +72,6 @@ export function resolveExportedPathBabel(
     })
 
     if (!foundPath) {
-        console.warn(`Export "${exportName}" not found `)
         return null
     }
 

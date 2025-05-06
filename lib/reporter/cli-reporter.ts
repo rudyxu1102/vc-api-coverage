@@ -20,10 +20,6 @@ function formatCoverageValue(covered: number, total: number): string {
   if (total === 0 && covered === 0) {
     return chalk.bold.green('0/0');
   }
-
-  if (total === 0 && covered > 0) {
-    return chalk.bold.red(`${covered}/0`);
-  }
   
   const ratio = covered / total;
   
@@ -185,7 +181,8 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
       ];
       
       if (needExtraColumn) {
-        row.push(chalk.yellow(uncoveredAPIs));
+        const rowItem = uncoveredAPIs ? chalk.yellow(uncoveredAPIs): chalk.green.bold('\u{2714}')
+        row.push(rowItem)
       }
       
       table.push(row);

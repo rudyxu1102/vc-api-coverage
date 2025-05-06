@@ -77,22 +77,15 @@ export class JSONReporter {
       }
     }
 
-    const isValidate = (total: number, covered: number) => {
-      if (total === 0 && covered > 0) {
-        return 0
-      }
-      return covered
-    }
-
     const totalStats = this.coverageData.reduce((acc, component) => {
       acc.props.total += component.props.total
-      acc.props.covered += isValidate(component.props.total, component.props.covered)
+      acc.props.covered += component.props.covered
       acc.events.total += component.emits.total
-      acc.events.covered += isValidate(component.emits.total, component.emits.covered)
+      acc.events.covered += component.emits.covered
       acc.slots.total += component.slots.total
-      acc.slots.covered += isValidate(component.slots.total, component.slots.covered)
+      acc.slots.covered += component.slots.covered
       acc.methods.total += component.exposes.total
-      acc.methods.covered += isValidate(component.exposes.total, component.exposes.covered)
+      acc.methods.covered += component.exposes.covered
       return acc
     }, {
       props: { total: 0, covered: 0 },

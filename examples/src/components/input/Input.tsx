@@ -67,13 +67,6 @@ export default defineComponent({
       focus,
       select,
       clear,
-      test11111: () => {
-        console.log('test1');
-      },
-      test22222: () => {
-        console.log('test2');
-      },
-      
     });
 
     const wrapperStyle = {
