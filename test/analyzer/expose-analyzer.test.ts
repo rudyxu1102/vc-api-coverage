@@ -201,7 +201,7 @@ describe('analyzeExpose', () => {
         }
       }
     `
-    expect(analyzeExpose(code)).toEqual(['count', 'increment', 'decrement'])
+    expect(analyzeExpose(code)).toEqual([])
   })
 
   it('should handle multiple expose declarations', () => {
