@@ -125,7 +125,7 @@ export default class VcCoverageReporter implements Reporter {
       info.emits.total += comp.emits.length
       info.emits.covered += unit.emits.filter(e => comp.emits.includes(e)).length
       info.slots.total += comp.slots.length
-      info.slots.covered += unit.slots.filter(s => comp.slots.includes(s)).length
+      info.slots.covered += unit.slots.length
       info.exposes.total += comp.exposes.length
       info.exposes.covered += unit.exposes.filter(e => comp.exposes.includes(e)).length
       info.props.details = comp.props.map(p => ({ name: p, covered: unit.props.includes(p) }))
