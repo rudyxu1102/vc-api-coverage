@@ -138,6 +138,28 @@ export function processIdentifierReference(
           }
         }
       });
+    } else if (t.isTSAsExpression(init)) {
+      // 处理带有类型断言的对象 (如 'as const')
+      const expression = init.expression;
+      if (t.isObjectExpression(expression)) {
+        expression.properties.forEach(prop => {
+          if (t.isObjectProperty(prop)) {
+            if (t.isIdentifier(prop.key)) {
+              addToCollection(collection, prop.key.name);
+            } else if (t.isStringLiteral(prop.key)) {
+              addToCollection(collection, prop.key.value);
+            }
+          }
+        });
+      } else if (t.isArrayExpression(expression)) {
+        expression.elements.forEach(element => {
+          if (t.isStringLiteral(element)) {
+            addToCollection(collection, element.value);
+          } else if (t.isIdentifier(element)) {
+            addToCollection(collection, element.name);
+          }
+        });
+      }
     }
   } 
   // 如果是导入的变量，且提供了处理函数

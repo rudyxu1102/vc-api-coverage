@@ -190,7 +190,7 @@ describe('props-analyzer', () => {
     expect(props.length).toBe(3)
   })
 
-  it('test 111', () => {
+  it('should analyze typescript with as', () => {
     const code = `
       const buttonProps = {
         loading: Boolean,
