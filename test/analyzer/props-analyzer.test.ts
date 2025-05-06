@@ -112,10 +112,10 @@ describe('props-analyzer', () => {
         disabled: { type: Boolean, default: false },
       }
     `
-    
+
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
-    
+
     const code = `
       import { buttonProps } from './props'
       
@@ -124,17 +124,17 @@ describe('props-analyzer', () => {
         props: buttonProps,
       })
     `
-    
+
     const filePath = '/fake/component/Button.tsx'
     const props = analyzeProps(code, undefined, filePath)
-    
+
     // 验证
     expect(path.dirname).toHaveBeenCalledWith(filePath)
     expect(path.resolve).toHaveBeenCalledWith('/fake/path', './props.ts')
     expect(fs.readFileSync).toHaveBeenCalled()
     expect(props).toEqual(['label', 'size', 'disabled'])
   })
-  
+
   it('should analyze nested imported props with spread operator', () => {
     // 模拟基础props和特定props的导入
     const mockCommonPropsContent = `
@@ -142,7 +142,7 @@ describe('props-analyzer', () => {
         loading: { type: Boolean, default: false },
       }
     `
-    
+
     const mockButtonPropsContent = `
       import { commonProps } from './common'
       
@@ -152,20 +152,20 @@ describe('props-analyzer', () => {
         size: { type: String, default: 'md' },
       }
     `
-    
+
     // 第一次调用返回buttonProps文件内容，第二次调用返回commonProps文件内容
     vi.mocked(fs.existsSync)
       .mockReturnValueOnce(true)  // 第一个文件存在
       .mockReturnValueOnce(true)  // 第二个文件存在
-    
+
     vi.mocked(fs.readFileSync)
       .mockReturnValueOnce(mockButtonPropsContent)  // 读取第一个文件
       .mockReturnValueOnce(mockCommonPropsContent)  // 读取第二个文件
-    
+
     vi.mocked(path.resolve)
       .mockReturnValueOnce('/fake/path/props.ts')
       .mockReturnValueOnce('/fake/path/common.ts')
-    
+
     const code = `
       import { buttonProps } from './props'
       
@@ -174,19 +174,33 @@ describe('props-analyzer', () => {
         props: buttonProps,
       })
     `
-    
+
     const filePath = '/fake/component/Button.tsx'
     const props = analyzeProps(code, undefined, filePath)
-    
+
     // 验证调用了两次文件读取，一次读取buttonProps，一次读取commonProps
     expect(fs.existsSync).toHaveBeenCalledTimes(2)
     expect(fs.readFileSync).toHaveBeenCalledTimes(2)
     expect(path.resolve).toHaveBeenCalledTimes(2)
-    
+
     // 验证结果包含所有属性，包括从commonProps导入的
     expect(props).toContain('loading')  // 从commonProps导入
     expect(props).toContain('label')    // 直接在buttonProps中定义
     expect(props).toContain('size')     // 直接在buttonProps中定义
     expect(props.length).toBe(3)
+  })
+
+  it('test 111', () => {
+    const code = `
+      const buttonProps = {
+        loading: Boolean,
+        disabled: Boolean,
+      } as const
+      export default {
+        props: buttonProps
+      }
+    `
+    const props = analyzeProps(code)
+    expect(props).toEqual(['loading', 'disabled'])
   })
 }) 

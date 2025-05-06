@@ -1,7 +1,6 @@
 import { defineComponent } from 'vue';
 import { buttonProps, buttonEmits, buttonExpose, buttonSlots } from './props';
 
-
 export default defineComponent({
   name: 'MyButton',
 

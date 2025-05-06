@@ -15,6 +15,7 @@ import { parseComponent } from '../lib/common/shared-parser';
 import type { VcCoverageData, VcData } from '../lib/types';
 import { analyzeTestUnits } from '../lib/analyzer/test-units-analyzer';
 import { ViteDevServer } from 'vite';
+import type { SourceMap } from 'rollup';
 
 export default class VcCoverageReporter implements Reporter {
   private ctx!: Vitest;
@@ -72,7 +73,7 @@ export default class VcCoverageReporter implements Reporter {
   analyzerComponent() {
     for (const path in this.unitData) {
       const module = this.ctx.vite.moduleGraph.getModuleById(path);
-      const code = module?.transformResult?.code || '';
+      const code = (module?.transformResult?.map as SourceMap).sourcesContent[0] || '';
       const parsedContent = parseComponent(code);
         
       // 分析组件API
@@ -134,6 +135,7 @@ export default class VcCoverageReporter implements Reporter {
       info.exposes.details = comp.exposes.map(e => ({ name: e, covered: unit.exposes.includes(e) }))
       res.push(info)
     }
+    res.sort((a, b) => a.name.localeCompare(b.name))
     return res
   }
 

@@ -81,16 +81,10 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
     chalk.bold('Props'),
     chalk.bold('Emits'),
     chalk.bold('Slots'),
-    chalk.bold('Exposes')
+    chalk.bold('Exposes'),
+    chalk.bold('Uncovered APIs')
   ];
 
-  const colWidths = [30, 10, 10, 10, 10];
-  
-  // 如果有未覆盖的API或空组件，添加Uncovered API列
-  if (needExtraColumn) {
-    tableHeaders.push(chalk.bold('Uncovered APIs'));
-    colWidths.push(35);
-  }
   
   // 创建表格实例
   const table = new Table({
@@ -105,9 +99,11 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
       head: [],  // 保持标题颜色，不应用额外样式
       border: [], // 保持边框颜色
     },
-    colWidths: colWidths,
+    colWidths: [30, null, null, null, null, 35],
     // 启用文本自动换行
-    wordWrap: true
+    wordWrap: true,
+    // 启用文本自动换行
+    wrapOnWordBoundary: true
   });
   
   // 计算总体覆盖率

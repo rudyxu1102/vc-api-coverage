@@ -141,7 +141,6 @@ function processImportedProps(
     // 解析导入的文件路径
     const currentDir = path.dirname(filePath);
     const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
-    
     logDebug(moduleName, `Trying to resolve imported props from ${importFilePath}, imported name: ${importedName}`);
     
     // 读取并解析导入文件

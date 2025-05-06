@@ -44,7 +44,6 @@ describe('cli-reporter', () => {
     const report = generateCliReport([vcCoverage])
     expect(report).toContain('MyComponent.vue')
     expect(report).toContain('2/2')
-    expect(report).not.toContain('Uncovered API')
   })
 
   it('should generate CLI report with partial coverage component', () => {
