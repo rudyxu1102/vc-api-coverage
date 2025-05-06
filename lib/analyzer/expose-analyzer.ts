@@ -67,12 +67,9 @@ class ExposeAnalyzer {
       return this.optionsExposeOrder;
     }
     
-    // 如果没有显式的 expose，但有从 setup 返回的属性
-    if (!this.hasExplicitExpose && this.exposeOrder.length > 0) {
-      return this.exposeOrder;
-    }
-    
-    return this.exposeOrder;
+    // 没有显式的 expose，应该返回空数组
+    // 在 Vue 3 中，setup() 返回的属性只在组件内部可用，不会暴露给父组件
+    return [];
   }
 
   /**

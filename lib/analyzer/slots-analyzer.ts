@@ -91,45 +91,8 @@ class SlotsAnalyzer {
    */
   private analyzeScriptSlots(): void {
     traverse(this.ast, {
-      MemberExpression: this.analyzeMemberExpression.bind(this),
-      CallExpression: this.analyzeCallExpression.bind(this),
-      ObjectProperty: this.analyzeObjectProperty.bind(this)
+      ObjectProperty: this.analyzeObjectProperty.bind(this),
     });
-  }
-
-  /**
-   * 分析 this.$slots 或 slots 成员表达式
-   */
-  private analyzeMemberExpression(path: NodePath<t.MemberExpression>): void {
-    if (
-      (t.isThisExpression(path.node.object) && 
-       t.isIdentifier(path.node.property) && 
-       path.node.property.name === '$slots') ||
-      (t.isIdentifier(path.node.object) && 
-       path.node.object.name === 'slots')
-    ) {
-      let parent = path.parent;
-      if (t.isMemberExpression(parent) && t.isIdentifier(parent.property)) {
-        this.slots.add(parent.property.name);
-      }
-    }
-  }
-
-  /**
-   * 分析 useSlots() 调用
-   */
-  private analyzeCallExpression(path: NodePath<t.CallExpression>): void {
-    if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useSlots') {
-      const parentBinding = path.parentPath?.scope.getBinding('slots');
-      if (parentBinding) {
-        parentBinding.referencePaths.forEach(refPath => {
-          let parent = refPath.parent;
-          if (t.isMemberExpression(parent) && t.isIdentifier(parent.property)) {
-            this.slots.add(parent.property.name);
-          }
-        });
-      }
-    }
   }
 
   /**

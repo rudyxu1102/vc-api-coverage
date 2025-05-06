@@ -53,22 +53,31 @@ describe('Input.tsx', () => {
 
   // 测试 events
   it('emits focus and blur events', async () => {
-    const wrapper = mount(Input);
+    const focusFn = vi.fn()
+    const blurFn = vi.fn()
+    const wrapper = mount(Input, {
+      props: {
+        onFocus: focusFn,
+        onBlur: blurFn
+      }
+    });
     const input = wrapper.find('input');
     
     await input.trigger('focus');
-    expect(wrapper.emitted('focus')?.[0][0]).toBeInstanceOf(FocusEvent);
+    expect(focusFn).toHaveBeenCalled()
     
     await input.trigger('blur');
-    expect(wrapper.emitted('blur')?.[0][0]).toBeInstanceOf(FocusEvent);
+    expect(blurFn).toHaveBeenCalled()
   });
 
   // 测试 clearable
   it('handles clear functionality', async () => {
+    const clearFn = vi.fn()
     const wrapper = mount(Input, {
       props: {
         modelValue: 'test value',
         clearable: true,
+        onClear: clearFn,
         'onUpdate:modelValue': (e: string) => wrapper.setProps({ modelValue: e })
       }
     });
@@ -76,7 +85,7 @@ describe('Input.tsx', () => {
     expect(wrapper.find('.clear-icon').exists()).toBe(true);
     
     await wrapper.find('.clear-icon').trigger('click');
-    expect(wrapper.emitted('clear')).toBeDefined();
+    expect(clearFn).toHaveBeenCalled()
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['']);
   });
 

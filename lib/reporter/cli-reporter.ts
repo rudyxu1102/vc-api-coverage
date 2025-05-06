@@ -17,8 +17,12 @@ function getUncoveredAPIs(coverageData: VcCoverageData): string {
 
 // 根据覆盖率获取颜色处理后的文本
 function formatCoverageValue(covered: number, total: number): string {
-  if (total === 0) {
-    return chalk.dim('N/A');
+  if (total === 0 && covered === 0) {
+    return chalk.bold.green('0/0');
+  }
+
+  if (total === 0 && covered > 0) {
+    return chalk.bold.red(`${covered}/0`);
   }
   
   const ratio = covered / total;

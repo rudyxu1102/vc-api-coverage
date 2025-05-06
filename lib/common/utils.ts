@@ -32,3 +32,4 @@ export function colorizePercentage(percentage: number): string {
 export function roundPercentage(current: number, total: number): number {
   return total > 0 ? Math.round((current / total) * 100) : 100;
 }
+

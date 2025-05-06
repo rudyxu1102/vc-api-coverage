@@ -25,22 +25,24 @@ class EmitsAnalyzer {
   private importDeclarations: Record<string, ImportInfo> = {};
   private filePath?: string;
   private foundDefineComponentEmits: boolean = false;
+  private ast: ParseResult<File>;
 
   constructor(ast: ParseResult<File>, filePath?: string) {
     this.filePath = filePath;
+    this.ast = ast;
     collectImportDeclarations(ast, this.importDeclarations);
   }
 
   /**
    * 分析并返回组件的 emits
    */
-  analyze(ast: ParseResult<File>): string[] {
+  analyze(): string[] {
     // 优先查找 defineComponent 中的 emits
-    this.analyzeDefineComponentEmits(ast);
+    this.analyzeDefineComponentEmits(this.ast);
 
     // 如果未在 defineComponent 中找到，则查找 defineEmits 调用
     if (!this.foundDefineComponentEmits) {
-      this.analyzeDefineEmits(ast);
+      this.analyzeDefineEmits(this.ast);
     }
 
     return this.emits;
@@ -211,7 +213,7 @@ class EmitsAnalyzer {
 export function analyzeEmits(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
   const ast = parsedAst || parseComponent(code).ast;
   const analyzer = new EmitsAnalyzer(ast, filePath);
-  return analyzer.analyze(ast);
+  return analyzer.analyze();
 }
 
 // 处理导入的 emits

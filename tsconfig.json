@@ -34,7 +34,8 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "lib/**/*.ts",
-    "reporters/**/*.ts"
+    "reporters/**/*.ts",
+    "index.ts"
   ],
   "exclude": [
     "node_modules", // 排除 node_modules

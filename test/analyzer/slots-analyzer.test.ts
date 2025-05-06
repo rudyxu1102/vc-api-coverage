@@ -39,36 +39,6 @@ describe('slots-analyzer', () => {
     expect(slots).toEqual(['header', 'default', 'footer'])
   })
 
-  it('should analyze slots in render function', () => {
-    const code = `
-      export default {
-        render() {
-          return h('div', [
-            this.$slots.header?.(),
-            this.$slots.default?.(),
-            this.$slots.footer?.()
-          ])
-        }
-      }
-    `
-    const slots = analyzeSlots(code)
-    expect(slots).toEqual(['header', 'default', 'footer'])
-  })
-
-  it('should analyze slots in setup script', () => {
-    const code = `
-      <script setup>
-      import { useSlots } from 'vue'
-      
-      const slots = useSlots()
-      const hasHeader = !!slots.header
-      const hasFooter = !!slots.footer
-      </script>
-    `
-    const slots = analyzeSlots(code)
-    expect(slots).toEqual(['header', 'footer'])
-  })
-
   it('should analyze scoped slots', () => {
     const code = `
       <script setup>
@@ -95,22 +65,6 @@ describe('slots-analyzer', () => {
     `
     const slots = analyzeSlots(code)
     expect(slots).toEqual([])
-  })
-
-  it('should analyze slots in TSX component', () => {
-    const code = `
-      export default {
-        render() {
-          return h('div', [
-            this.$slots.header?.(),
-            this.$slots.default?.(),
-            this.$slots.footer?.()
-          ])
-        }
-      }
-    `
-    const slots = analyzeSlots(code)
-    expect(slots).toEqual(['header', 'default', 'footer'])
   })
 
   it('should analyze slots defined with SlotsType syntax', () => {
@@ -209,26 +163,4 @@ describe('slots-analyzer', () => {
     expect(slots.length).toBe(3) // header, footer, default
   })
 
-  it('should handle when imported file contains syntax errors or is not found', () => {
-    // 模拟导入文件不存在
-    vi.mocked(fs.existsSync).mockReturnValue(false)
-    
-    const code = `
-      import { buttonSlots } from './non-existent-file'
-      
-      export default defineComponent({
-        name: 'MyButton',
-        slots: buttonSlots,
-        render() {
-          return h('button', this.$slots.default?.())
-        }
-      })
-    `
-    
-    const filePath = '/fake/component/Button.tsx'
-    const slots = analyzeSlots(code, undefined, filePath)
-    
-    // 应该只识别出render函数中使用的插槽
-    expect(slots).toEqual(['default'])
-  })
 }) 
