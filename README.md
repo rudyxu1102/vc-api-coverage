@@ -169,3 +169,57 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 MIT
+
+# 组件源文件查找工具
+
+这个工具可以帮助你找到从index文件或其他中间文件导出的组件的实际源文件位置。
+
+## 使用方法
+
+```bash
+node findComponentSource.js [当前文件路径] [导入路径] [组件名称]
+```
+
+### 参数
+
+- `当前文件路径`: 包含导入语句的文件的绝对路径，默认为当前目录下的App.js
+- `导入路径`: 导入语句中的路径，如'./index'，默认为'./index'
+- `组件名称`: 要查找的组件名称，如'Button'，默认为'Button'
+
+### 示例
+
+```bash
+# 使用默认参数
+node findComponentSource.js
+
+# 指定参数
+node findComponentSource.js ./src/pages/Home.js './components/common' 'Dialog'
+```
+
+## 功能
+
+- 支持处理不同的文件扩展名(.js, .jsx, .ts, .tsx, .vue)
+- 处理目录导入，自动查找index文件
+- 支持递归查找组件的真正源文件
+- 支持多种导出格式:
+  - `export { Component } from './path'`
+  - `import Component from './path'; export { Component }`
+  - `export default Component`
+
+## 测试示例
+
+项目包含一个简单的示例:
+- App.js: 导入Button组件
+- index.js: 重导出Button组件 
+- Button.js: Button组件的实际实现
+
+运行以下命令测试:
+
+```bash
+node findComponentSource.js ./example/App.js './index' 'Button'
+```
+
+预期输出:
+```
+组件 Button 的实际文件位置: /your/path/example/Button.js
+```

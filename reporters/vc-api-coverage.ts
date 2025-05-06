@@ -15,6 +15,7 @@ import { parseComponent } from '../lib/common/shared-parser';
 import type { VcCoverageData, VcData } from '../lib/types';
 import { analyzeTestUnits } from '../lib/analyzer/test-units-analyzer';
 import fs from 'fs';
+import { ViteDevServer } from 'vite';
 
 export default class VcCoverageReporter implements Reporter {
   private ctx!: Vitest;
@@ -47,7 +48,7 @@ export default class VcCoverageReporter implements Reporter {
     const vitenode = testModule.project.vite
     const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
     const code = cache?.transformResult?.code || ''
-    const res = analyzeTestUnits(code)
+    const res = analyzeTestUnits(code, vitenode as unknown as ViteDevServer)
     const rootDir = this.ctx.config.root
     for (const path in res) {
       const fullPath = `${rootDir}${path}`

@@ -3,7 +3,8 @@ import type { File } from '@babel/types';
 import * as parser from '@babel/parser';
 import traverse from '@babel/traverse';
 import * as t from '@babel/types';
-
+import { resolveExportedPathBabel } from '../common/export-parser';
+import type { ViteDevServer } from 'vite';
 interface TestUnit {
     props?: string[];
     emits?: string[];
@@ -18,9 +19,11 @@ class TestUnitAnalyzer {
     private ast: ParseResult<File>;
     private importedComponents: Map<string, string> = new Map();
     private result: TestUnitsResult = {};
+    private vitenode?: ViteDevServer;
     
-    constructor(ast: ParseResult<File>) {
+    constructor(ast: ParseResult<File>, vitenode?: ViteDevServer) {
         this.ast = ast;
+        this.vitenode = vitenode;
     }
 
     public analyze(): TestUnitsResult {
@@ -50,7 +53,15 @@ class TestUnitAnalyzer {
                         }
                         // Handle named imports
                         else if (t.isImportSpecifier(specifier) && t.isIdentifier(specifier.local)) {
-                            this.importedComponents.set(specifier.local.name, source);
+                            const moduleId = `${this.vitenode?.config.root}${source}`
+                            // 通过vitenode.moduleGraph.getModuleById(testModule.moduleId)获取到模块的绝对路径
+                            const module = this.vitenode?.moduleGraph.getModuleById(moduleId);
+                            const code = module?.transformResult?.code || ''
+                            const name = specifier.local.name
+                            const path = resolveExportedPathBabel(code, name)
+                            if (path) {
+                                this.importedComponents.set(specifier.local.name,  path);
+                            }
                         }
                     });
                 }
@@ -276,12 +287,12 @@ class TestUnitAnalyzer {
     }
 }
 
-export function analyzeTestUnits(code: string) {
+export function analyzeTestUnits(code: string, vitenode?: ViteDevServer) {
     const ast = parser.parse(code, {
         sourceType: 'module',
         plugins: ['typescript', 'jsx'], // 测试文件也可能用 TSX
         errorRecovery: true, // 增加容错性，避免因单个测试文件解析失败中断
     });
-    const analyzer = new TestUnitAnalyzer(ast);
+    const analyzer = new TestUnitAnalyzer(ast, vitenode);
     return analyzer.analyze();
 }
