@@ -55,6 +55,21 @@ describe('slots-analyzer', () => {
     expect(slots).toEqual(['header', 'default', 'footer'])
   })
 
+  it('should analyze slots in jsx', () => {
+    const code = `
+      export default {
+        render() {
+          const { $slots } = this
+          return _createVNode("div", {
+            "class": bem('action')
+          }, [$slots.action?.()])
+        }
+      }
+    `
+    const slots = analyzeSlots(code)
+    expect(slots).toEqual(['action'])
+  })
+
   it('should analyze slots in setup script', () => {
     const code = `
       <script setup>

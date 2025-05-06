@@ -93,8 +93,45 @@ class SlotsAnalyzer {
     traverse(this.ast, {
       MemberExpression: this.analyzeMemberExpression.bind(this),
       CallExpression: this.analyzeCallExpression.bind(this),
-      ObjectProperty: this.analyzeObjectProperty.bind(this)
+      ObjectProperty: this.analyzeObjectProperty.bind(this),
+      VariableDeclarator: this.analyzeVariableDeclarator.bind(this)
     });
+  }
+
+  /**
+   * 分析变量声明，追踪$slots解构赋值
+   */
+  private analyzeVariableDeclarator(path: NodePath<t.VariableDeclarator>): void {
+    // 检查是否是从this对象解构$slots: const { $slots } = this
+    if (
+      t.isObjectPattern(path.node.id) && 
+      t.isThisExpression(path.node.init)
+    ) {
+      // 遍历解构的属性，查找$slots
+      for (const property of path.node.id.properties) {
+        if (
+          t.isObjectProperty(property) && 
+          t.isIdentifier(property.key) && 
+          property.key.name === '$slots'
+        ) {
+          // 找到$slots解构，现在需要追踪它的使用
+          if (t.isIdentifier(property.value)) {
+            const slotsVarName = property.value.name; // 通常还是$slots
+            const binding = path.scope.getBinding(slotsVarName);
+            
+            if (binding) {
+              // 分析所有使用这个变量的地方
+              binding.referencePaths.forEach(refPath => {
+                const parent = refPath.parent;
+                if (t.isMemberExpression(parent) && t.isIdentifier(parent.property)) {
+                  this.slots.add(parent.property.name);
+                }
+              });
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -106,7 +143,9 @@ class SlotsAnalyzer {
        t.isIdentifier(path.node.property) && 
        path.node.property.name === '$slots') ||
       (t.isIdentifier(path.node.object) && 
-       path.node.object.name === 'slots')
+       path.node.object.name === 'slots') ||
+      (t.isIdentifier(path.node.object) && 
+       path.node.object.name === '$slots')
     ) {
       let parent = path.parent;
       if (t.isMemberExpression(parent) && t.isIdentifier(parent.property)) {
