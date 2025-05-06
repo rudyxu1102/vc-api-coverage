@@ -84,7 +84,7 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
     chalk.bold('Exposes')
   ];
 
-  const colWidths = [20, 10, 10, 10, 10];
+  const colWidths = [30, 10, 10, 10, 10];
   
   // 如果有未覆盖的API或空组件，添加Uncovered API列
   if (needExtraColumn) {

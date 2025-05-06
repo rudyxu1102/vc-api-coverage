@@ -118,7 +118,7 @@ export default class VcCoverageReporter implements Reporter {
       }
       const unit = unitData[path]
       const comp = compData[path]
-      info.name = path.split('/').pop() || ''
+      info.name = path.split('/').slice(-2).join('/') || ''
       info.file = path
       info.props.total += comp.props.length
       info.props.covered += unit.props.filter(p => comp.props.includes(p)).length
@@ -162,12 +162,6 @@ export default class VcCoverageReporter implements Reporter {
         if (this.checkFromCoverage(coverage, method.name) && !method.covered) {
           method.covered = true
           item.exposes.covered += 1
-        }
-      }
-      for (const emit of item.emits.details) {
-        if (this.checkFromCoverage(coverage, emit.name) && !emit.covered) {
-          emit.covered = true
-          item.emits.covered += 1
         }
       }
     }
