@@ -97,6 +97,36 @@ class PropsAnalyzer {
     const propsVarName = identifier.name;
     logDebug(moduleName, `Found props variable reference: ${propsVarName}`);
     
+    // 先尝试在AST中找到该变量的绑定
+    const binding = this.findBindingInAST(propsVarName);
+    if (binding && t.isVariableDeclarator(binding.node) && binding.node.init) {
+      // 如果变量是在当前文件中定义的
+      if (t.isObjectExpression(binding.node.init)) {
+        // 处理变量定义中的展开操作符
+        binding.node.init.properties.forEach(prop => {
+          if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument)) {
+            const spreadName = prop.argument.name;
+            // 检查是否为导入的标识符
+            const importInfo = this.importDeclarations[spreadName];
+            if (importInfo && this.filePath) {
+              // 处理导入的props
+              processImportedProps(importInfo, this.filePath, this.propsSet);
+            }
+          }
+        });
+        
+        processObjectProperties(
+          binding.node.init.properties,
+          this.propsSet,
+          this.filePath,
+          this.importDeclarations,
+          'props',
+          processImportedProps
+        );
+        return;
+      }
+    }
+    
     // 使用通用函数处理标识符引用
     processIdentifierReference(
       identifier, 
@@ -123,6 +153,19 @@ class PropsAnalyzer {
           const init = binding.node.init;
           
           if (t.isObjectExpression(init)) {
+            // 处理本地对象表达式中的展开操作符
+            init.properties.forEach(innerProp => {
+              if (t.isSpreadElement(innerProp) && t.isIdentifier(innerProp.argument)) {
+                const innerSpreadName = innerProp.argument.name;
+                // 检查是否为导入的标识符
+                const importInfo = this.importDeclarations[innerSpreadName];
+                if (importInfo && this.filePath) {
+                  // 处理导入的props
+                  processImportedProps(importInfo, this.filePath, this.propsSet);
+                }
+              }
+            });
+            
             processObjectProperties(
               init.properties,
               this.propsSet,
