@@ -242,9 +242,14 @@ function processImportedProps(
       // 从导入的文件中找到对应的导出变量
       const [exportedPropsObject, nestedImportDeclarations] = findExportedObjectAndImports(importedAst, importedName);
       
-      if (exportedPropsObject && t.isObjectExpression(exportedPropsObject)) {
-        // 递归处理导入文件中的对象属性，包括可能的展开运算符
-        processObjectProperties(exportedPropsObject.properties, propsSet, importFilePath, nestedImportDeclarations, 'props', processImportedProps);
+      if (exportedPropsObject) {
+        if (t.isObjectExpression(exportedPropsObject)) {
+          // 递归处理导入文件中的对象属性，包括可能的展开运算符
+          processObjectProperties(exportedPropsObject.properties, propsSet, importFilePath, nestedImportDeclarations, 'props', processImportedProps);
+        } else if (t.isTSAsExpression(exportedPropsObject) && t.isObjectExpression(exportedPropsObject.expression)) {
+          // 处理带有类型断言的对象 (如 'as const')
+          processObjectProperties(exportedPropsObject.expression.properties, propsSet, importFilePath, nestedImportDeclarations, 'props', processImportedProps);
+        }
       }
     } else {
       logDebug(moduleName, `Import file not found: ${importFilePath}`);

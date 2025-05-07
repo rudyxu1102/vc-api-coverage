@@ -222,8 +222,8 @@ describe('props-analyzer', () => {
   })
 
   it('should analyze typescript with spread from imported file', () => {
-     // 模拟导入文件内容
-     const mockImportedFileContent = `
+    // 模拟导入文件内容
+    const mockImportedFileContent = `
       export const buttonProps = {
         label: { type: String, required: true },
         disabled: { type: Boolean, default: false },
@@ -255,12 +255,12 @@ describe('props-analyzer', () => {
      export const buttonProps = {
        label: { type: String, required: true },
        disabled: { type: Boolean, default: false },
-     }
+     } as const
    `
 
-   vi.mocked(fs.existsSync).mockReturnValue(true)
-   vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
-   const code = `
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
+    const code = `
      import { buttonProps } from './props'
      const buttonProps2 = {
       ...buttonProps,
@@ -273,11 +273,39 @@ describe('props-analyzer', () => {
        props: buttonProps2
      }
    `
-   const filePath = '/fake/component/Button.tsx'
-   const props = analyzeProps(code, undefined, filePath)
+    const filePath = '/fake/component/Button.tsx'
+    const props = analyzeProps(code, undefined, filePath)
 
-   // // 验证fs.readFileSync被调用
-   expect(fs.readFileSync).toHaveBeenCalled()
-   expect(props).toEqual(['label', 'disabled', 'size'])
- })
+    // // 验证fs.readFileSync被调用
+    expect(fs.readFileSync).toHaveBeenCalled()
+    expect(props).toEqual(['label', 'disabled', 'size'])
+  })
+
+  it('should analyze typescript with lodash function', () => {
+    // 模拟导入文件内容
+    const mockImportedFileContent = `
+     export const buttonProps = {
+       label: { type: String, required: true },
+       disabled: { type: Boolean, default: false },
+       type: String
+     } as const
+   `
+
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
+    const code = `
+     import { pick } from 'lodash'
+     import { buttonProps } from './props'
+     const buttonProps2 = pick(buttonProps, ['label', 'disabled'])
+     export default {
+       props: buttonProps2
+     }
+   `
+    const filePath = '/fake/component/Button.tsx'
+    const props = analyzeProps(code, undefined, filePath)
+
+    // // 验证fs.readFileSync被调用
+    expect(fs.readFileSync).toHaveBeenCalled()
+    expect(props).toEqual(['label', 'disabled'])
+  })
 }) 
