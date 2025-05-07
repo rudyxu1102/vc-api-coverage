@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
-import type { VcCoverageData, VcTotalData } from '../types'
+import type { VcCoverageData } from '../types'
 import { colorizePercentage, getTotalData, roundPercentage } from '../common/utils';
 
 // 获取未覆盖的API列表

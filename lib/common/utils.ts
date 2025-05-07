@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { VcCoverageData, VcTotalData } from '../types';
+import { VcCoverageData } from '../types';
 
 export function logDebug(moduleName: string, message: string, ...args: any[]) {
   if (process.env.DEBUG) {
