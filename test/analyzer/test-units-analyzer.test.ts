@@ -9,10 +9,10 @@ describe('test-units-analyzer', () => {
         const code = `
             import Button from "src/components/Button.tsx";
             import Input from "src/components/Input.vue";
-            import { describe, it, expect } from 'vitest';
+            import { describe, it, expect, test } from 'vitest';
 
             describe('components', () => {
-                it('should render correctly 1', () => {
+                test('should render correctly 1', () => {
                     const wrapper = shallowMount(Button, {
                         props: {
                             size: 'large',

@@ -77,10 +77,10 @@ class TestUnitAnalyzer {
     private analyzeTraditionalMountCalls() {
         traverse(this.ast, {
             CallExpression: (path) => {
-                // 查找 it('...', () => {}) 语句内的挂载调用
+                // 查找 it('...', () => {}) 或 test('...', () => {}) 语句内的挂载调用
                 if (
                     t.isIdentifier(path.node.callee) && 
-                    path.node.callee.name === 'it' && 
+                    (path.node.callee.name === 'it' || path.node.callee.name === 'test') && 
                     t.isStringLiteral(path.node.arguments[0])
                 ) {
                     // 检查测试用例中是否包含expect断言
