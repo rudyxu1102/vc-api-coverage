@@ -22,6 +22,25 @@ export interface VcData {
   exposes: string[]
 }
 
+export interface VcTotalData {
+  props: {
+    total: number,
+    covered: number
+  },
+  emits: {
+    total: number,
+    covered: number
+  },
+  slots: {
+    total: number,
+    covered: number
+  },
+  exposes: {
+    total: number,
+    covered: number
+  }
+}
+
 export interface VcCoverageData {
   name: string;
   file: string;

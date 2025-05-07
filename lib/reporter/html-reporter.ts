@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { VcTotalData } from '../types'
 
 interface ComponentCoverage {
   name: string
@@ -29,13 +30,32 @@ interface ComponentCoverage {
 export class HTMLReporter {
   private outputDir: string
   private coverageData: ComponentCoverage[] = []
+  private totalData: VcTotalData = {
+    props: {
+      total: 0,
+      covered: 0
+    },
+    emits: {
+      total: 0,
+      covered: 0
+    },
+    slots: {
+      total: 0,
+      covered: 0
+    },
+    exposes: {
+      total: 0,
+      covered: 0
+    }
+  }
 
   constructor(outputDir = 'coverage') {
     this.outputDir = outputDir
   }
 
-  public setCoverageData(data: ComponentCoverage[]) {
+  public setCoverageData(data: ComponentCoverage[], totalData: VcTotalData) {
     this.coverageData = data
+    this.totalData = totalData
   }
 
   public async generateReport() {
@@ -176,22 +196,7 @@ export class HTMLReporter {
       }
     }
 
-    const totalStats = this.coverageData.reduce((acc, component) => {
-      acc.props.total += component.props.total
-      acc.props.covered += component.props.covered
-      acc.emits.total += component.emits.total
-      acc.emits.covered += component.emits.covered
-      acc.slots.total += component.slots.total
-      acc.slots.covered += component.slots.covered
-      acc.exposes.total += component.exposes.total
-      acc.exposes.covered += component.exposes.covered
-      return acc
-    }, {
-      props: { total: 0, covered: 0 },
-      emits: { total: 0, covered: 0 },
-      slots: { total: 0, covered: 0 },
-      exposes: { total: 0, covered: 0 }
-    })
+    const totalStats = this.totalData
 
     return {
       props: totalStats.props.total ? (totalStats.props.covered / totalStats.props.total) * 100 : 100,

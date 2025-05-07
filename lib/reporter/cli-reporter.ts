@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
-import type { VcCoverageData } from '../types'
+import type { VcCoverageData, VcTotalData } from '../types'
 import { colorizePercentage, roundPercentage } from '../common/utils';
 
 // 获取未覆盖的API列表
@@ -20,7 +20,9 @@ function formatCoverageValue(covered: number, total: number): string {
   if (total === 0 && covered === 0) {
     return chalk.bold.green('0/0');
   }
-  
+  if (total === 0 && covered > 0) {
+    return chalk.bold.red(`${covered}/N`);
+  }
   const ratio = covered / total;
   
   if (ratio === 1) {
@@ -51,7 +53,7 @@ function formatComponentName(name: string, percentage: number): string {
   }
 }
 
-export function generateCliReport(allCoverageData: VcCoverageData[]): string {
+export function generateCliReport(allCoverageData: VcCoverageData[], totalData: VcTotalData): string {
   // 检查是否有任何未覆盖的API
   const hasUncoveredApis = allCoverageData.some(data => {
     return data.props.details.some(p => !p.covered) ||
@@ -103,25 +105,17 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
   });
   
   // 计算总体覆盖率
-  const totalProps = allCoverageData.reduce((acc, item) => acc + item.props.total, 0);
-  const coveredProps = allCoverageData.reduce((acc, item) => acc + item.props.covered, 0);
-  const propsCoverage = roundPercentage(coveredProps, totalProps);
+  const propsCoverage = roundPercentage(totalData.props.covered, totalData.props.total);
   
-  const totalEmits = allCoverageData.reduce((acc, item) => acc + item.emits.total, 0);
-  const coveredEmits = allCoverageData.reduce((acc, item) => acc + item.emits.covered, 0);
-  const emitsCoverage = roundPercentage(coveredEmits, totalEmits);
+  const emitsCoverage = roundPercentage(totalData.emits.covered, totalData.emits.total);
   
-  const totalSlots = allCoverageData.reduce((acc, item) => acc + item.slots.total, 0);
-  const coveredSlots = allCoverageData.reduce((acc, item) => acc + item.slots.covered, 0);
-  const slotsCoverage = roundPercentage(coveredSlots, totalSlots);
+  const slotsCoverage = roundPercentage(totalData.slots.covered, totalData.slots.total);
   
-  const totalExposes = allCoverageData.reduce((acc, item) => acc + item.exposes.total, 0);
-  const coveredExposes = allCoverageData.reduce((acc, item) => acc + item.exposes.covered, 0);
-  const exposesCoverage = roundPercentage(coveredExposes, totalExposes);
+  const exposesCoverage = roundPercentage(totalData.exposes.covered, totalData.exposes.total);
   
   const totalPercentage = roundPercentage(
-    coveredProps + coveredEmits + coveredSlots + coveredExposes,
-    totalProps + totalEmits + totalSlots + totalExposes
+    totalData.props.covered + totalData.emits.covered + totalData.slots.covered + totalData.exposes.covered,
+    totalData.props.total + totalData.emits.total + totalData.slots.total + totalData.exposes.total
   );
   
   // 添加汇总行

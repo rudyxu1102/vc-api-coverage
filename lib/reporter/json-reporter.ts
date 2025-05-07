@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { VcTotalData } from '../types'
 
 interface ComponentCoverage {
   name: string
@@ -29,13 +30,31 @@ interface ComponentCoverage {
 export class JSONReporter {
   private outputDir: string
   private coverageData: ComponentCoverage[] = []
-
+  private totalData: VcTotalData = {
+    props: {
+      total: 0,
+      covered: 0
+    },
+    emits: {
+      total: 0,
+      covered: 0
+    },
+    slots: {
+      total: 0,
+      covered: 0
+    },
+    exposes: {
+      total: 0,
+      covered: 0
+    }
+  }
   constructor(outputDir = 'coverage') {
     this.outputDir = outputDir
   }
 
-  public setCoverageData(data: ComponentCoverage[]) {
+  public setCoverageData(data: ComponentCoverage[], totalData: VcTotalData) {
     this.coverageData = data
+    this.totalData = totalData
   }
 
   public async generateReport() {
@@ -47,14 +66,14 @@ export class JSONReporter {
     const jsonContent = {
       summary: {
         totalComponents: this.coverageData.length,
-        totalProps: this.coverageData.reduce((sum, comp) => sum + comp.props.total, 0),
-        coveredProps: this.coverageData.reduce((sum, comp) => sum + comp.props.covered, 0),
-        totalEmits: this.coverageData.reduce((sum, comp) => sum + comp.emits.total, 0),
-        coveredEmits: this.coverageData.reduce((sum, comp) => sum + comp.emits.covered, 0),
-        totalSlots: this.coverageData.reduce((sum, comp) => sum + comp.slots.total, 0),
-        coveredSlots: this.coverageData.reduce((sum, comp) => sum + comp.slots.covered, 0),
-        totalExposes: this.coverageData.reduce((sum, comp) => sum + comp.exposes.total, 0),
-        coveredExposes: this.coverageData.reduce((sum, comp) => sum + comp.exposes.covered, 0)
+        totalProps: this.totalData.props.total,
+        coveredProps: this.totalData.props.covered,
+        totalEmits: this.totalData.emits.total,
+        coveredEmits: this.totalData.emits.covered,
+        totalSlots: this.totalData.slots.total,
+        coveredSlots: this.totalData.slots.covered,
+        totalExposes: this.totalData.exposes.total,
+        coveredExposes: this.totalData.exposes.covered
       },
       stats: this.calculateOverallStats(),
       components: this.coverageData
@@ -77,35 +96,20 @@ export class JSONReporter {
       }
     }
 
-    const totalStats = this.coverageData.reduce((acc, component) => {
-      acc.props.total += component.props.total
-      acc.props.covered += component.props.covered
-      acc.events.total += component.emits.total
-      acc.events.covered += component.emits.covered
-      acc.slots.total += component.slots.total
-      acc.slots.covered += component.slots.covered
-      acc.methods.total += component.exposes.total
-      acc.methods.covered += component.exposes.covered
-      return acc
-    }, {
-      props: { total: 0, covered: 0 },
-      events: { total: 0, covered: 0 },
-      slots: { total: 0, covered: 0 },
-      methods: { total: 0, covered: 0 }
-    })
+    const totalStats = this.totalData
 
     const stats = {
       props: totalStats.props.total ? (totalStats.props.covered / totalStats.props.total) * 100 : 100,
-      events: totalStats.events.total ? (totalStats.events.covered / totalStats.events.total) * 100 : 100,
+      events: totalStats.emits.total ? (totalStats.emits.covered / totalStats.emits.total) * 100 : 100,
       slots: totalStats.slots.total ? (totalStats.slots.covered / totalStats.slots.total) * 100 : 100,
-      methods: totalStats.methods.total ? (totalStats.methods.covered / totalStats.methods.total) * 100 : 100
+      methods: totalStats.exposes.total ? (totalStats.exposes.covered / totalStats.exposes.total) * 100 : 100
     }
 
     // 计算总体覆盖率
-    const totalCovered = totalStats.props.covered + totalStats.events.covered + 
-                        totalStats.slots.covered + totalStats.methods.covered
-    const totalItems = totalStats.props.total + totalStats.events.total + 
-                      totalStats.slots.total + totalStats.methods.total
+    const totalCovered = totalStats.props.covered + totalStats.emits.covered + 
+                        totalStats.slots.covered + totalStats.exposes.covered
+    const totalItems = totalStats.props.total + totalStats.emits.total + 
+                      totalStats.slots.total + totalStats.exposes.total
 
     return {
       ...stats,
