@@ -37,38 +37,28 @@ class EmitsAnalyzer {
    * 分析并返回组件的 emits
    */
   analyze(): string[] {
-    // 优先查找 defineComponent 中的 emits
-    this.analyzeDefineComponentEmits(this.ast);
-
-    // 如果未在 defineComponent 中找到，则查找 defineEmits 调用
-    if (!this.foundDefineComponentEmits) {
-      this.analyzeDefineEmits(this.ast);
-    }
+    // 分析 defineComponent 和 defineEmits
+    traverse(this.ast, {
+      CallExpression: this.visitCallExpression.bind(this),
+      ObjectExpression: this.visitObjectExpression.bind(this)
+    });
 
     return this.emits;
   }
 
   /**
-   * 分析 defineComponent 中的 emits
+   * 处理CallExpression节点
    */
-  private analyzeDefineComponentEmits(ast: ParseResult<File>): void {
-    traverse(ast, {
-      CallExpression: this.analyzeDefineComponentCall.bind(this),
-      ObjectExpression: this.analyzeComponentOptions.bind(this)
-    });
-  }
-
-  /**
-   * 分析 defineComponent({ emits: ... }) 调用
-   */
-  private analyzeDefineComponentCall(path: NodePath<t.CallExpression>): void {
-    if (
-      !this.foundDefineComponentEmits &&
-      t.isIdentifier(path.node.callee, { name: 'defineComponent' }) &&
-      path.node.arguments.length > 0 &&
-      t.isObjectExpression(path.node.arguments[0])
-    ) {
-      const componentDefinition = path.node.arguments[0];
+  private visitCallExpression(path: NodePath<t.CallExpression>): void {
+    if (this.foundDefineComponentEmits) return;
+    
+    const { node } = path;
+    
+    // 处理 defineComponent({ emits: ... })
+    if (t.isIdentifier(node.callee, { name: 'defineComponent' }) && 
+        node.arguments.length > 0 && 
+        t.isObjectExpression(node.arguments[0])) {
+      const componentDefinition = node.arguments[0];
       const emitsProperty = this.findEmitsProperty(componentDefinition.properties);
       
       if (emitsProperty) {
@@ -77,20 +67,33 @@ class EmitsAnalyzer {
         path.stop();
       }
     }
+    
+    // 处理 defineEmits 调用
+    else if (t.isIdentifier(node.callee, { name: 'defineEmits' })) {
+      // 处理 defineEmits(['event1', 'event2'])
+      if (node.arguments.length > 0 && t.isArrayExpression(node.arguments[0])) {
+        processArrayElements(node.arguments[0].elements, this.emits);
+      }
+      // 处理 defineEmits<{ (e: 'event1'): void; (e: 'event2', id: number): void }>()
+      else if (node.typeParameters?.params[0]) {
+        this.processTypeParameterEmits(node.typeParameters.params[0]);
+      }
+      path.stop();
+    }
   }
 
   /**
-   * 分析组件选项对象中的 emits
+   * 处理ObjectExpression节点
    */
-  private analyzeComponentOptions(path: NodePath<t.ObjectExpression>): void {
-    if (!this.foundDefineComponentEmits) {
-      const emitsProperty = this.findEmitsProperty(path.node.properties);
-      
-      if (emitsProperty) {
-        this.foundDefineComponentEmits = true;
-        this.processEmitsProperty(emitsProperty, path);
-        path.stop();
-      }
+  private visitObjectExpression(path: NodePath<t.ObjectExpression>): void {
+    if (this.foundDefineComponentEmits) return;
+    
+    const emitsProperty = this.findEmitsProperty(path.node.properties);
+    
+    if (emitsProperty) {
+      this.foundDefineComponentEmits = true;
+      this.processEmitsProperty(emitsProperty, path);
+      path.stop();
     }
   }
 
@@ -114,78 +117,33 @@ class EmitsAnalyzer {
     emitsProperty: t.ObjectProperty, 
     path: NodePath<t.CallExpression | t.ObjectExpression>
   ): void {
+    const value = emitsProperty.value;
+    
     // 处理 emits: ['event1', 'event2']
-    if (t.isArrayExpression(emitsProperty.value)) {
-      this.processArrayEmits(emitsProperty.value);
+    if (t.isArrayExpression(value)) {
+      processArrayElements(value.elements, this.emits);
     } 
     // 处理 emits: { click: null, 'update:modelValue': validator }
-    else if (t.isObjectExpression(emitsProperty.value)) {
-      this.processObjectEmits(emitsProperty.value);
+    else if (t.isObjectExpression(value)) {
+      processObjectProperties(
+        value.properties, 
+        this.emits, 
+        this.filePath, 
+        this.importDeclarations, 
+        'emits', 
+        processImportedEmits
+      );
     }
     // 处理 emits 为变量引用的情况
-    else if (t.isIdentifier(emitsProperty.value)) {
-      this.processIdentifierEmits(emitsProperty.value, path);
-    }
-  }
-
-  /**
-   * 处理数组形式的 emits
-   */
-  private processArrayEmits(arrayExpr: t.ArrayExpression): void {
-    processArrayElements(arrayExpr.elements, this.emits);
-  }
-
-  /**
-   * 处理对象形式的 emits
-   */
-  private processObjectEmits(objectExpr: t.ObjectExpression): void {
-    processObjectProperties(
-      objectExpr.properties, 
-      this.emits, 
-      this.filePath, 
-      this.importDeclarations, 
-      'emits', 
-      processImportedEmits
-    );
-  }
-
-  /**
-   * 处理标识符引用形式的 emits
-   */
-  private processIdentifierEmits(identifier: t.Identifier, path: NodePath<t.CallExpression | t.ObjectExpression>): void {
-    processIdentifierReference(
-      identifier, 
-      path, 
-      this.emits, 
-      this.importDeclarations, 
-      this.filePath, 
-      processImportedEmits
-    );
-  }
-
-  /**
-   * 分析 defineEmits 调用
-   */
-  private analyzeDefineEmits(ast: ParseResult<File>): void {
-    traverse(ast, {
-      CallExpression: this.analyzeDefineEmitsCall.bind(this)
-    });
-  }
-
-  /**
-   * 分析 defineEmits 调用表达式
-   */
-  private analyzeDefineEmitsCall(path: NodePath<t.CallExpression>): void {
-    if (t.isIdentifier(path.node.callee, { name: 'defineEmits' })) {
-      // 处理 defineEmits(['event1', 'event2'])
-      if (path.node.arguments.length > 0 && t.isArrayExpression(path.node.arguments[0])) {
-        this.processArrayEmits(path.node.arguments[0]);
-      }
-      // 处理 defineEmits<{ (e: 'event1'): void; (e: 'event2', id: number): void }>()
-      else if (path.node.typeParameters?.params[0]) {
-        this.processTypeParameterEmits(path.node.typeParameters.params[0]);
-      }
-      path.stop();
+    else if (t.isIdentifier(value)) {
+      processIdentifierReference(
+        value, 
+        path, 
+        this.emits, 
+        this.importDeclarations, 
+        this.filePath, 
+        processImportedEmits
+      );
     }
   }
 
