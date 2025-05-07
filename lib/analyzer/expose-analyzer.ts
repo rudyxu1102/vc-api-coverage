@@ -26,10 +26,8 @@ export interface ExposeInfo {
  * Expose 分析器类，包含不同的分析策略
  */
 class ExposeAnalyzer {
-  private exposed: Set<string> = new Set<string>();
+  private exposed: Map<string, { isOptions: boolean }> = new Map();
   private exposeOrder: string[] = [];
-  private optionsExpose: Set<string> = new Set<string>();
-  private optionsExposeOrder: string[] = [];
   private importDeclarations: Record<string, ImportInfo> = {};
   private filePath?: string;
   private code: string;
@@ -59,17 +57,26 @@ class ExposeAnalyzer {
     }
 
     // 返回分析结果
-    if (this.hasExplicitExpose && this.exposeOrder.length > 0) {
-      return this.exposeOrder;
+    if (this.hasExplicitExpose) {
+      return this.getExposedProperties(false);
     }
     
     if (this.hasOptionsExpose) {
-      return this.optionsExposeOrder;
+      return this.getExposedProperties(true);
     }
     
     // 没有显式的 expose，应该返回空数组
     // 在 Vue 3 中，setup() 返回的属性只在组件内部可用，不会暴露给父组件
     return [];
+  }
+
+  /**
+   * 获取暴露的属性列表
+   */
+  private getExposedProperties(isOptions: boolean): string[] {
+    return this.exposeOrder.filter(name => 
+      this.exposed.has(name) && this.exposed.get(name)?.isOptions === isOptions
+    );
   }
 
   /**
@@ -94,10 +101,8 @@ class ExposeAnalyzer {
         if (propMatches) {
           for (const prop of propMatches) {
             const cleanProp = prop.replace(/,/g, '').trim();
-            if (cleanProp && !this.exposed.has(cleanProp)) {
-              logDebug(moduleName, 'Adding exposed property', cleanProp);
-              this.exposed.add(cleanProp);
-              this.exposeOrder.push(cleanProp);
+            if (cleanProp) {
+              this.addExposedProperty(cleanProp, false);
               this.hasExplicitExpose = true;
             }
           }
@@ -119,9 +124,8 @@ class ExposeAnalyzer {
         const exposeItems = cleanMatch.split(',').map(item => item.trim().replace(/['"]/g, ''));
         
         for (const item of exposeItems) {
-          if (item && !this.optionsExpose.has(item)) {
-            this.optionsExpose.add(item);
-            this.optionsExposeOrder.push(item);
+          if (item) {
+            this.addExposedProperty(item, true);
             this.hasOptionsExpose = true;
           }
         }
@@ -133,9 +137,8 @@ class ExposeAnalyzer {
         if (variableMatch) {
           const exposeItems = variableMatch[1].split(',').map(item => item.trim().replace(/['"]/g, ''));
           for (const item of exposeItems) {
-            if (item && !this.optionsExpose.has(item)) {
-              this.optionsExpose.add(item);
-              this.optionsExposeOrder.push(item);
+            if (item) {
+              this.addExposedProperty(item, true);
               this.hasOptionsExpose = true;
             }
           }
@@ -187,32 +190,40 @@ class ExposeAnalyzer {
     const id = path.node.id;
     if (t.isIdentifier(id) && id.name === 'expose') {
       if (t.isArrayExpression(path.node.init)) {
-        processArrayElements(path.node.init.elements, this.exposed);
-        path.node.init.elements.forEach(element => {
-          if (t.isStringLiteral(element) || t.isIdentifier(element)) {
-            if (t.isStringLiteral(element) && !this.exposed.has(element.value)) {
-              this.exposed.add(element.value);
-              this.exposeOrder.push(element.value);
-            } else if (t.isIdentifier(element) && !this.exposed.has(element.name)) {
-              this.exposed.add(element.name);
-              this.exposeOrder.push(element.name);
-            }
-            this.hasExplicitExpose = true;
-          }
-        });
+        this.processArrayExpression(path.node.init, false);
       } else if (t.isIdentifier(path.node.init) && this.importDeclarations[path.node.init.name] && this.filePath) {
         // 处理导入的 expose 变量
         processIdentifierReference(
           path.node.init, 
           path, 
-          this.exposed, 
+          new Set(), // 此处创建一个临时Set，最终结果通过addExposedProperty方法添加
           this.importDeclarations, 
           this.filePath, 
-          processImportedExpose
+          (importInfo, filePath, exposedCollection) => {
+            this.processImportedExpose(importInfo, filePath, exposedCollection, false);
+          }
         );
         this.hasExplicitExpose = true;
       }
     }
+  }
+
+  /**
+   * 处理数组表达式
+   */
+  private processArrayExpression(arrayExpr: t.ArrayExpression, isOptions: boolean): void {
+    arrayExpr.elements.forEach(element => {
+      if (t.isStringLiteral(element) || t.isIdentifier(element)) {
+        const name = t.isStringLiteral(element) ? element.value : element.name;
+        this.addExposedProperty(name, isOptions);
+        
+        if (isOptions) {
+          this.hasOptionsExpose = true;
+        } else {
+          this.hasExplicitExpose = true;
+        }
+      }
+    });
   }
 
   /**
@@ -221,29 +232,18 @@ class ExposeAnalyzer {
   private analyzeExposeObjectProperty(path: NodePath<t.ObjectProperty>): void {
     if (t.isIdentifier(path.node.key) && path.node.key.name === 'expose') {
       if (t.isArrayExpression(path.node.value)) {
-        processArrayElements(path.node.value.elements, this.optionsExpose);
-        // 同步更新 optionsExposeOrder 数组
-        Array.from(this.optionsExpose).forEach(item => {
-          if (!this.optionsExposeOrder.includes(item)) {
-            this.optionsExposeOrder.push(item);
-          }
-        });
-        this.hasOptionsExpose = true;
+        this.processArrayExpression(path.node.value, true);
       } else if (t.isIdentifier(path.node.value)) {
         processIdentifierReference(
           path.node.value, 
           path, 
-          this.optionsExpose, 
+          new Set(), // 临时Set
           this.importDeclarations, 
           this.filePath, 
-          processImportedExpose
-        );
-        // 同步更新 optionsExposeOrder 数组
-        Array.from(this.optionsExpose).forEach(item => {
-          if (!this.optionsExposeOrder.includes(item)) {
-            this.optionsExposeOrder.push(item);
+          (importInfo, filePath, exposedCollection) => {
+            this.processImportedExpose(importInfo, filePath, exposedCollection, true);
           }
-        });
+        );
         this.hasOptionsExpose = true;
       }
     }
@@ -264,34 +264,30 @@ class ExposeAnalyzer {
    * 检查 setup 函数参数中的 expose
    */
   private checkSetupParamsForExpose(path: NodePath<t.ObjectMethod>): void {
-    if (path.node.params.length >= 2) {
-      const secondParam = path.node.params[1];
-      if (t.isObjectPattern(secondParam)) {
-        const exposeBinding = secondParam.properties.find(
-          prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
-        );
-        if (exposeBinding && t.isObjectProperty(exposeBinding) && t.isIdentifier(exposeBinding.value)) {
-          const exposeName = exposeBinding.value.name;
-          path.scope.traverse(path.node, {
-            CallExpression: (callPath) => {
-              if (t.isIdentifier(callPath.node.callee) && callPath.node.callee.name === exposeName) {
-                const arg = callPath.node.arguments[0];
-                if (t.isObjectExpression(arg)) {
-                  this.hasExplicitExpose = true;
-                  arg.properties.forEach(prop => {
-                    if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-                      this.addExposedProperty(prop);
-                    } else if (t.isSpreadElement(prop)) {
-                      this.addExposedProperty(prop);
-                    }
-                  });
-                }
-              }
-            }
-          });
+    if (path.node.params.length < 2) return;
+    
+    const secondParam = path.node.params[1];
+    if (!t.isObjectPattern(secondParam)) return;
+    
+    const exposeBinding = secondParam.properties.find(
+      prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
+    );
+    
+    if (!exposeBinding || !t.isObjectProperty(exposeBinding) || !t.isIdentifier(exposeBinding.value)) return;
+    
+    const exposeName = exposeBinding.value.name;
+    
+    path.scope.traverse(path.node, {
+      CallExpression: (callPath) => {
+        if (t.isIdentifier(callPath.node.callee) && callPath.node.callee.name === exposeName) {
+          const arg = callPath.node.arguments[0];
+          if (t.isObjectExpression(arg)) {
+            this.hasExplicitExpose = true;
+            this.processObjectExpression(arg, false);
+          }
         }
       }
-    }
+    });
   }
 
   /**
@@ -334,13 +330,7 @@ class ExposeAnalyzer {
 
     // 处理对象字面量参数
     if (t.isObjectExpression(arg)) {
-      arg.properties.forEach(prop => {
-        if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-          this.addExposedProperty(prop);
-        } else if (t.isSpreadElement(prop)) {
-          this.addExposedProperty(prop);
-        }
-      });
+      this.processObjectExpression(arg, false);
     } else if (t.isIdentifier(arg)) {
       // 处理整个对象传递给 defineExpose 的情况
       const binding = path.scope.getBinding(arg.name);
@@ -350,14 +340,21 @@ class ExposeAnalyzer {
           this.handleTypeAnnotation(id.typeAnnotation, binding.path);
         }
         if (t.isObjectExpression(binding.path.node.init)) {
-          binding.path.node.init.properties.forEach(prop => {
-            if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-              this.addExposedProperty(prop);
-            }
-          });
+          this.processObjectExpression(binding.path.node.init, false);
         }
       }
     }
+  }
+
+  /**
+   * 处理对象表达式
+   */
+  private processObjectExpression(obj: t.ObjectExpression, isOptions: boolean): void {
+    obj.properties.forEach(prop => {
+      if (t.isObjectProperty(prop) || t.isObjectMethod(prop) || t.isSpreadElement(prop)) {
+        this.addExposedProperty(prop, isOptions);
+      }
+    });
   }
 
   /**
@@ -378,11 +375,7 @@ class ExposeAnalyzer {
       
       const value = exposeProp.value;
       if (t.isArrayExpression(value)) {
-        value.elements.forEach(element => {
-          if (t.isStringLiteral(element) || t.isIdentifier(element)) {
-            this.addExposedProperty(element, true);
-          }
-        });
+        this.processArrayExpression(value, true);
       }
     }
     
@@ -408,9 +401,8 @@ class ExposeAnalyzer {
     let setupFunction;
     if (t.isObjectMethod(setupProp)) {
       setupFunction = setupProp;
-    } else if (t.isObjectProperty(setupProp) && t.isFunctionExpression(setupProp.value)) {
-      setupFunction = setupProp.value;
-    } else if (t.isObjectProperty(setupProp) && t.isArrowFunctionExpression(setupProp.value)) {
+    } else if (t.isObjectProperty(setupProp) && 
+              (t.isFunctionExpression(setupProp.value) || t.isArrowFunctionExpression(setupProp.value))) {
       setupFunction = setupProp.value;
     }
     
@@ -433,13 +425,7 @@ class ExposeAnalyzer {
           const arg = callPath.node.arguments[0];
           if (t.isObjectExpression(arg)) {
             this.hasExplicitExpose = true;
-            arg.properties.forEach(prop => {
-              if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-                this.addExposedProperty(prop);
-              } else if (t.isSpreadElement(prop)) {
-                this.addExposedProperty(prop);
-              }
-            });
+            this.processObjectExpression(arg, false);
           }
         }
       }
@@ -453,13 +439,7 @@ class ExposeAnalyzer {
     this.hasExplicitExpose = true;
     const arg = path.node.arguments[0];
     if (t.isObjectExpression(arg)) {
-      arg.properties.forEach(prop => {
-        if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-          this.addExposedProperty(prop);
-        } else if (t.isSpreadElement(prop)) {
-          this.addExposedProperty(prop);
-        }
-      });
+      this.processObjectExpression(arg, false);
     }
   }
 
@@ -471,22 +451,14 @@ class ExposeAnalyzer {
     
     const argument = path.node.argument;
     if (t.isObjectExpression(argument)) {
-      argument.properties.forEach(prop => {
-        if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-          this.addExposedProperty(prop);
-        }
-      });
+      this.processObjectExpression(argument, false);
     } else if (t.isIdentifier(argument)) {
       // 处理标识符返回的情况
       const binding = path.scope.getBinding(argument.name);
       if (binding && t.isVariableDeclarator(binding.path.node)) {
         const init = binding.path.node.init;
         if (t.isObjectExpression(init)) {
-          init.properties.forEach(prop => {
-            if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-              this.addExposedProperty(prop);
-            }
-          });
+          this.processObjectExpression(init, false);
         }
       }
     }
@@ -503,7 +475,7 @@ class ExposeAnalyzer {
     if (t.isTSTypeLiteral(actualType)) {
       actualType.members.forEach((member: t.TSTypeElement) => {
         if (t.isTSPropertySignature(member) || t.isTSMethodSignature(member)) {
-          this.addExposedProperty(member);
+          this.addExposedProperty(member, false);
         }
       });
     } else if (t.isTSTypeReference(actualType) && t.isIdentifier(actualType.typeName)) {
@@ -523,7 +495,7 @@ class ExposeAnalyzer {
       if (binding) {
         if (t.isTSInterfaceDeclaration(binding.path.node)) {
           binding.path.node.body.body.forEach(member => {
-            this.addExposedProperty(member);
+            this.addExposedProperty(member, false);
           });
           break;
         } else if (t.isTSTypeAliasDeclaration(binding.path.node)) {
@@ -539,42 +511,92 @@ class ExposeAnalyzer {
    * 添加暴露的属性
    */
   private addExposedProperty(
-    prop: t.ObjectProperty | t.ObjectMethod | t.TSPropertySignature | t.Identifier | t.StringLiteral | t.TSTypeElement | t.SpreadElement, 
-    isOptionsExpose = false
+    propOrName: t.ObjectProperty | t.ObjectMethod | t.TSPropertySignature | t.Identifier | 
+               t.StringLiteral | t.TSTypeElement | t.SpreadElement | string, 
+    isOptions = false
   ): void {
     let name: string | null = null;
     
-    if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-      if (t.isIdentifier(prop.key)) {
-        name = prop.key.name;
-      } else if (t.isStringLiteral(prop.key)) {
-        name = prop.key.value;
+    if (typeof propOrName === 'string') {
+      name = propOrName;
+    } else if (t.isObjectProperty(propOrName) || t.isObjectMethod(propOrName)) {
+      if (t.isIdentifier(propOrName.key)) {
+        name = propOrName.key.name;
+      } else if (t.isStringLiteral(propOrName.key)) {
+        name = propOrName.key.value;
       }
-    } else if (t.isIdentifier(prop)) {
-      name = prop.name;
-    } else if (t.isStringLiteral(prop)) {
-      name = prop.value;
-    } else if (t.isTSPropertySignature(prop) && t.isIdentifier(prop.key)) {
-      name = prop.key.name;
-    } else if (t.isTSMethodSignature(prop) && t.isIdentifier(prop.key)) {
-      name = prop.key.name;
-    } else if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument)) {
-      // 处理展开运算符
-      name = prop.argument.name;
+    } else if (t.isIdentifier(propOrName)) {
+      name = propOrName.name;
+    } else if (t.isStringLiteral(propOrName)) {
+      name = propOrName.value;
+    } else if (t.isTSPropertySignature(propOrName) && t.isIdentifier(propOrName.key)) {
+      name = propOrName.key.name;
+    } else if (t.isTSMethodSignature(propOrName) && t.isIdentifier(propOrName.key)) {
+      name = propOrName.key.name;
+    } else if (t.isSpreadElement(propOrName) && t.isIdentifier(propOrName.argument)) {
+      name = propOrName.argument.name;
     }
 
     if (!name) return;
     
-    if (isOptionsExpose) {
-      if (!this.optionsExpose.has(name)) {
-        this.optionsExpose.add(name);
-        this.optionsExposeOrder.push(name);
+    // 统一管理所有exposed属性
+    if (!this.exposed.has(name)) {
+      this.exposed.set(name, { isOptions });
+      this.exposeOrder.push(name);
+    }
+  }
+
+  /**
+   * 处理导入的 expose
+   */
+  private processImportedExpose(
+    importInfo: ImportInfo,
+    filePath: string,
+    exposedCollection: Set<string> | string[],
+    isOptions: boolean
+  ): void {
+    const importSource = importInfo.source;
+    const importedName = importInfo.importedName;
+    
+    try {
+      const currentDir = path.dirname(filePath);
+      const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
+      
+      logDebug(moduleName, `Trying to resolve imported expose from ${importFilePath}, imported name: ${importedName}`);
+      
+      if (fs.existsSync(importFilePath)) {
+        const importedCode = fs.readFileSync(importFilePath, 'utf-8');
+        const importedAst = parseComponent(importedCode).ast;
+        
+        // 查找导出的变量
+        const [exportedExposeObject, nestedImportDeclarations] = findExportedObjectAndImports(
+          importedAst, 
+          importedName, 
+        );
+        
+        if (exportedExposeObject) {
+          if (t.isArrayExpression(exportedExposeObject)) {
+            exportedExposeObject.elements.forEach(element => {
+              if (t.isStringLiteral(element) || t.isIdentifier(element)) {
+                const name = t.isStringLiteral(element) ? element.value : element.name;
+                this.addExposedProperty(name, isOptions);
+              }
+            });
+          } else if (t.isObjectExpression(exportedExposeObject)) {
+            exportedExposeObject.properties.forEach(prop => {
+              if (t.isObjectProperty(prop) || t.isObjectMethod(prop) || t.isSpreadElement(prop)) {
+                this.addExposedProperty(prop, isOptions);
+              }
+            });
+          }
+        } else {
+          logDebug(moduleName, `Could not find export named ${importedName} in ${importFilePath}`);
+        }
+      } else {
+        logDebug(moduleName, `Import file not found: ${importFilePath}`);
       }
-    } else {
-      if (!this.exposed.has(name)) {
-        this.exposed.add(name);
-        this.exposeOrder.push(name);
-      }
+    } catch (error) {
+      logError(moduleName, `Error analyzing imported expose:`, error);
     }
   }
 }
@@ -584,70 +606,4 @@ export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, fileP
   const ast = parsedAst || parseComponent(code).ast;
   const analyzer = new ExposeAnalyzer(code, ast, filePath);
   return analyzer.analyze(ast);
-}
-
-// 处理导入的 expose
-function processImportedExpose(
-  importInfo: ImportInfo,
-  filePath: string,
-  exposedCollection: Set<string> | string[]
-): void {
-  const importSource = importInfo.source;
-  const importedName = importInfo.importedName;
-  const isSet = exposedCollection instanceof Set;
-  const exposedSet = isSet ? exposedCollection as Set<string> : new Set<string>();
-  const exposeOrder = isSet ? [] : exposedCollection as string[];
-  
-  try {
-    const currentDir = path.dirname(filePath);
-    const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
-    
-    logDebug(moduleName, `Trying to resolve imported expose from ${importFilePath}, imported name: ${importedName}`);
-    
-    if (fs.existsSync(importFilePath)) {
-      const importedCode = fs.readFileSync(importFilePath, 'utf-8');
-      const importedAst = parseComponent(importedCode).ast;
-      
-      // 查找导出的变量
-      const [exportedExposeObject, nestedImportDeclarations] = findExportedObjectAndImports(
-        importedAst, 
-        importedName, 
-      );
-      
-      if (exportedExposeObject) {
-        if (t.isArrayExpression(exportedExposeObject)) {
-          exportedExposeObject.elements.forEach(element => {
-            if (t.isStringLiteral(element)) {
-              const name = element.value;
-              if (!exposedSet.has(name)) {
-                exposedSet.add(name);
-                if (!isSet) exposeOrder.push(name);
-              }
-            } else if (t.isIdentifier(element)) {
-              const name = element.name;
-              if (!exposedSet.has(name)) {
-                exposedSet.add(name);
-                if (!isSet) exposeOrder.push(name);
-              }
-            }
-          });
-        } else if (t.isObjectExpression(exportedExposeObject)) {
-          processObjectProperties(
-            exportedExposeObject.properties, 
-            exposedCollection, 
-            importFilePath, 
-            nestedImportDeclarations, 
-            'expose', 
-            processImportedExpose
-          );
-        }
-      } else {
-        logDebug(moduleName, `Could not find export named ${importedName} in ${importFilePath}`);
-      }
-    } else {
-      logDebug(moduleName, `Import file not found: ${importFilePath}`);
-    }
-  } catch (error) {
-    logError(moduleName, `Error analyzing imported expose:`, error);
-  }
 } 
