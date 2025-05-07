@@ -19,6 +19,7 @@ describe('test-units-analyzer', () => {
                             type: 'primary'
                         }
                     })
+                    expect(1).toBe(1)
                 })
                 it('should render correctly 2', () => {
                     const wrapper = shallowMount(Input, {
@@ -26,6 +27,7 @@ describe('test-units-analyzer', () => {
                             size: 'large',
                         }
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
@@ -48,6 +50,7 @@ describe('test-units-analyzer', () => {
                             onClick: () => {}
                         }
                     })
+                    expect(1).toBe(1)
                 })
 
                 it('should emit input event 2', () => {
@@ -57,13 +60,14 @@ describe('test-units-analyzer', () => {
                             'onUpdate:modelValue': () => {}
                         }
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
         
         const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
-        expect(res['src/components/Input.vue'].emits).toEqual(['change', 'update:modelValue'])
+        expect(res['src/components/Button.tsx'].emits).toEqual(['onClick'])
+        expect(res['src/components/Input.vue'].emits).toEqual(['onChange', 'onUpdate:modelValue'])
     })
 
     it('should analyze slots in test units', () => {
@@ -79,6 +83,7 @@ describe('test-units-analyzer', () => {
                             default: 'Button'
                         }
                     })
+                    expect(1).toBe(1)
                 })
 
                 it('should render correctly2', () => {
@@ -87,6 +92,7 @@ describe('test-units-analyzer', () => {
                             default: 'Input'
                         }
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
@@ -108,6 +114,7 @@ describe('test-units-analyzer', () => {
                         size: 'large',
                         type: 'primary'
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
@@ -126,12 +133,13 @@ describe('test-units-analyzer', () => {
                     createVNode(Button, {
                         onClick: () => {}
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
 
         const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
+        expect(res['src/components/Button.tsx'].emits).toEqual(['onClick'])
     })
 
     it('should analyze default slot in jsx', () => {
@@ -144,6 +152,7 @@ describe('test-units-analyzer', () => {
                     createVNode(Button, {}, {
                         default: () => '123'
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
@@ -162,6 +171,7 @@ describe('test-units-analyzer', () => {
                         default: () => '123',
                         footer: () => '456'
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
@@ -180,6 +190,7 @@ describe('test-units-analyzer', () => {
                         size: 'large',
                         type: 'primary'
                     })
+                    expect(1).toBe(1)
                 })
             })
         `
@@ -208,14 +219,35 @@ describe('test-units-analyzer', () => {
                     fireEvent.click(button);
                     expect(onClick).toHaveBeenCalled();
                     expect(onClick).toHaveBeenCalledWith(expect.any(MouseEvent));
+                    expect(1).toBe(1)
                 });
             });
         `
 
         const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
+        expect(res['src/components/Button.tsx'].emits).toEqual(['onClick'])
         expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
     })
 
+    it('should not analyze props without expect', () => {
+        const code = `
+            import Button from "src/components/Button.tsx";
+            import Input from "src/components/Input.vue";
+            import { describe, it, expect } from 'vitest';
 
+            describe('components', () => {
+                it('should render correctly 1', () => {
+                    const wrapper = shallowMount(Button, {
+                        props: {
+                            size: 'large',
+                            type: 'primary'
+                        }
+                    })
+                })
+            })
+        `
+
+        const res = analyzeTestUnits(code)
+        expect(res['src/components/Button.tsx'].props).toEqual([])
+    })
 })

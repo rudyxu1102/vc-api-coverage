@@ -39,6 +39,11 @@ class TestUnitAnalyzer {
         return this.result;
     }
     
+    // 获取导入的组件
+    public getImportedComponents(): Map<string, string> {
+        return this.importedComponents;
+    }
+    
     private collectComponentImports() {
         traverse(this.ast, {
             ImportDeclaration: (path) => {
@@ -78,6 +83,23 @@ class TestUnitAnalyzer {
                     path.node.callee.name === 'it' && 
                     t.isStringLiteral(path.node.arguments[0])
                 ) {
+                    // 检查测试用例中是否包含expect断言
+                    let hasExpect = false;
+                    
+                    // 遍历当前测试用例体内所有函数调用，检查是否有expect调用
+                    path.traverse({
+                        CallExpression: (innerPath) => {
+                            if (t.isIdentifier(innerPath.node.callee) && innerPath.node.callee.name === 'expect') {
+                                hasExpect = true;
+                            }
+                        }
+                    });
+                    
+                    // 如果没有expect断言，则跳过该测试用例
+                    if (!hasExpect) {
+                        return;
+                    }
+                    
                     // 查找 shallowMount 或 mount 调用
                     path.traverse({
                         CallExpression: (mountPath) => {
@@ -115,10 +137,60 @@ class TestUnitAnalyzer {
     private analyzeComponentCreationCalls() {
         const skipFunctions = new Set(['mount', 'shallowMount', 'it', 'describe', 'test', 'expect']);
         
+        // 首先找到所有包含expect断言的测试用例的范围
+        const testBlocksWithExpect = new Set<t.CallExpression>();
+        
+        // 收集所有包含expect断言的测试块
+        traverse(this.ast, {
+            CallExpression: (path) => {
+                if (
+                    t.isIdentifier(path.node.callee) && 
+                    (path.node.callee.name === 'it' || path.node.callee.name === 'test')
+                ) {
+                    // 检查是否包含expect断言
+                    let hasExpect = false;
+                    path.traverse({
+                        CallExpression: (innerPath) => {
+                            if (t.isIdentifier(innerPath.node.callee) && innerPath.node.callee.name === 'expect') {
+                                hasExpect = true;
+                            }
+                        }
+                    });
+                    
+                    if (hasExpect) {
+                        testBlocksWithExpect.add(path.node);
+                    }
+                }
+            }
+        });
+        
         traverse(this.ast, {
             CallExpression: (path) => {
                 // 排除已知的非组件创建函数
                 if (t.isIdentifier(path.node.callee) && skipFunctions.has(path.node.callee.name)) {
+                    return;
+                }
+                
+                // 检查当前调用是否在包含expect断言的测试块内
+                let isInTestWithExpect = false;
+                let currentPath: any = path;
+                
+                while (currentPath && !isInTestWithExpect) {
+                    // 向上查找父级CallExpression节点
+                    currentPath = currentPath.findParent((p: any) => p.isCallExpression());
+                    
+                    if (!currentPath) break;
+                    
+                    if (t.isIdentifier(currentPath.node.callee) && 
+                        (currentPath.node.callee.name === 'it' || currentPath.node.callee.name === 'test')) {
+                        // 检查当前测试块是否包含expect断言
+                        isInTestWithExpect = testBlocksWithExpect.has(currentPath.node);
+                        break;
+                    }
+                }
+                
+                // 如果不在包含expect断言的测试块内，则跳过
+                if (!isInTestWithExpect) {
                     return;
                 }
                 
@@ -181,8 +253,7 @@ class TestUnitAnalyzer {
                                 
                                 // 处理事件处理器 (onClick, onChange, etc.)
                                 if (propName.startsWith('on') && propName.length > 2) {
-                                    const eventName = propName.charAt(2).toLowerCase() + propName.slice(3);
-                                    this.result[componentFile].emits = [...new Set([...this.result[componentFile].emits!, eventName])];
+                                    this.result[componentFile].emits = [...new Set([...this.result[componentFile].emits!, propName])];
                                 } else {
                                     // 普通属性
                                     this.result[componentFile].props = [...new Set([...this.result[componentFile].props!, propName])];
@@ -243,14 +314,9 @@ class TestUnitAnalyzer {
                     const key = (prop as t.ObjectProperty).key;
                     
                     if (t.isIdentifier(key) && key.name.startsWith('on') && key.name.length > 2) {
-                        // 提取 onClick -> click, onChange -> change
-                        return key.name.charAt(2).toLowerCase() + key.name.slice(3);
+                        return key.name
                     } else if (t.isStringLiteral(key) && key.value.startsWith('on')) {
-                        // 处理 'onUpdate:modelValue' 这样的情况
-                        const eventName = key.value.slice(2); // 移除 'on' 前缀
-                        
-                        // 确保第一个字母是小写
-                        return eventName.charAt(0).toLowerCase() + eventName.slice(1);
+                        return key.value
                     }
                     
                     return null;
@@ -293,6 +359,21 @@ export function analyzeTestUnits(code: string, vitenode?: ViteDevServer) {
         plugins: ['typescript', 'jsx'], // 测试文件也可能用 TSX
         errorRecovery: true, // 增加容错性，避免因单个测试文件解析失败中断
     });
+    
+    // 分析测试用例
     const analyzer = new TestUnitAnalyzer(ast, vitenode);
-    return analyzer.analyze();
+    const result = analyzer.analyze();
+    
+    // 确保所有导入的组件都有一个条目
+    analyzer.getImportedComponents().forEach((path) => {
+        if (!result[path]) {
+            result[path] = { props: [], emits: [], slots: [] };
+        } else {
+            result[path].props = result[path].props || [];
+            result[path].emits = result[path].emits || [];
+            result[path].slots = result[path].slots || [];
+        }
+    });
+    
+    return result;
 }

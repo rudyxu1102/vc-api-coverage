@@ -73,3 +73,11 @@ export function getTotalData(allCoverageData: VcCoverageData[]) {
   }
   return data
 }
+
+// 将update:modelValue转换为onUpdate:modelValue
+export function toEventName(str: string) {
+  if (str.startsWith('on')) {
+    return str
+  }
+  return `on${str.charAt(0).toUpperCase()}${str.slice(1)}`
+}
