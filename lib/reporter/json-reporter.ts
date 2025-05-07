@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { VcTotalData } from '../types'
+import { getTotalData } from '../common/utils'
 
 interface ComponentCoverage {
   name: string
@@ -52,9 +53,9 @@ export class JSONReporter {
     this.outputDir = outputDir
   }
 
-  public setCoverageData(data: ComponentCoverage[], totalData: VcTotalData) {
+  public setCoverageData(data: ComponentCoverage[]) {
     this.coverageData = data
-    this.totalData = totalData
+    this.totalData = getTotalData(data)
   }
 
   public async generateReport() {

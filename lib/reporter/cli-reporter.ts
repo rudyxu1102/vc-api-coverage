@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import Table from 'cli-table3';
 import type { VcCoverageData, VcTotalData } from '../types'
-import { colorizePercentage, roundPercentage } from '../common/utils';
+import { colorizePercentage, getTotalData, roundPercentage } from '../common/utils';
 
 // 获取未覆盖的API列表
 function getUncoveredAPIs(coverageData: VcCoverageData): string {
@@ -53,7 +53,8 @@ function formatComponentName(name: string, percentage: number): string {
   }
 }
 
-export function generateCliReport(allCoverageData: VcCoverageData[], totalData: VcTotalData): string {
+export function generateCliReport(allCoverageData: VcCoverageData[]): string {
+  const totalData = getTotalData(allCoverageData)
   // 检查是否有任何未覆盖的API
   const hasUncoveredApis = allCoverageData.some(data => {
     return data.props.details.some(p => !p.covered) ||

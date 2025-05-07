@@ -43,46 +43,6 @@ export default class VcCoverageReporter implements Reporter {
     console.log('\n[vc-api-coverage] Initialized.');
   }
 
-  get totalData() {
-    const data = {
-      props: {
-        total: 0,
-        covered: 0,
-      },
-      emits: {
-        total: 0,
-        covered: 0
-      },
-      slots: {
-        total: 0,
-        covered: 0
-      },
-      exposes: {
-        total: 0,
-        covered: 0
-      }
-    }
-    for (const item of this.coverageData) {
-      if (item.props.total > 0) {
-        data.props.total += item.props.total
-        data.props.covered += item.props.covered
-      }
-      if (item.emits.total > 0) {
-        data.emits.total += item.emits.total
-        data.emits.covered += item.emits.covered
-      }
-      if (item.slots.total > 0) {
-        data.slots.total += item.slots.total
-        data.slots.covered += item.slots.covered
-      }
-      if (item.exposes.total > 0) {
-        data.exposes.total += item.exposes.total
-        data.exposes.covered += item.exposes.covered
-      }
-    }
-    return data
-  }
-
   onTestModuleEnd(testModule: TestModule) {
     const vitenode = testModule.project.vite
     const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
@@ -214,13 +174,13 @@ export default class VcCoverageReporter implements Reporter {
 
     if (shouldGenerateFormat('cli')) {
       // 计算总体覆盖率
-      const report = generateCliReport(this.coverageData, this.totalData);
+      const report = generateCliReport(this.coverageData);
       
       console.log('\n' + report);
     }
 
     if (shouldGenerateFormat('html')) {
-      this.htmlReporter.setCoverageData(this.coverageData, this.totalData);
+      this.htmlReporter.setCoverageData(this.coverageData);
       await this.htmlReporter.generateReport();
       if (this.options.openBrowser) {
         const htmlPath = path.join(process.cwd(), this.options.outputDir || 'coverage', 'index.html');
@@ -229,7 +189,7 @@ export default class VcCoverageReporter implements Reporter {
     }
 
     if (shouldGenerateFormat('json')) {
-      this.jsonReporter.setCoverageData(this.coverageData, this.totalData);
+      this.jsonReporter.setCoverageData(this.coverageData);
       await this.jsonReporter.generateReport();
     }
 
