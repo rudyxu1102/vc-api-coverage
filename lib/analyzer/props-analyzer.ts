@@ -91,6 +91,55 @@ class PropsAnalyzer {
   }
 
   /**
+   * 处理展开操作符
+   */
+  private processSpreadElement(element: t.SpreadElement): void {
+    if (t.isIdentifier(element.argument)) {
+      const spreadName = element.argument.name;
+      // 检查是否为导入的标识符
+      const importInfo = this.importDeclarations[spreadName];
+      if (importInfo && this.filePath) {
+        // 处理导入的props
+        processImportedProps(importInfo, this.filePath, this.propsSet);
+      } else {
+        // 查找本地绑定
+        const binding = this.findBindingInAST(spreadName);
+        if (binding && t.isVariableDeclarator(binding.node) && binding.node.init) {
+          if (t.isObjectExpression(binding.node.init)) {
+            // 处理本地对象中的属性
+            this.processLocalObject(binding.node.init);
+          } else if (t.isTSAsExpression(binding.node.init) && t.isObjectExpression(binding.node.init.expression)) {
+            // 处理 as const 或其他类型断言
+            this.processLocalObject(binding.node.init.expression);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 处理本地对象表达式
+   */
+  private processLocalObject(objectExpr: t.ObjectExpression): void {
+    // 处理对象中的展开操作符
+    objectExpr.properties.forEach(prop => {
+      if (t.isSpreadElement(prop)) {
+        this.processSpreadElement(prop);
+      }
+    });
+    
+    // 处理对象的普通属性
+    processObjectProperties(
+      objectExpr.properties,
+      this.propsSet,
+      this.filePath,
+      this.importDeclarations,
+      'props',
+      processImportedProps
+    );
+  }
+
+  /**
    * 分析 props: variableName 形式
    */
   private analyzeIdentifierProps(identifier: t.Identifier, nodePath: NodePath<t.ObjectProperty>): void {
@@ -102,27 +151,10 @@ class PropsAnalyzer {
     if (binding && t.isVariableDeclarator(binding.node) && binding.node.init) {
       // 如果变量是在当前文件中定义的
       if (t.isObjectExpression(binding.node.init)) {
-        // 处理变量定义中的展开操作符
-        binding.node.init.properties.forEach(prop => {
-          if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument)) {
-            const spreadName = prop.argument.name;
-            // 检查是否为导入的标识符
-            const importInfo = this.importDeclarations[spreadName];
-            if (importInfo && this.filePath) {
-              // 处理导入的props
-              processImportedProps(importInfo, this.filePath, this.propsSet);
-            }
-          }
-        });
-        
-        processObjectProperties(
-          binding.node.init.properties,
-          this.propsSet,
-          this.filePath,
-          this.importDeclarations,
-          'props',
-          processImportedProps
-        );
+        this.processLocalObject(binding.node.init);
+        return;
+      } else if (t.isTSAsExpression(binding.node.init) && t.isObjectExpression(binding.node.init.expression)) {
+        this.processLocalObject(binding.node.init.expression);
         return;
       }
     }
@@ -142,50 +174,10 @@ class PropsAnalyzer {
    * 分析 props: { prop1: Type, prop2: Type } 形式
    */
   private analyzeObjectProps(objectExpr: t.ObjectExpression): void {
-    // 先处理spread操作符
+    // 处理对象中的所有属性，包括展开操作符
     objectExpr.properties.forEach(prop => {
-      if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument)) {
-        const spreadVarName = prop.argument.name;
-        
-        // 找到当前AST中该变量的引用
-        const binding = this.findBindingInAST(spreadVarName);
-        if (binding && t.isVariableDeclarator(binding.node)) {
-          const init = binding.node.init;
-          
-          if (t.isObjectExpression(init)) {
-            // 处理本地对象表达式中的展开操作符
-            init.properties.forEach(innerProp => {
-              if (t.isSpreadElement(innerProp) && t.isIdentifier(innerProp.argument)) {
-                const innerSpreadName = innerProp.argument.name;
-                // 检查是否为导入的标识符
-                const importInfo = this.importDeclarations[innerSpreadName];
-                if (importInfo && this.filePath) {
-                  // 处理导入的props
-                  processImportedProps(importInfo, this.filePath, this.propsSet);
-                }
-              }
-            });
-            
-            processObjectProperties(
-              init.properties,
-              this.propsSet,
-              this.filePath,
-              this.importDeclarations,
-              'props',
-              processImportedProps
-            );
-          } else if (t.isTSAsExpression(init) && t.isObjectExpression(init.expression)) {
-            // 处理 as const 或其他类型断言
-            processObjectProperties(
-              init.expression.properties,
-              this.propsSet,
-              this.filePath,
-              this.importDeclarations,
-              'props',
-              processImportedProps
-            );
-          }
-        }
+      if (t.isSpreadElement(prop)) {
+        this.processSpreadElement(prop);
       }
     });
     
