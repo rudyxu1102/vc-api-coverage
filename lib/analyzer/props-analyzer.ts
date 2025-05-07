@@ -23,9 +23,11 @@ class PropsAnalyzer {
   private propsSet: Set<string> = new Set<string>();
   private importDeclarations: Record<string, ImportInfo> = {};
   private filePath?: string;
+  private ast: ParseResult<File>;
 
   constructor(ast: ParseResult<File>, filePath?: string) {
     this.filePath = filePath;
+    this.ast = ast;
     collectImportDeclarations(ast, this.importDeclarations);
   }
 
@@ -110,6 +112,41 @@ class PropsAnalyzer {
    * 分析 props: { prop1: Type, prop2: Type } 形式
    */
   private analyzeObjectProps(objectExpr: t.ObjectExpression): void {
+    // 先处理spread操作符
+    objectExpr.properties.forEach(prop => {
+      if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument)) {
+        const spreadVarName = prop.argument.name;
+        
+        // 找到当前AST中该变量的引用
+        const binding = this.findBindingInAST(spreadVarName);
+        if (binding && t.isVariableDeclarator(binding.node)) {
+          const init = binding.node.init;
+          
+          if (t.isObjectExpression(init)) {
+            processObjectProperties(
+              init.properties,
+              this.propsSet,
+              this.filePath,
+              this.importDeclarations,
+              'props',
+              processImportedProps
+            );
+          } else if (t.isTSAsExpression(init) && t.isObjectExpression(init.expression)) {
+            // 处理 as const 或其他类型断言
+            processObjectProperties(
+              init.expression.properties,
+              this.propsSet,
+              this.filePath,
+              this.importDeclarations,
+              'props',
+              processImportedProps
+            );
+          }
+        }
+      }
+    });
+    
+    // 处理普通属性
     processObjectProperties(
       objectExpr.properties, 
       this.propsSet, 
@@ -118,6 +155,25 @@ class PropsAnalyzer {
       'props', 
       processImportedProps
     );
+  }
+  
+  /**
+   * 在AST中找到变量的绑定
+   */
+  private findBindingInAST(name: string): NodePath<t.VariableDeclarator> | null {
+    let binding: NodePath<t.VariableDeclarator> | null = null;
+    
+    // 使用全局AST遍历查找变量绑定
+    traverse(this.ast as unknown as File, {
+      VariableDeclarator(path) {
+        if (t.isIdentifier(path.node.id) && path.node.id.name === name) {
+          binding = path;
+          path.stop(); // 找到后停止遍历
+        }
+      }
+    });
+    
+    return binding;
   }
 }
 

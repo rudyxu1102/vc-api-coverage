@@ -203,4 +203,81 @@ describe('props-analyzer', () => {
     const props = analyzeProps(code)
     expect(props).toEqual(['loading', 'disabled'])
   })
+
+  it('should analyze typescript with spread', () => {
+    const code = `
+      const buttonProps = {
+        loading: Boolean,
+        disabled: Boolean,
+      } as const
+      export default {
+        props: {
+          ...buttonProps,
+          size: String,
+        }
+      }
+    `
+    const props = analyzeProps(code)
+    expect(props).toEqual(['loading', 'disabled', 'size'])
+  })
+
+  it('should analyze typescript with spread from imported file', () => {
+     // 模拟导入文件内容
+     const mockImportedFileContent = `
+      export const buttonProps = {
+        label: { type: String, required: true },
+        disabled: { type: Boolean, default: false },
+      }
+    `
+
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
+    const code = `
+      import { buttonProps } from './props'
+      export default {
+        props: {
+          ...buttonProps,
+          size: String,
+        }
+      }
+    `
+    const filePath = '/fake/component/Button.tsx'
+    const props = analyzeProps(code, undefined, filePath)
+
+    // // 验证fs.readFileSync被调用
+    expect(fs.readFileSync).toHaveBeenCalled()
+    expect(props).toEqual(['label', 'disabled', 'size'])
+  })
+
+  it('should analyze typescript with spread from imported file 2', () => {
+    // 模拟导入文件内容
+    const mockImportedFileContent = `
+     export const buttonProps = {
+       label: { type: String, required: true },
+       disabled: { type: Boolean, default: false },
+     }
+   `
+
+   vi.mocked(fs.existsSync).mockReturnValue(true)
+   vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
+   const code = `
+     import { buttonProps } from './props'
+     const buttonProps2 = {
+      ...buttonProps,
+      size: {
+        type: String,
+        default: 'md',
+      },
+     }
+     export default {
+       props: buttonProps2
+     }
+   `
+   const filePath = '/fake/component/Button.tsx'
+   const props = analyzeProps(code, undefined, filePath)
+
+   // // 验证fs.readFileSync被调用
+   expect(fs.readFileSync).toHaveBeenCalled()
+   expect(props).toEqual(['label', 'disabled', 'size'])
+ })
 }) 

@@ -199,7 +199,7 @@ export default class VcCoverageReporter implements Reporter {
       this.htmlReporter.setCoverageData(this.coverageData);
       await this.htmlReporter.generateReport();
       if (this.options.openBrowser) {
-        const htmlPath = path.join(process.cwd(), this.options.outputDir || 'coverage', 'index.html');
+        const htmlPath = path.join(process.cwd(), this.options.outputDir || 'coverage-api', 'index.html');
         await open(htmlPath);
       }
     }
