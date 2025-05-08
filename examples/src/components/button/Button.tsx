@@ -1,5 +1,10 @@
 import { defineComponent } from 'vue';
 import { buttonProps, buttonEmits, buttonExpose, buttonSlots } from './props';
+import { pick } from 'lodash'
+const bbb = {
+  ...buttonProps,
+  a: 1,
+}
 
 export default defineComponent({
   name: 'MyButton',

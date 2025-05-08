@@ -201,6 +201,7 @@ class PropsAnalyzer {
     // 使用全局AST遍历查找变量绑定
     traverse(this.ast as unknown as File, {
       VariableDeclarator(path) {
+        console.log(path.get('init').evaluate().value)
         if (t.isIdentifier(path.node.id) && path.node.id.name === name) {
           binding = path;
           path.stop(); // 找到后停止遍历

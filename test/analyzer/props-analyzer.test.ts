@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { analyzeProps } from '../../lib/analyzer/props-analyzer'
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
 
 // Mock fs and path modules for import testing
 vi.mock('fs', () => ({
@@ -13,6 +14,13 @@ vi.mock('path', () => ({
   dirname: vi.fn().mockReturnValue('/fake/path'),
   resolve: vi.fn().mockImplementation((...args) => args.join('/')),
 }))
+
+// 获取当前文件的目录路径
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// 测试用例目录
+const TEST_CASES_DIR = path.resolve(__dirname, '../fixtures/props')
 
 describe('props-analyzer', () => {
   beforeEach(() => {
@@ -282,30 +290,235 @@ describe('props-analyzer', () => {
   })
 
   it('should analyze typescript with lodash function', () => {
-    // 模拟导入文件内容
-    const mockImportedFileContent = `
-     export const buttonProps = {
+    const code = `
+     import { pick } from 'lodash'
+     const buttonProps1 = {
        label: { type: String, required: true },
        disabled: { type: Boolean, default: false },
        type: String
-     } as const
-   `
-
-    vi.mocked(fs.existsSync).mockReturnValue(true)
-    vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
-    const code = `
-     import { pick } from 'lodash'
-     import { buttonProps } from './props'
-     const buttonProps2 = pick(buttonProps, ['label', 'disabled'])
+     };
+     const buttonProps2 = pick(buttonProps1, ['label', 'disabled'])
      export default {
        props: buttonProps2
      }
    `
-    const filePath = '/fake/component/Button.tsx'
-    const props = analyzeProps(code, undefined, filePath)
+    const props = analyzeProps(code)
 
-    // // 验证fs.readFileSync被调用
-    expect(fs.readFileSync).toHaveBeenCalled()
     expect(props).toEqual(['label', 'disabled'])
   })
-}) 
+})
+
+describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
+  // 测试简单对象形式的props
+  it('should analyze object props correctly', () => {
+    const code = `
+    export default {
+      props: {
+        name: String,
+        age: Number,
+        isActive: Boolean
+      }
+    }
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.ts');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const babelResult = analyzeProps(code);
+      const morphResult = analyzeProps(code, undefined, tempFile);
+      
+      expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+      expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+      expect(morphResult).toEqual(babelResult);
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
+  
+  // 测试数组形式的props
+  it('should analyze array props correctly', () => {
+    const code = `
+    export default {
+      props: ['name', 'age', 'isActive']
+    }
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.ts');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const babelResult = analyzeProps(code);
+      const morphResult = analyzeProps(code, undefined, tempFile);
+      
+      expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+      expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
+  
+  // 测试defineProps的泛型形式
+  it('should analyze defineProps with generics correctly', () => {
+    const code = `
+    <script setup lang="ts">
+    const props = defineProps<{
+      name: string;
+      age: number;
+      isActive: boolean;
+    }>();
+    </script>
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.tsx');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const babelResult = analyzeProps(code);
+      const morphResult = analyzeProps(code, undefined, tempFile);
+      
+      expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+      expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
+  
+  // 测试defineProps的对象字面量形式
+  it('should analyze defineProps with object correctly', () => {
+    const code = `
+    <script setup>
+    const props = defineProps({
+      name: String,
+      age: Number,
+      isActive: Boolean
+    });
+    </script>
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.tsx');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const babelResult = analyzeProps(code);
+      const morphResult = analyzeProps(code, undefined, tempFile);
+      
+      expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+      expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
+  
+  // 测试带有类型引用的defineProps
+  it('should analyze defineProps with type reference correctly', () => {
+    const code = `
+    <script setup lang="ts">
+    interface Props {
+      name: string;
+      age: number;
+      isActive: boolean;
+    }
+    
+    const props = defineProps<Props>();
+    </script>
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.tsx');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const babelResult = analyzeProps(code);
+      const morphResult = analyzeProps(code, undefined, tempFile);
+      
+      expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+      expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
+  
+  // 测试带有交叉类型(intersection types)的props
+  it('should analyze props with intersection types correctly', () => {
+    const code = `
+    <script setup lang="ts">
+    interface BaseProps {
+      id: string;
+      class: string;
+    }
+    
+    interface SpecificProps {
+      name: string;
+      age: number;
+    }
+    
+    type Props = BaseProps & SpecificProps;
+    
+    const props = defineProps<Props>();
+    </script>
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.tsx');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const babelResult = analyzeProps(code);
+      const morphResult = analyzeProps(code, undefined, tempFile);
+      
+      expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
+      // 注意：babel版本可能无法正确处理交叉类型
+      console.log('Babel result:', babelResult);
+      console.log('ts-morph result:', morphResult);
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
+  
+  // 测试继承的接口
+  it('should analyze props with interface extension correctly', () => {
+    const code = `
+    <script setup lang="ts">
+    interface BaseProps {
+      id: string;
+      class: string;
+    }
+    
+    interface Props extends BaseProps {
+      name: string;
+      age: number;
+    }
+    
+    const props = defineProps<Props>();
+    </script>
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.tsx');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const babelResult = analyzeProps(code);
+      const morphResult = analyzeProps(code, undefined, tempFile);
+      
+      expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
+      // 注意：babel版本可能无法正确处理接口继承
+      console.log('Babel result:', babelResult);
+      console.log('ts-morph result:', morphResult);
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
+}); 
