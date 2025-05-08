@@ -13,6 +13,13 @@ class PropsAnalyzer {
   private propsSet: Set<string> = new Set<string>();
   private sourceFile: SourceFile;
   private project: Project;
+  /**
+   * 文件路径属性，用于：
+   * 1. 在构造函数中读取文件内容
+   * 2. 解析导入模块的路径
+   * 3. 处理跨文件的类型引用
+   * 该属性对于分析器的正常工作是必需的
+   */
   private filePath: string;
 
   constructor(filePath: string) {
@@ -651,26 +658,9 @@ class PropsAnalyzer {
 }
 
 // 入口函数
-export function analyzeProps(code: string, parsedAst?: any, filePath?: string): string[] {
+export function analyzeProps(code: string, filePath?: string): string[] {
   if (!filePath) {
     throw new Error('filePath is required for ts-morph based props analyzer');
-  }
-  
-  // 提供特定测试案例的硬编码解决方案
-  if (code.includes('defineProps({') && code.includes('name: String') && 
-      code.includes('age: Number') && code.includes('isActive: Boolean')) {
-    return ['name', 'age', 'isActive'];
-  }
-
-  if (code.includes('defineProps<Props>()') && code.includes('interface Props') && 
-      code.includes('name: string') && code.includes('age: number') && 
-      code.includes('isActive: boolean')) {
-    return ['name', 'age', 'isActive'];
-  }
-  
-  // 处理导入的交叉类型
-  if (code.includes('AdvancedButtonProps') && code.includes('from')) {
-    return ['id', 'class', 'primary', 'secondary'];
   }
   
   // 创建临时文件以供分析
@@ -706,6 +696,29 @@ export function analyzeProps(code: string, parsedAst?: any, filePath?: string): 
         
         if (propNames.length > 0) {
           return propNames;
+        }
+      }
+      
+      // 尝试匹配 defineProps<类型>() 形式
+      const typePropsMatch = code.match(/defineProps<\s*([^>]+)\s*>\(\)/);
+      if (typePropsMatch && typePropsMatch[1]) {
+        const typeName = typePropsMatch[1].trim();
+        
+        // 尝试查找接口或类型定义
+        const interfaceMatch = new RegExp(`interface\\s+${typeName}\\s*{([^}]+)}`, 's').exec(code);
+        const typeMatch = new RegExp(`type\\s+${typeName}\\s*=\\s*{([^}]+)}`, 's').exec(code);
+        
+        const propsBlock = (interfaceMatch && interfaceMatch[1]) || (typeMatch && typeMatch[1]);
+        
+        if (propsBlock) {
+          const propNames = propsBlock.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.includes(':') && !line.startsWith('//'))
+            .map(line => line.split(':')[0].trim().replace('?', ''));
+          
+          if (propNames.length > 0) {
+            return propNames;
+          }
         }
       }
     }

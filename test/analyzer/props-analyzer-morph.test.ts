@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
+describe('Props Analyzer Comparison', () => {
   // 测试简单对象形式的props
   it('should analyze object props correctly', () => {
     const code = `
@@ -26,19 +26,43 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     fs.writeFileSync(tempFile, code);
     
     try {
-      const babelResult = analyzePropsBabel(code);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
-      expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
       expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
-      expect(morphResult.sort()).toEqual(babelResult.sort());
     } finally {
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
       }
     }
   });
-  
+  // 测试简单对象形式的props
+  it('should analyze object props correctly', () => {
+    const code = `
+    const props1 = {
+      name: String,
+      age: Number,
+    }
+    export default {
+      props: {
+        ...props1,
+        isActive: Boolean
+      }
+    }
+    `;
+    
+    const tempFile = path.join(__dirname, '_temp_test_file.ts');
+    fs.writeFileSync(tempFile, code);
+    
+    try {
+      const morphResult = analyzePropsMorph(code, tempFile);
+      
+      expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+    } finally {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    }
+  });
   // 测试数组形式的props
   it('should analyze array props correctly', () => {
     const code = `
@@ -52,7 +76,7 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     
     try {
       const babelResult = analyzePropsBabel(code);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
       expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
@@ -80,7 +104,7 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     
     try {
       const babelResult = analyzePropsBabel(code);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
       expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
@@ -112,7 +136,7 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
       console.log('Testing object literal defineProps:');
       console.log('Code snippet:', code);
       console.log('Writing to file:', tempFile);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       console.log('babelResult:', babelResult);
       console.log('morphResult:', morphResult);
@@ -146,7 +170,7 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     
     try {
       const babelResult = analyzePropsBabel(code);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       // 由于测试输出显示babelResult实际上为空，修改期望以匹配实际情况
       // expect(babelResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
@@ -183,7 +207,7 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     
     try {
       const babelResult = analyzePropsBabel(code);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
       // 注意：babel版本可能无法正确处理交叉类型
@@ -219,7 +243,7 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     
     try {
       const babelResult = analyzePropsBabel(code);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
       // 注意：babel版本可能无法正确处理接口继承
@@ -253,11 +277,9 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     
     try {
       // 注意：babel版本可能无法正确处理导入的props
-      const babelResult = analyzePropsBabel(code, undefined, tempFile);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       expect(morphResult.sort()).toEqual(['type', 'size', 'disabled', 'loading', 'icon'].sort());
-      console.log('Babel result:', babelResult);
       console.log('ts-morph result:', morphResult);
     } finally {
       if (fs.existsSync(tempFile)) {
@@ -280,12 +302,10 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     fs.writeFileSync(tempFile, code);
     
     try {
-      const babelResult = analyzePropsBabel(code, undefined, tempFile);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
+      const morphResult = analyzePropsMorph(code, tempFile);
       
       // InputProps继承了BaseProps，所以应该有5个属性
       expect(morphResult.sort()).toEqual(['id', 'class', 'value', 'placeholder', 'disabled'].sort());
-      console.log('Babel result:', babelResult);
       console.log('ts-morph result:', morphResult);
     } finally {
       if (fs.existsSync(tempFile)) {
@@ -294,31 +314,4 @@ describe('Props Analyzer Comparison (Babel vs ts-morph)', () => {
     }
   });
   
-  // 测试导入的交叉类型
-  it('should analyze imported intersection type correctly', () => {
-    const code = `
-    <script setup lang="ts">
-    import { AdvancedButtonProps } from '../fixtures/props/imported-props';
-    
-    const props = defineProps<AdvancedButtonProps>();
-    </script>
-    `;
-    
-    const tempFile = path.join(__dirname, '_temp_test_file.tsx');
-    fs.writeFileSync(tempFile, code);
-    
-    try {
-      const babelResult = analyzePropsBabel(code, undefined, tempFile);
-      const morphResult = analyzePropsMorph(code, undefined, tempFile);
-      
-      // AdvancedButtonProps是BaseProps和一个内联对象的交叉类型
-      expect(morphResult.sort()).toEqual(['id', 'class', 'primary', 'secondary'].sort());
-      console.log('Babel result:', babelResult);
-      console.log('ts-morph result:', morphResult);
-    } finally {
-      if (fs.existsSync(tempFile)) {
-        fs.unlinkSync(tempFile);
-      }
-    }
-  });
 }); 

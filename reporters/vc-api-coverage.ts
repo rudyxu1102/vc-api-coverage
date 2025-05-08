@@ -3,7 +3,7 @@ import type { TestModule, Vitest } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
-import { analyzeProps } from '../lib/analyzer/props-analyzer';
+import { analyzeProps } from '../lib/analyzer/props-analyzer-morph';
 import { analyzeEmits } from '../lib/analyzer/emits-analyzer';
 import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
 import { analyzeExpose } from '../lib/analyzer/expose-analyzer';
@@ -77,7 +77,7 @@ export default class VcCoverageReporter implements Reporter {
       const parsedContent = parseComponent(code);
         
       // 分析组件API
-      const props = analyzeProps(code, parsedContent.ast, path);  // 传入文件路径
+      const props = analyzeProps(code,  path);  // 传入文件路径
       const emits = analyzeEmits(code, parsedContent.ast, path).map(e => toEventName(e));
       const slots = analyzeSlots(code, parsedContent, path);
       const exposes = analyzeExpose(code, parsedContent.ast, path)
@@ -92,13 +92,18 @@ export default class VcCoverageReporter implements Reporter {
 
   // 有一些prop命名为onXxx，但是需要从emits中移除
   dealPropsEmits(compData: VcData, unitData: VcData) {
-    const propsDetails = [...unitData.props]
+    const propsDetails = []
     const emitsDetails = []
     for (const emit of unitData.emits) {
       if (compData.props.includes(emit)) {
         propsDetails.push(emit)
       } else {
         emitsDetails.push(emit)
+      }
+    }
+    for (const prop of unitData.props) {
+      if (!compData.emits.includes(prop)) {
+        propsDetails.push(prop)
       }
     }
     return { propsDetails, emitsDetails }
