@@ -142,6 +142,16 @@ class PropsAnalyzer {
       else if (initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
         this.processObjectLiteral(initializer);
       }
+      // 处理 AS 表达式，如 props: { ... } as const
+      else if (initializer.getKind() === SyntaxKind.AsExpression) {
+        const asExpression = initializer.asKind(SyntaxKind.AsExpression);
+        if (asExpression) {
+          const expression = asExpression.getExpression();
+          if (expression.getKind() === SyntaxKind.ObjectLiteralExpression) {
+            this.processObjectLiteral(expression);
+          }
+        }
+      }
       // 标识符引用: props: PropsOptions
       else if (initializer.getKind() === SyntaxKind.Identifier) {
         const identifier = initializer.getText();
@@ -359,7 +369,6 @@ class PropsAnalyzer {
         return;
       }
       
-      console.log(`[DEBUG] Reading imported file: ${importFilePath}`);
       
       // 读取和解析导入文件
       const importFileContent = fs.readFileSync(importFilePath, 'utf-8');
@@ -407,7 +416,6 @@ class PropsAnalyzer {
         for (const varDecl of variableDeclarations) {
           const initializer = varDecl.getInitializer();
           if (initializer && initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-            console.log(`[DEBUG] Found imported object for ${importName}`);
             
             // 处理对象字面量
             const objLiteral = initializer.asKind(SyntaxKind.ObjectLiteralExpression);
@@ -418,7 +426,6 @@ class PropsAnalyzer {
                 if (prop.getKind() === SyntaxKind.PropertyAssignment) {
                   const propName = prop.asKind(SyntaxKind.PropertyAssignment)?.getName();
                   if (propName) {
-                    console.log(`[DEBUG] Adding prop from imported object: ${propName}`);
                     this.propsSet.add(propName);
                   }
                 }
@@ -431,7 +438,6 @@ class PropsAnalyzer {
                 
                 if (expression.getKind() === SyntaxKind.Identifier) {
                   const spreadName = expression.getText();
-                  console.log(`[DEBUG] Found spread element in imported object: ${spreadName}`);
                   
                   // 创建一个临时 PropsAnalyzer 实例来分析导入文件中的展开属性
                   const tempAnalyzer = new PropsAnalyzer(importFilePath);
@@ -440,7 +446,6 @@ class PropsAnalyzer {
                   // 合并找到的属性
                   const foundProps = Array.from(tempAnalyzer.propsSet);
                   for (const prop of foundProps) {
-                    console.log(`[DEBUG] Adding prop from nested spread: ${prop}`);
                     this.propsSet.add(prop);
                   }
                 }
