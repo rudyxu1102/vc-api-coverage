@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import PropsAnalyzer from '../../lib/analyzer/props-analyzer-morph';
+import PropsAnalyzer from '../../lib/analyzer/props-analyzer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';

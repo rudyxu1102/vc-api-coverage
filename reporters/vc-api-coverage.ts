@@ -3,7 +3,7 @@ import type { TestModule, Vitest } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
-import PropsAnalyzer from '../lib/analyzer/props-analyzer-morph';
+import PropsAnalyzer from '../lib/analyzer/props-analyzer';
 import { analyzeEmits } from '../lib/analyzer/emits-analyzer';
 import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
 import { analyzeExpose } from '../lib/analyzer/expose-analyzer';

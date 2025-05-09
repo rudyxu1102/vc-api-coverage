@@ -12,13 +12,13 @@ const props = {
 export default defineComponent({
   name: 'MyInput',
 
-  props,
+  props: props,
 
-  // slots: Object as SlotsType<{
-  //   prefix?: () => VNode[];
-  //   suffix?: () => VNode[];
-  //   clearIcon?: () => VNode[];
-  // }>,
+  slots: Object as SlotsType<{
+    prefix?: () => VNode[];
+    suffix?: () => VNode[];
+    clearIcon?: () => VNode[];
+  }>,
 
   emits: {
     'update:modelValue': (value: string) => true,
