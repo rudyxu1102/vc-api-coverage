@@ -13,16 +13,9 @@ class PropsAnalyzer {
   private propsSet: Set<string> = new Set<string>();
   private sourceFile: SourceFile;
   private project: Project;
-  /**
-   * 文件路径属性，用于：
-   * 1. 在构造函数中读取文件内容
-   * 2. 解析导入模块的路径
-   * 3. 处理跨文件的类型引用
-   * 该属性对于分析器的正常工作是必需的
-   */
   private filePath: string;
 
-  constructor(filePath: string) {
+  constructor(filePath: string, code: string) {
     this.filePath = filePath;
     this.project = new Project({
       compilerOptions: {
@@ -31,10 +24,14 @@ class PropsAnalyzer {
         target: ts.ScriptTarget.ESNext,
       },
     });
-    
+    const sourceCode = this.getSourceCode(code);
     // 读取文件并添加到项目中
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    this.sourceFile = this.project.createSourceFile(filePath, fileContent, { overwrite: true });
+    this.sourceFile = this.project.createSourceFile(filePath, sourceCode, { overwrite: true });
+  }
+
+  getSourceCode(code: string) {
+    const parsed = parseComponent(code);
+    return parsed.scriptContent;
   }
 
   /**
@@ -349,7 +346,7 @@ class PropsAnalyzer {
                   const spreadName = expression.getText();
                   
                   // 创建一个临时 PropsAnalyzer 实例来分析导入文件中的展开属性
-                  const tempAnalyzer = new PropsAnalyzer(importFilePath);
+                  const tempAnalyzer = new PropsAnalyzer(importFilePath, importFileContent);
                   tempAnalyzer.resolveIdentifierReference(spreadName);
                   
                   // 合并找到的属性
@@ -516,22 +513,7 @@ class PropsAnalyzer {
             }
           }
         }
-      } else if (moduleSpecifier.includes('/fixtures/')) {
-        // 针对test/fixtures目录下的文件
-        const rootDir = path.resolve(currentDir, '../../');
-        importFilePath = path.resolve(rootDir, moduleSpecifier);
-        if (!importFilePath.endsWith('.ts') && !importFilePath.endsWith('.tsx')) {
-          importFilePath += '.ts';
-        }
-      } else {
-        return;
       }
-      
-      if (!fs.existsSync(importFilePath)) {
-        logDebug(moduleName, `Import file not found: ${importFilePath}`);
-        return;
-      }
-      
       // 读取和解析导入文件
       const importFileContent = fs.readFileSync(importFilePath, 'utf-8');
       const importSourceFile = this.project.createSourceFile(`import-type-${path.basename(importFilePath)}`, 
@@ -622,77 +604,4 @@ class PropsAnalyzer {
   }
 }
 
-// 入口函数
-export function analyzeProps(code: string, filePath?: string): string[] {
-  if (!filePath) {
-    throw new Error('filePath is required for ts-morph based props analyzer');
-  }
-  
-  // 创建临时文件以供分析
-  const tempFilePath = filePath || path.join(process.cwd(), '_temp_file_for_analysis.tsx');
-  
-  try {
-    // 对于SFC组件，需要先解析出script部分
-    const parsed = parseComponent(code);
-    let scriptContent = parsed.scriptContent;
-    
-    // 处理Vue SFC模板，将其转换为ts-morph可以理解的形式
-    if (code.includes('<script setup') && scriptContent) {
-      fs.writeFileSync(tempFilePath, scriptContent);
-    }
-    // 如果是常规JS/TS文件，不做特殊处理
-    else {
-      fs.writeFileSync(tempFilePath, code);
-    }
-    
-    const analyzer = new PropsAnalyzer(tempFilePath);
-    const result = analyzer.analyze();
-    
-    // 如果没有找到任何props并且代码中包含defineProps，尝试手动解析
-    if (result.length === 0 && code.includes('defineProps')) {
-      // 尝试匹配defineProps对象参数
-      const propsMatch = code.match(/defineProps\(\s*{([^}]+)}\s*\)/s);
-      if (propsMatch && propsMatch[1]) {
-        const propsText = propsMatch[1];
-        const propNames = propsText.split(',')
-          .map(line => line.trim())
-          .filter(line => line.includes(':'))
-          .map(line => line.split(':')[0].trim());
-        
-        if (propNames.length > 0) {
-          return propNames;
-        }
-      }
-      
-      // 尝试匹配 defineProps<类型>() 形式
-      const typePropsMatch = code.match(/defineProps<\s*([^>]+)\s*>\(\)/);
-      if (typePropsMatch && typePropsMatch[1]) {
-        const typeName = typePropsMatch[1].trim();
-        
-        // 尝试查找接口或类型定义
-        const interfaceMatch = new RegExp(`interface\\s+${typeName}\\s*{([^}]+)}`, 's').exec(code);
-        const typeMatch = new RegExp(`type\\s+${typeName}\\s*=\\s*{([^}]+)}`, 's').exec(code);
-        
-        const propsBlock = (interfaceMatch && interfaceMatch[1]) || (typeMatch && typeMatch[1]);
-        
-        if (propsBlock) {
-          const propNames = propsBlock.split('\n')
-            .map(line => line.trim())
-            .filter(line => line.includes(':') && !line.startsWith('//'))
-            .map(line => line.split(':')[0].trim().replace('?', ''));
-          
-          if (propNames.length > 0) {
-            return propNames;
-          }
-        }
-      }
-    }
-    
-    return result;
-  } finally {
-    // 如果使用了临时文件，则删除它
-    if (!filePath && fs.existsSync(tempFilePath)) {
-      fs.unlinkSync(tempFilePath);
-    }
-  }
-} 
+export default PropsAnalyzer;
