@@ -47,12 +47,6 @@ class PropsAnalyzer {
     // 分析props属性
     this.analyzePropsProperty();
     
-    // 分析setup函数参数中的props
-    this.analyzeSetupProps();
-    
-    // 分析class组件的props
-    this.analyzeClassProps();
-    
     return Array.from(this.propsSet);
   }
 
@@ -156,73 +150,6 @@ class PropsAnalyzer {
       else if (initializer.getKind() === SyntaxKind.Identifier) {
         const identifier = initializer.getText();
         this.resolveIdentifierReference(identifier);
-      }
-    }
-  }
-
-  /**
-   * 分析setup函数参数中的props
-   */
-  private analyzeSetupProps(): void {
-    // 查找setup方法
-    const setupFunctions = this.sourceFile.getDescendantsOfKind(SyntaxKind.MethodDeclaration)
-      .filter(method => method.getName() === 'setup');
-    
-    // 如果找不到方法声明，也查找函数表达式(对于functional组件)
-    const setupFuncExpressions = this.sourceFile.getDescendantsOfKind(SyntaxKind.FunctionExpression)
-      .filter(func => {
-        const parent = func.getParent();
-        return parent && parent.getKind() === SyntaxKind.PropertyAssignment && 
-               parent.asKind(SyntaxKind.PropertyAssignment)?.getName() === 'setup';
-      });
-    
-    const setupArrowFunctions = this.sourceFile.getDescendantsOfKind(SyntaxKind.ArrowFunction)
-      .filter(func => {
-        const parent = func.getParent();
-        return parent && parent.getKind() === SyntaxKind.PropertyAssignment && 
-               parent.asKind(SyntaxKind.PropertyAssignment)?.getName() === 'setup';
-      });
-    
-    const allSetupFunctions = [...setupFunctions, ...setupFuncExpressions, ...setupArrowFunctions];
-    
-    // 处理所有setup函数的第一个参数
-    for (const setup of allSetupFunctions) {
-      const params = setup.getParameters();
-      if (params.length > 0) {
-        const propsParam = params[0];
-        
-        try {
-          // 查看参数的类型注解
-          const typeNode = propsParam.getTypeNode();
-          if (typeNode) {
-            // 如果是类型引用，尝试解析该类型
-            if (typeNode.getKind() === SyntaxKind.TypeReference) {
-              const typeName = typeNode.getText();
-              this.resolveTypeReference(typeName);
-            }
-          }
-        } catch (error) {
-          logDebug(moduleName, `Error getting properties from setup props parameter type: ${error}`);
-        }
-      }
-    }
-  }
-
-  /**
-   * 分析Class组件的props
-   */
-  private analyzeClassProps(): void {
-    // 查找Class组件中的@Prop装饰器
-    const propertyDeclarations = this.sourceFile.getDescendantsOfKind(SyntaxKind.PropertyDeclaration);
-    
-    for (const property of propertyDeclarations) {
-      const decorators = property.getDecorators();
-      for (const decorator of decorators) {
-        const name = decorator.getName();
-        
-        if (name === 'Prop') {
-          this.propsSet.add(property.getName());
-        }
       }
     }
   }
@@ -349,24 +276,6 @@ class PropsAnalyzer {
             }
           }
         }
-      }
-      // 尝试读取测试用例中的导入文件
-      else if (moduleSpecifier.includes('/fixtures/')) {
-        // 针对test/fixtures目录下的文件
-        const rootDir = path.resolve(currentDir, '../../');
-        importFilePath = path.resolve(rootDir, moduleSpecifier);
-        if (!importFilePath.endsWith('.ts') && !importFilePath.endsWith('.tsx')) {
-          importFilePath += '.ts';
-        }
-      }
-      // 处理包导入（不处理，因为我们主要关注项目内的组件）
-      else {
-        return;
-      }
-      
-      if (!fs.existsSync(importFilePath)) {
-        logDebug(moduleName, `Import file not found: ${importFilePath}`);
-        return;
       }
       
       
