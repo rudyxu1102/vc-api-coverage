@@ -24,14 +24,19 @@ class PropsAnalyzer {
         target: ts.ScriptTarget.ESNext,
       },
     });
+    // 解析代码，处理Vue SFC文件
     const sourceCode = this.getSourceCode(code);
     // 读取文件并添加到项目中
     this.sourceFile = this.project.createSourceFile(filePath, sourceCode, { overwrite: true });
   }
 
-  getSourceCode(code: string) {
+  /**
+   * 解析源代码，处理Vue SFC文件
+   */
+  private getSourceCode(code: string): string {
+    // 解析Vue单文件组件，提取script部分
     const parsed = parseComponent(code);
-    return parsed.scriptContent;
+    return parsed.scriptContent || code;
   }
 
   /**
