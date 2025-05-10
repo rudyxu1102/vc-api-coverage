@@ -1,42 +1,18 @@
 import { SyntaxKind, Node, TypeLiteralNode, PropertySignature } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
-import { parseComponent } from '../common/shared-parser';
 
 const moduleName = 'slots-analyzer-morph';
 
-/**
- * 从模板中提取插槽名称
- */
-function extractSlotsFromTemplate(template: string): string[] {
-  const slots = new Set<string>();
-  // 匹配 <slot> 标签，包括可能的属性、作用域插槽的绑定数据和自闭合标签
-  const slotRegex = /<slot(?:\s+[^>]*?(?:name|:name|v-bind:name)=["']([^"']+)["'][^>]*?|\s+[^>]*?)?(?:>[\s\S]*?<\/slot>|\/>)/g;
-  let match;
-
-  while ((match = slotRegex.exec(template)) !== null) {
-    const slotTag = match[0];
-    // 尝试从 name 属性中提取插槽名
-    const nameMatch = slotTag.match(/(?:name|:name|v-bind:name)=["']([^"']+)["']/);
-    slots.add(nameMatch ? nameMatch[1] : 'default');
-  }
-
-  return Array.from(slots);
-}
 
 /**
  * 插槽分析器类，使用ts-morph处理TypeScript AST
  */
 class SlotsAnalyzer extends BaseAnalyzer {
   private hasTemplateSlots: boolean = false;
-  private templateContent: string;
 
   constructor(filePath: string, code: string) {
     super(filePath, code);
-    
-    // 解析Vue单文件组件，提取模板内容
-    const parsed = parseComponent(code);
-    this.templateContent = parsed.templateContent || '';
   }
 
   /**
@@ -50,29 +26,10 @@ class SlotsAnalyzer extends BaseAnalyzer {
    * 执行分析
    */
   protected performAnalysis(): void {
-    // 首先从模板中分析插槽
-    this.analyzeTemplateSlots();
     
     // 然后从 JavaScript/TypeScript 中分析插槽
     this.analyzeScriptSlots();
-    
-    // 处理默认插槽的特殊情况
-    this.handleDefaultSlot();
-  }
 
-  /**
-   * 从模板中分析插槽
-   */
-  private analyzeTemplateSlots(): void {
-    if (!this.templateContent) return;
-    
-    const templateSlots = extractSlotsFromTemplate(this.templateContent);
-    if (templateSlots.length > 0) {
-      templateSlots.forEach(slot => {
-        this.resultSet.add(slot);
-      });
-      this.hasTemplateSlots = true;
-    }
   }
 
   /**
@@ -141,20 +98,6 @@ class SlotsAnalyzer extends BaseAnalyzer {
             }
           }
         }
-      }
-    }
-  }
-
-  /**
-   * 处理默认插槽的特殊情况
-   */
-  private handleDefaultSlot(): void {
-    // 只有在模板中找到插槽时才考虑添加默认插槽
-    if (this.hasTemplateSlots && !this.resultSet.has('default')) {
-      // 检查模板中是否有不带 name 属性的 slot 标签
-      const hasDefaultSlot = /<slot(?!\s+[^>]*?(?:name|:name|v-bind:name)=["'][^"']+["'])[^>]*?>/.test(this.templateContent);
-      if (hasDefaultSlot) {
-        this.resultSet.add('default');
       }
     }
   }
