@@ -190,6 +190,17 @@ export abstract class BaseAnalyzer {
             this.processArrayExpression(initializer, sourceFile);
             return;
           }
+          // 处理 as const 或其他类型断言
+          else if (Node.isAsExpression(initializer)) {
+            const expression = initializer.getExpression();
+            if (Node.isObjectLiteralExpression(expression)) {
+              this.processObjectLiteral(expression, sourceFile);
+              return;
+            } else if (Node.isArrayLiteralExpression(expression)) {
+              this.processArrayLiteral(expression);
+              return;
+            }
+          }
         }
       }
     }

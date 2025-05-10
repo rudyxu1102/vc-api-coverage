@@ -36,12 +36,13 @@ describe('Props Analyzer', () => {
 
   it('should analyze object props correctly', () => {
     const code = `
+    const props1 = {
+      name: String,
+      age: Number,
+      isActive: Boolean
+    } as const;
     export default {
-      props: {
-        name: String,
-        age: Number,
-        isActive: Boolean
-      } as const
+      props: props1
     }
     `;
     
