@@ -188,7 +188,7 @@ describe('Props Analyzer', () => {
         disabled: Boolean,
         loading: Boolean,
         icon: String
-      };
+      } as const;
     `
 
    vi.mocked(fs.existsSync).mockReturnValue(true)

@@ -328,7 +328,15 @@ class PropsAnalyzer extends BaseAnalyzer {
           if (decl.getKind() === SyntaxKind.VariableDeclaration) {
             const initializer = decl.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
             if (initializer && initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-              this.processObjectLiteral(initializer, this.sourceFile);
+              this.processObjectLiteral(initializer, importSourceFile);
+            } else if (initializer && initializer.getKind() === SyntaxKind.AsExpression) {
+              const asExpression = initializer.asKind(SyntaxKind.AsExpression);
+              if (asExpression) {
+                const expression = asExpression.getExpression();
+                if (expression && expression.getKind() === SyntaxKind.ObjectLiteralExpression) {
+                  this.processObjectLiteral(expression, importSourceFile);
+                }
+              }
             }
           }
         }
