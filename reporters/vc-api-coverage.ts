@@ -6,7 +6,7 @@ import _ from 'lodash';
 import PropsAnalyzer from '../lib/analyzer/props-analyzer';
 import EmitsAnalyzer from '../lib/analyzer/emits-analyzer';
 import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
-import { analyzeExpose } from '../lib/analyzer/expose-analyzer';
+import ExposeAnalyzer from '../lib/analyzer/expose-analyzer';
 import { generateCliReport } from '../lib/reporter/cli-reporter';
 import { HTMLReporter } from '../lib/reporter/html-reporter';
 import { JSONReporter } from '../lib/reporter/json-reporter';
@@ -80,7 +80,7 @@ export default class VcCoverageReporter implements Reporter {
       const props = new PropsAnalyzer(path, code).analyze();  // 传入文件路径
       const emits = new EmitsAnalyzer(path, code).analyze().map(e => toEventName(e))
       const slots = analyzeSlots(code, parsedContent, path);
-      const exposes = analyzeExpose(code, parsedContent.ast, path)
+      const exposes = new ExposeAnalyzer(path, code).analyze()
       this.compData[path] = {
         props,
         emits,

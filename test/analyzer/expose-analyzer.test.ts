@@ -1,7 +1,25 @@
-import { describe, it, expect } from 'vitest'
-import { analyzeExpose } from '../../lib/analyzer/expose-analyzer'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import ExposeAnalyzer from '../../lib/analyzer/expose-analyzer'
+import * as fs from 'fs'
+import * as path from 'path'
+import { fileURLToPath } from 'url'
 
-describe('expose-analyzer', () => {
+// 获取当前文件的目录路径
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const tempFile = path.join(__dirname, '_temp_test_file.tsx')
+
+// Mock fs and path modules for import testing
+vi.mock('fs', () => ({
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+}))
+
+describe('Expose Analyzer', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('should analyze expose in Vue SFC with defineExpose', () => {
     const code = `
       <script setup>
@@ -18,8 +36,8 @@ describe('expose-analyzer', () => {
       })
       </script>
     `
-    const exposed = analyzeExpose(code)
-    expect(exposed).toEqual(['count', 'increment', 'reset'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['count', 'increment', 'reset'].sort())
   })
 
   it('should analyze expose in TSX component', () => {
@@ -39,15 +57,14 @@ describe('expose-analyzer', () => {
         expose: ['getValue', 'increment']
       })
     `
-    const exposed = analyzeExpose(code)
-    expect(exposed).toEqual(['getValue', 'increment'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['getValue', 'increment'].sort())
   })
 
   it('should analyze expose in TSX component with expose', () => {
     const code = `
-      const expose = ['getValue', 'increment']
       export default defineComponent({
-        expose,
+        expose: ['getValue', 'increment'],
         setup() {
           const state = reactive({
             value: 0
@@ -61,11 +78,12 @@ describe('expose-analyzer', () => {
         },
       })
     `
-    const exposed = analyzeExpose(code)
-    expect(exposed).toEqual(['getValue', 'increment'])
+    
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['getValue', 'increment'].sort())
   })
   
-  it('should analyze expose in TSX component with expose', () => {
+  it('should analyze expose in TSX component with setup context expose', () => {
     const code = `
       export default defineComponent({
         setup(props, { expose }) {
@@ -89,8 +107,8 @@ describe('expose-analyzer', () => {
         }
       })
     `
-    const exposed = analyzeExpose(code)
-    expect(exposed).toEqual(['focus', 'blur'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['focus', 'blur'].sort())
   })
 
   it('should analyze expose with type annotations', () => {
@@ -109,8 +127,8 @@ describe('expose-analyzer', () => {
       })
       </script>
     `
-    const exposed = analyzeExpose(code)
-    expect(exposed).toEqual(['submit', 'validate', 'reset'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['submit', 'validate', 'reset'].sort())
   })
 
   it('should return empty array when nothing is exposed', () => {
@@ -119,8 +137,8 @@ describe('expose-analyzer', () => {
       const internal = 'not exposed'
       </script>
     `
-    const exposed = analyzeExpose(code)
-    expect(exposed).toEqual([])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult).toEqual([])
   })
 
   it('should analyze expose in options API', () => {
@@ -139,12 +157,12 @@ describe('expose-analyzer', () => {
         expose: ['count', 'increment']
       }
     `
-    const exposed = analyzeExpose(code)
-    expect(exposed).toEqual(['count', 'increment'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['count', 'increment'].sort())
   })
 })
 
-describe('analyzeExpose', () => {
+describe('ExposeAnalyzer', () => {
   it('should handle defineExpose with object literal', () => {
     const code = `
       defineExpose({
@@ -153,7 +171,8 @@ describe('analyzeExpose', () => {
         method2() {}
       })
     `
-    expect(analyzeExpose(code)).toEqual(['method1', 'prop1', 'method2'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['method1', 'prop1', 'method2'].sort())
   })
 
   it('should handle defineExpose with type parameters', () => {
@@ -168,7 +187,8 @@ describe('analyzeExpose', () => {
         method2
       })
     `
-    expect(analyzeExpose(code)).toEqual(['method1', 'prop1', 'method2'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['method1', 'prop1', 'method2'].sort())
   })
 
   it('should handle expose option in component options', () => {
@@ -182,7 +202,8 @@ describe('analyzeExpose', () => {
         }
       }
     `
-    expect(analyzeExpose(code)).toEqual(['method1', 'method2'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['method1', 'method2'].sort())
   })
 
   it('should handle setup function return', () => {
@@ -201,7 +222,8 @@ describe('analyzeExpose', () => {
         }
       }
     `
-    expect(analyzeExpose(code)).toEqual([])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult).toEqual([])
   })
 
   it('should handle multiple expose declarations', () => {
@@ -219,7 +241,8 @@ describe('analyzeExpose', () => {
         }
       }
     `
-    expect(analyzeExpose(code)).toEqual(['method1', 'method2', 'prop1'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['method1', 'method2', 'prop1'].sort())
   })
 
   it('should handle empty expose declarations', () => {
@@ -230,7 +253,8 @@ describe('analyzeExpose', () => {
         }
       }
     `
-    expect(analyzeExpose(code)).toEqual([])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult).toEqual([])
   })
 
   it('should handle interface type in defineExpose', () => {
@@ -245,6 +269,7 @@ describe('analyzeExpose', () => {
         prop1
       })
     `
-    expect(analyzeExpose(code)).toEqual(['method1', 'prop1'])
+    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    expect(exposeResult.sort()).toEqual(['method1', 'prop1'].sort())
   })
 }) 

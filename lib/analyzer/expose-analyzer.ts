@@ -1,104 +1,170 @@
-import traverse from '@babel/traverse'
-import * as t from '@babel/types'
-import type { NodePath } from '@babel/traverse'
-import type { ParseResult } from '@babel/parser'
-import type { File } from '@babel/types'
-import { parseComponent } from '../common/shared-parser'
-import * as fs from 'fs'
-import * as path from 'path'
-import { 
-  ImportInfo, 
-  collectImportDeclarations, 
-  findExportedObjectAndImports, 
-  processArrayElements,
-  processObjectProperties,
-  processIdentifierReference
-} from '../common/import-analyzer'
-import { logDebug, logError } from '../common/utils'
+import { SyntaxKind, Node, ArrayLiteralExpression, TypeLiteralNode, PropertySignature, ObjectLiteralExpression } from 'ts-morph';
+import { logDebug, logError } from '../common/utils';
+import { BaseAnalyzer } from './base-analyzer';
 
-const moduleName = 'expose-analyzer';
-
-export interface ExposeInfo {
-  name: string;
-}
+const moduleName = 'expose-analyzer-morph';
 
 /**
- * Expose 分析器类，包含不同的分析策略
+ * Expose 分析器类，使用ts-morph处理TypeScript AST
  */
-class ExposeAnalyzer {
+class ExposeAnalyzer extends BaseAnalyzer {
   private exposed: Set<string> = new Set<string>();
   private exposeOrder: string[] = [];
   private optionsExpose: Set<string> = new Set<string>();
   private optionsExposeOrder: string[] = [];
-  private importDeclarations: Record<string, ImportInfo> = {};
-  private filePath?: string;
-  private code: string;
-  private inSetupContext: boolean = false;
   private hasExplicitExpose: boolean = false;
   private hasOptionsExpose: boolean = false;
 
-  constructor(code: string, ast: ParseResult<File>, filePath?: string) {
-    this.code = code;
-    this.filePath = filePath;
-    collectImportDeclarations(ast, this.importDeclarations);
+  constructor(filePath: string, code: string) {
+    super(filePath, code);
   }
 
   /**
-   * 分析并返回组件的 exposed 属性
+   * 返回模块名称
    */
-  analyze(ast: ParseResult<File>): string[] {
-    logDebug(moduleName, 'Analyzing code', this.code);
-    
-    // 先尝试快速分析特定模式
-    this.analyzeExposeContextCalls();
-    this.analyzeExposeArrayOption();
-    
-    // 如果快速分析没有找到结果，则进行详细的 AST 分析
-    if (!this.hasExplicitExpose && !this.hasOptionsExpose) {
-      this.traverseAST(ast);
-    }
-
-    // 返回分析结果
-    if (this.hasExplicitExpose && this.exposeOrder.length > 0) {
-      return this.exposeOrder;
-    }
-    
-    if (this.hasOptionsExpose) {
-      return this.optionsExposeOrder;
-    }
-    
-    // 没有显式的 expose，应该返回空数组
-    // 在 Vue 3 中，setup() 返回的属性只在组件内部可用，不会暴露给父组件
-    return [];
+  protected getModuleName(): string {
+    return moduleName;
   }
 
   /**
-   * 快速分析：查找 expose 上下文调用，如 expose({...})
+   * 执行Expose分析
    */
-  private analyzeExposeContextCalls(): void {
-    const hasExposeContextCall = this.code.includes('expose({') && 
-                                (this.code.includes('setup(props, { expose })') || 
-                                 this.code.includes('{ expose }') || 
-                                 this.code.includes('context.expose'));
-    if (!hasExposeContextCall) return;
+  protected performAnalysis(): void {
     
-    logDebug(moduleName, 'Detected expose context call');
-    const matches = this.code.match(/expose\(\s*\{([^}]+)\}\s*\)/g);
+    // 分析defineExpose调用
+    this.analyzeDefineExpose();
     
-    if (matches && matches.length > 0) {
-      logDebug(moduleName, 'Found expose calls', matches);
-      for (const match of matches) {
-        const propsStr = match.replace(/expose\(\s*\{/, '').replace(/\}\s*\)/, '');
-        const propMatches = propsStr.match(/(\w+),?/g);
+    // 分析expose属性
+    this.analyzeExposeProperty();
+    
+    // 分析setup中的expose调用
+    this.analyzeSetupExpose();
+
+    // 将分析结果合并到resultSet中
+    this.getResult().forEach(prop => this.resultSet.add(prop));
+  }
+
+  /**
+   * 获取分析结果
+   */
+  private getResult(): string[] {
+    // 优先使用显式expose和options expose的属性
+    const allExposed = new Set<string>([...this.exposed, ...this.optionsExpose]);
+    return Array.from(allExposed);
+  }
+
+  /**
+   * 分析 defineExpose({...}) 调用
+   */
+  private analyzeDefineExpose(): void {
+    const defineExposeCallExpressions = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
+      .filter(call => {
+        const expr = call.getExpression();
+        return expr.getText() === 'defineExpose';
+      });
+    
+    for (const call of defineExposeCallExpressions) {
+      this.hasExplicitExpose = true;
+      
+      // 处理类型参数: defineExpose<Type>({...})
+      const typeArgs = call.getTypeArguments();
+      if (typeArgs.length > 0) {
+        const typeArg = typeArgs[0];
+        this.processTypeNode(typeArg);
+      }
+      
+      // 处理对象参数: defineExpose({ prop1, prop2 })
+      const args = call.getArguments();
+      if (args.length > 0) {
+        const arg = args[0];
         
-        if (propMatches) {
-          for (const prop of propMatches) {
-            const cleanProp = prop.replace(/,/g, '').trim();
-            if (cleanProp && !this.exposed.has(cleanProp)) {
-              logDebug(moduleName, 'Adding exposed property', cleanProp);
-              this.exposed.add(cleanProp);
-              this.exposeOrder.push(cleanProp);
-              this.hasExplicitExpose = true;
+        // 对象字面量参数
+        if (arg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+          const objExpr = arg.asKind(SyntaxKind.ObjectLiteralExpression);
+          if (objExpr) {
+            this.processObjectExpression(objExpr, false);
+          }
+        }
+        // 标识符参数: defineExpose(exposedObject)
+        else if (arg.getKind() === SyntaxKind.Identifier) {
+          const identifier = arg.getText();
+          this.resolveIdentifierReference(identifier);
+        }
+      }
+    }
+  }
+
+  /**
+   * 分析 expose 属性
+   */
+  private analyzeExposeProperty(): void {
+    const exposeProperties = this.sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAssignment)
+      .filter(prop => prop.getName() === 'expose');
+    
+    for (const exposeProperty of exposeProperties) {
+      const initializer = exposeProperty.getInitializer();
+      
+      if (!initializer) continue;
+      
+      this.hasOptionsExpose = true;
+      
+      // 数组形式: expose: ['method1', 'method2']
+      if (initializer.getKind() === SyntaxKind.ArrayLiteralExpression) {
+        const arrayLiteral = initializer.asKind(SyntaxKind.ArrayLiteralExpression);
+        if (arrayLiteral) {
+          this.processArrayForOptionsExpose(arrayLiteral);
+        }
+      }
+      // 标识符引用: expose: exposedMethods
+      else if (initializer.getKind() === SyntaxKind.Identifier) {
+        const identifier = initializer.getText();
+        // 在options expose上下文中处理
+        this.resolveIdentifierReferenceForOptionsExpose(identifier);
+      }
+    }
+  }
+
+  /**
+   * 分析setup函数中的expose调用
+   */
+  private analyzeSetupExpose(): void {
+    // 查找setup方法
+    const setupMethods = this.sourceFile.getDescendantsOfKind(SyntaxKind.MethodDeclaration)
+      .filter(method => method.getName() === 'setup');
+    
+    for (const setupMethod of setupMethods) {
+      // 检查参数中是否包含context或{expose}
+      const parameters = setupMethod.getParameters();
+      
+      if (parameters.length >= 2) {
+        const secondParam = parameters[1];
+        
+        // 检查是否使用对象解构 { expose }
+        if (secondParam.getStructure().name && secondParam.getStructure().name.includes('expose')) {
+          this.extractExposeFromSetupContext(setupMethod);
+        }
+        // 检查是否使用context.expose
+        else if (secondParam.getStructure().name === 'context') {
+          this.extractExposeFromContext(setupMethod);
+        }
+      }
+      
+      // 查找setup方法中的return语句
+      const returnStatements = setupMethod.getDescendantsOfKind(SyntaxKind.ReturnStatement);
+      for (const returnStmt of returnStatements) {
+        const expression = returnStmt.getExpression();
+        
+        if (expression) {
+          if (expression.getKind() === SyntaxKind.ObjectLiteralExpression) {
+            const objExpr = expression.asKind(SyntaxKind.ObjectLiteralExpression);
+            if (objExpr && !this.hasExplicitExpose && !this.hasOptionsExpose) {
+              // 在Vue3中，setup返回的属性只在组件内部可用，不会暴露给父组件
+              // 这里不需要处理返回值
+            }
+          } else if (expression.getKind() === SyntaxKind.Identifier) {
+            // 处理返回标识符的情况
+            if (!this.hasExplicitExpose && !this.hasOptionsExpose) {
+              // 同样，在Vue3中setup返回的属性不会自动暴露给父组件
             }
           }
         }
@@ -107,547 +173,545 @@ class ExposeAnalyzer {
   }
 
   /**
-   * 快速分析：查找 expose 选项数组
+   * 从setup上下文中提取expose调用
    */
-  private analyzeExposeArrayOption(): void {
-    const exposeArrayMatch = this.code.match(/expose\s*:\s*(?:\[\s*(['"][\w\s]+['"]|[\w\s]+),?\s*(['"][\w\s]+['"]|[\w\s]+)?\s*\]|(\w+))/g);
-    if (!exposeArrayMatch) return;
+  private extractExposeFromSetupContext(setupMethod: Node): void {
+    const exposeCallExpressions = setupMethod.getDescendantsOfKind(SyntaxKind.CallExpression)
+      .filter(call => {
+        const expr = call.getExpression();
+        // 匹配expose({...}) 模式
+        return expr.getKind() === SyntaxKind.Identifier && expr.getText() === 'expose';
+      });
     
-    for (const match of exposeArrayMatch) {
-      if (match.includes('[')) {
-        const cleanMatch = match.replace(/expose\s*:\s*\[\s*/, '').replace(/\s*\]/, '');
-        const exposeItems = cleanMatch.split(',').map(item => item.trim().replace(/['"]/g, ''));
+    for (const call of exposeCallExpressions) {
+      this.hasExplicitExpose = true;
+      
+      const args = call.getArguments();
+      if (args.length > 0) {
+        const arg = args[0];
         
-        for (const item of exposeItems) {
-          if (item && !this.optionsExpose.has(item)) {
-            this.optionsExpose.add(item);
-            this.optionsExposeOrder.push(item);
-            this.hasOptionsExpose = true;
+        if (arg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+          const objExpr = arg.asKind(SyntaxKind.ObjectLiteralExpression);
+          if (objExpr) {
+            this.processObjectExpression(objExpr, false);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 从context中提取expose调用
+   */
+  private extractExposeFromContext(setupMethod: Node): void {
+    const contextExposeCallExpressions = setupMethod.getDescendantsOfKind(SyntaxKind.CallExpression)
+      .filter(call => {
+        const expr = call.getExpression();
+        // 匹配context.expose({...}) 模式
+        return expr.getKind() === SyntaxKind.PropertyAccessExpression && 
+               expr.getText() === 'context.expose';
+      });
+    
+    for (const call of contextExposeCallExpressions) {
+      this.hasExplicitExpose = true;
+      
+      const args = call.getArguments();
+      if (args.length > 0) {
+        const arg = args[0];
+        
+        if (arg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+          const objExpr = arg.asKind(SyntaxKind.ObjectLiteralExpression);
+          if (objExpr) {
+            this.processObjectExpression(objExpr, false);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 处理对象表达式
+   */
+  private processObjectExpression(objExpr: ObjectLiteralExpression, isOptionsExpose: boolean): void {
+    // 处理常规属性
+    const properties = objExpr.getProperties();
+    
+    for (const prop of properties) {
+      if (Node.isPropertyAssignment(prop)) {
+        const propName = prop.getName();
+        this.addExposedProperty(propName, isOptionsExpose);
+      }
+      else if (Node.isShorthandPropertyAssignment(prop)) {
+        const propName = prop.getName();
+        this.addExposedProperty(propName, isOptionsExpose);
+      }
+      else if (Node.isMethodDeclaration(prop)) {
+        const methodName = prop.getName();
+        this.addExposedProperty(methodName, isOptionsExpose);
+      }
+      else if (Node.isSpreadAssignment(prop)) {
+        const expression = prop.getExpression();
+        
+        if (Node.isIdentifier(expression)) {
+          // 处理标识符引用的展开: ...exposedObject
+          const spreadName = expression.getText();
+          if (isOptionsExpose) {
+            this.resolveIdentifierReferenceForOptionsExpose(spreadName);
+          } else {
+            this.resolveIdentifierReference(spreadName);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 处理数组表达式
+   */
+  private processArrayExpressionForExpose(arrayExpr: ArrayLiteralExpression, isOptionsExpose: boolean): void {
+    const elements = arrayExpr.getElements();
+    
+    for (const element of elements) {
+      // 字符串字面量
+      if (Node.isStringLiteral(element)) {
+        const propName = element.getLiteralValue();
+        this.addExposedProperty(propName, isOptionsExpose);
+      }
+      // 标识符
+      else if (Node.isIdentifier(element)) {
+        const propName = element.getText();
+        this.addExposedProperty(propName, isOptionsExpose);
+      }
+      // 其他类型的表达式
+      else if (isOptionsExpose) {
+        this.resolveExpressionForOptionsExpose(element);
+      } else {
+        this.resolveExpression(element);
+      }
+    }
+  }
+
+  /**
+   * 处理类型节点，提取属性
+   */
+  private processTypeNode(typeNode: Node): void {
+    if (typeNode.getKind() === SyntaxKind.TypeLiteral) {
+      // 直接类型字面量，如 { method1: Function, prop2: number }
+      const typeLiteral = typeNode as TypeLiteralNode;
+      const members = typeLiteral.getMembers();
+      
+      for (const member of members) {
+        if (member.getKind() === SyntaxKind.PropertySignature) {
+          const propSig = member as PropertySignature;
+          const propName = propSig.getName();
+          this.addExposedProperty(propName, false);
+        }
+        else if (member.getKind() === SyntaxKind.MethodSignature) {
+          const methodName = member.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
+          if (methodName) {
+            this.addExposedProperty(methodName, false);
+          }
+        }
+      }
+    } 
+    else if (typeNode.getKind() === SyntaxKind.TypeReference) {
+      // 类型引用，如 ExposeType
+      const typeName = typeNode.getText().split('<')[0].trim();
+      this.resolveTypeReference(typeName);
+    } 
+    else if (typeNode.getKind() === SyntaxKind.IntersectionType) {
+      // 交集类型，如 A & B
+      const typeElements = typeNode.getChildrenOfKind(SyntaxKind.TypeLiteral);
+      for (const element of typeElements) {
+        this.processTypeNode(element);
+      }
+      
+      // 处理可能的类型引用
+      const typeRefs = typeNode.getChildrenOfKind(SyntaxKind.TypeReference);
+      for (const typeRef of typeRefs) {
+        const typeName = typeRef.getText();
+        this.resolveTypeReference(typeName);
+      }
+    }
+    else if (typeNode.getKind() === SyntaxKind.UnionType) {
+      // 联合类型，如 A | B
+      const typeElements = typeNode.getChildrenOfKind(SyntaxKind.TypeLiteral);
+      for (const element of typeElements) {
+        this.processTypeNode(element);
+      }
+      
+      // 处理可能的类型引用
+      const typeRefs = typeNode.getChildrenOfKind(SyntaxKind.TypeReference);
+      for (const typeRef of typeRefs) {
+        const typeName = typeRef.getText();
+        this.resolveTypeReference(typeName);
+      }
+    }
+  }
+
+  /**
+   * 解析标识符引用，追踪expose相关定义
+   */
+  private resolveIdentifierReferenceForOptionsExpose(identifierName: string): void {
+    logDebug(moduleName, `Resolving options expose identifier: ${identifierName}`);
+    
+    // 查找局部变量定义
+    const variableDeclarations = this.sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+      .filter(decl => decl.getName() === identifierName);
+    
+    if (variableDeclarations.length > 0) {
+      for (const decl of variableDeclarations) {
+        const initializer = decl.getInitializer();
+        if (initializer) {
+          // 处理数组字面量
+          if (Node.isArrayLiteralExpression(initializer)) {
+            this.processArrayForOptionsExpose(initializer);
+          }
+          // 处理对象字面量
+          else if (Node.isObjectLiteralExpression(initializer)) {
+            this.processObjectExpression(initializer, true);
+          }
+        }
+      }
+    }
+    
+    // 查找导入声明
+    const importedDecl = this.findImportDeclaration(identifierName);
+    if (importedDecl) {
+      const { moduleSpecifier, importName } = importedDecl;
+      this.resolveImportedReferenceForOptionsExpose(moduleSpecifier, importName);
+    }
+  }
+
+  /**
+   * 解析表达式，从中提取expose属性
+   */
+  private resolveExpression(expression: Node): void {
+    // 目前简单处理，可以根据需要扩展
+    if (Node.isIdentifier(expression)) {
+      this.resolveIdentifierReference(expression.getText());
+    }
+  }
+
+  /**
+   * 为options expose解析表达式
+   */
+  private resolveExpressionForOptionsExpose(expression: Node): void {
+    // 与resolveExpression类似，但针对options expose上下文
+    if (Node.isIdentifier(expression)) {
+      this.resolveIdentifierReferenceForOptionsExpose(expression.getText());
+    }
+  }
+
+  /**
+   * 解析导入的引用，用于options expose
+   */
+  private resolveImportedReferenceForOptionsExpose(moduleSpecifier: string, importName: string): void {
+    try {
+      logDebug(moduleName, `Resolving imported reference for options expose: ${moduleSpecifier}, ${importName}`);
+      
+      const importSourceFile = this.tryImportFile(moduleSpecifier);
+      if (!importSourceFile) return;
+      
+      // 查找导出的标识符
+      if (importName === 'default') {
+        // 查找默认导出
+        const defaultExportSymbol = importSourceFile.getDefaultExportSymbol();
+        if (defaultExportSymbol) {
+          const declarations = defaultExportSymbol.getDeclarations();
+          for (const decl of declarations) {
+            this.processExportDeclarationForOptionsExpose(decl);
+          }
+        }
+      } else if (importName === '*') {
+        // 处理所有命名导出
+        const exportedSymbols = importSourceFile.getExportSymbols();
+        for (const symbol of exportedSymbols) {
+          const declarations = symbol.getDeclarations();
+          for (const decl of declarations) {
+            this.processExportDeclarationForOptionsExpose(decl);
           }
         }
       } else {
-        // 处理变量引用
-        const variableName = match.replace(/expose\s*:\s*/, '');
-        const variableMatch = this.code.match(new RegExp(`const\\s+${variableName}\\s*=\\s*\\[([^\\]]+)\\]`));
+        // 查找特定命名导出
+        const exportedSymbols = importSourceFile.getExportSymbols();
+        const exportedSymbol = exportedSymbols.find(symbol => symbol.getName() === importName);
         
-        if (variableMatch) {
-          const exposeItems = variableMatch[1].split(',').map(item => item.trim().replace(/['"]/g, ''));
-          for (const item of exposeItems) {
-            if (item && !this.optionsExpose.has(item)) {
-              this.optionsExpose.add(item);
-              this.optionsExposeOrder.push(item);
-              this.hasOptionsExpose = true;
+        if (exportedSymbol) {
+          const declarations = exportedSymbol.getDeclarations();
+          for (const decl of declarations) {
+            this.processExportDeclarationForOptionsExpose(decl);
+          }
+        }
+        
+        // 查找变量声明
+        const variableDeclarations = importSourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+          .filter(decl => decl.getName() === importName);
+          
+        for (const varDecl of variableDeclarations) {
+          const initializer = varDecl.getInitializer();
+          if (initializer) {
+            if (initializer.getKind() === SyntaxKind.ArrayLiteralExpression) {
+              this.processArrayForOptionsExpose(initializer);
+            } else if (initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
+              this.processObjectExpression(initializer as ObjectLiteralExpression, true);
             }
           }
         }
       }
+    } catch (error) {
+      logError(moduleName, `Error resolving imported reference for options expose: ${error}`);
     }
   }
 
   /**
-   * 详细的 AST 遍历分析
+   * 处理导出声明，用于options expose
    */
-  private traverseAST(ast: ParseResult<File>): void {
-    traverse(ast, {
-      Program: this.analyzeProgram.bind(this),
-      VariableDeclarator: this.analyzeExposeVariables.bind(this),
-      ObjectProperty: this.analyzeExposeObjectProperty.bind(this),
-      ObjectMethod: {
-        enter: this.enterSetupFunction.bind(this),
-        exit: this.exitSetupFunction.bind(this)
-      },
-      CallExpression: this.analyzeCallExpressions.bind(this),
-      ReturnStatement: this.analyzeReturnStatement.bind(this)
-    });
-  }
-
-  /**
-   * 检查 <script setup> 是否导入了 defineExpose
-   */
-  private analyzeProgram(path: NodePath<t.Program>): void {
-    path.node.body.forEach(node => {
-      if (t.isImportDeclaration(node) && node.source.value === 'vue') {
-        node.specifiers.forEach(specifier => {
-          if (
-            t.isImportSpecifier(specifier) &&
-            t.isIdentifier(specifier.imported) &&
-            specifier.imported.name === 'defineExpose'
-          ) {
-            this.inSetupContext = true;
-          }
-        });
+  private processExportDeclarationForOptionsExpose(node: Node): void {
+    try {
+      // 数组字面量导出
+      if (Node.isArrayLiteralExpression(node)) {
+        this.processArrayForOptionsExpose(node);
       }
-    });
-  }
-
-  /**
-   * 分析 expose 相关的变量声明
-   */
-  private analyzeExposeVariables(path: NodePath<t.VariableDeclarator>): void {
-    const id = path.node.id;
-    if (t.isIdentifier(id) && id.name === 'expose') {
-      if (t.isArrayExpression(path.node.init)) {
-        processArrayElements(path.node.init.elements, this.exposed);
-        path.node.init.elements.forEach(element => {
-          if (t.isStringLiteral(element) || t.isIdentifier(element)) {
-            if (t.isStringLiteral(element) && !this.exposed.has(element.value)) {
-              this.exposed.add(element.value);
-              this.exposeOrder.push(element.value);
-            } else if (t.isIdentifier(element) && !this.exposed.has(element.name)) {
-              this.exposed.add(element.name);
-              this.exposeOrder.push(element.name);
-            }
-            this.hasExplicitExpose = true;
-          }
-        });
-      } else if (t.isIdentifier(path.node.init) && this.importDeclarations[path.node.init.name] && this.filePath) {
-        // 处理导入的 expose 变量
-        processIdentifierReference(
-          path.node.init, 
-          path, 
-          this.exposed, 
-          this.importDeclarations, 
-          this.filePath, 
-          processImportedExpose
-        );
-        this.hasExplicitExpose = true;
+      // 对象字面量导出
+      else if (Node.isObjectLiteralExpression(node)) {
+        this.processObjectExpression(node, true);
       }
-    }
-  }
-
-  /**
-   * 分析 expose 对象属性
-   */
-  private analyzeExposeObjectProperty(path: NodePath<t.ObjectProperty>): void {
-    if (t.isIdentifier(path.node.key) && path.node.key.name === 'expose') {
-      if (t.isArrayExpression(path.node.value)) {
-        processArrayElements(path.node.value.elements, this.optionsExpose);
-        // 同步更新 optionsExposeOrder 数组
-        Array.from(this.optionsExpose).forEach(item => {
-          if (!this.optionsExposeOrder.includes(item)) {
-            this.optionsExposeOrder.push(item);
-          }
-        });
-        this.hasOptionsExpose = true;
-      } else if (t.isIdentifier(path.node.value)) {
-        processIdentifierReference(
-          path.node.value, 
-          path, 
-          this.optionsExpose, 
-          this.importDeclarations, 
-          this.filePath, 
-          processImportedExpose
-        );
-        // 同步更新 optionsExposeOrder 数组
-        Array.from(this.optionsExpose).forEach(item => {
-          if (!this.optionsExposeOrder.includes(item)) {
-            this.optionsExposeOrder.push(item);
-          }
-        });
-        this.hasOptionsExpose = true;
-      }
-    }
-  }
-
-  /**
-   * 进入 setup 函数
-   */
-  private enterSetupFunction(path: NodePath<t.ObjectMethod>): void {
-    if (t.isIdentifier(path.node.key) && path.node.key.name === 'setup') {
-      this.inSetupContext = true;
-      // 检查 setup 参数中的 expose
-      this.checkSetupParamsForExpose(path);
-    }
-  }
-
-  /**
-   * 检查 setup 函数参数中的 expose
-   */
-  private checkSetupParamsForExpose(path: NodePath<t.ObjectMethod>): void {
-    if (path.node.params.length >= 2) {
-      const secondParam = path.node.params[1];
-      if (t.isObjectPattern(secondParam)) {
-        const exposeBinding = secondParam.properties.find(
-          prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
-        );
-        if (exposeBinding && t.isObjectProperty(exposeBinding) && t.isIdentifier(exposeBinding.value)) {
-          const exposeName = exposeBinding.value.name;
-          path.scope.traverse(path.node, {
-            CallExpression: (callPath) => {
-              if (t.isIdentifier(callPath.node.callee) && callPath.node.callee.name === exposeName) {
-                const arg = callPath.node.arguments[0];
-                if (t.isObjectExpression(arg)) {
-                  this.hasExplicitExpose = true;
-                  arg.properties.forEach(prop => {
-                    if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-                      this.addExposedProperty(prop);
-                    } else if (t.isSpreadElement(prop)) {
-                      this.addExposedProperty(prop);
-                    }
-                  });
-                }
-              }
-            }
-          });
-        }
-      }
-    }
-  }
-
-  /**
-   * 退出 setup 函数
-   */
-  private exitSetupFunction(path: NodePath<t.ObjectMethod>): void {
-    if (t.isIdentifier(path.node.key) && path.node.key.name === 'setup') {
-      this.inSetupContext = false;
-    }
-  }
-
-  /**
-   * 分析各种调用表达式
-   */
-  private analyzeCallExpressions(path: NodePath<t.CallExpression>): void {
-    if (!t.isIdentifier(path.node.callee)) return;
-    
-    const calleeName = path.node.callee.name;
-    
-    if (calleeName === 'defineExpose') {
-      this.processDefineExpose(path);
-    } else if (calleeName === 'defineComponent') {
-      this.processDefineComponent(path);
-    } else if (calleeName === 'expose') {
-      this.processExposeCall(path);
-    }
-  }
-
-  /**
-   * 处理 defineExpose 调用
-   */
-  private processDefineExpose(path: NodePath<t.CallExpression>): void {
-    this.hasExplicitExpose = true;
-    const arg = path.node.arguments[0];
-    
-    // 处理类型参数
-    if (path.node.typeParameters) {
-      this.handleTypeAnnotation(path.node.typeParameters.params[0], path);
-    }
-
-    // 处理对象字面量参数
-    if (t.isObjectExpression(arg)) {
-      arg.properties.forEach(prop => {
-        if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-          this.addExposedProperty(prop);
-        } else if (t.isSpreadElement(prop)) {
-          this.addExposedProperty(prop);
-        }
-      });
-    } else if (t.isIdentifier(arg)) {
-      // 处理整个对象传递给 defineExpose 的情况
-      const binding = path.scope.getBinding(arg.name);
-      if (binding && t.isVariableDeclarator(binding.path.node)) {
-        const id = binding.path.node.id;
-        if (t.isIdentifier(id) && t.isTSTypeAnnotation(id.typeAnnotation)) {
-          this.handleTypeAnnotation(id.typeAnnotation, binding.path);
-        }
-        if (t.isObjectExpression(binding.path.node.init)) {
-          binding.path.node.init.properties.forEach(prop => {
-            if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-              this.addExposedProperty(prop);
-            }
-          });
-        }
-      }
-    }
-  }
-
-  /**
-   * 处理 defineComponent 调用
-   */
-  private processDefineComponent(path: NodePath<t.CallExpression>): void {
-    const arg = path.node.arguments[0];
-    if (!t.isObjectExpression(arg)) return;
-    
-    // 检查组件选项中的 expose 选项
-    const exposeProp = arg.properties.find(
-      prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
-    );
-    
-    if (exposeProp && t.isObjectProperty(exposeProp)) {
-      this.hasExplicitExpose = true;
-      this.hasOptionsExpose = true;
-      
-      const value = exposeProp.value;
-      if (t.isArrayExpression(value)) {
-        value.elements.forEach(element => {
-          if (t.isStringLiteral(element) || t.isIdentifier(element)) {
-            this.addExposedProperty(element, true);
-          }
-        });
-      }
-    }
-    
-    // 检查 setup 函数
-    this.checkSetupFunctionInComponent(arg, path);
-  }
-
-  /**
-   * 在组件选项中检查 setup 函数
-   */
-  private checkSetupFunctionInComponent(
-    componentOptions: t.ObjectExpression, 
-    path: NodePath<t.CallExpression>
-  ): void {
-    const setupProp = componentOptions.properties.find(
-      prop => (t.isObjectMethod(prop) || t.isObjectProperty(prop)) && 
-             t.isIdentifier(prop.key) && 
-             prop.key.name === 'setup'
-    );
-    
-    if (!setupProp) return;
-    
-    let setupFunction;
-    if (t.isObjectMethod(setupProp)) {
-      setupFunction = setupProp;
-    } else if (t.isObjectProperty(setupProp) && t.isFunctionExpression(setupProp.value)) {
-      setupFunction = setupProp.value;
-    } else if (t.isObjectProperty(setupProp) && t.isArrowFunctionExpression(setupProp.value)) {
-      setupFunction = setupProp.value;
-    }
-    
-    if (!setupFunction || !setupFunction.params || setupFunction.params.length < 2) return;
-    
-    const secondParam = setupFunction.params[1];
-    if (!t.isObjectPattern(secondParam)) return;
-    
-    const exposeBinding = secondParam.properties.find(
-      prop => t.isObjectProperty(prop) && t.isIdentifier(prop.key) && prop.key.name === 'expose'
-    );
-    
-    if (!exposeBinding || !t.isObjectProperty(exposeBinding) || !t.isIdentifier(exposeBinding.value)) return;
-    
-    const exposeName = exposeBinding.value.name;
-    
-    path.traverse({
-      CallExpression: (callPath) => {
-        if (t.isIdentifier(callPath.node.callee) && callPath.node.callee.name === exposeName) {
-          const arg = callPath.node.arguments[0];
-          if (t.isObjectExpression(arg)) {
-            this.hasExplicitExpose = true;
-            arg.properties.forEach(prop => {
-              if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-                this.addExposedProperty(prop);
-              } else if (t.isSpreadElement(prop)) {
-                this.addExposedProperty(prop);
-              }
-            });
+      // 变量声明导出
+      else if (Node.isVariableDeclaration(node)) {
+        const initializer = node.getInitializer();
+        if (initializer) {
+          if (Node.isArrayLiteralExpression(initializer)) {
+            this.processArrayForOptionsExpose(initializer);
+          } else if (Node.isObjectLiteralExpression(initializer)) {
+            this.processObjectExpression(initializer, true);
           }
         }
       }
-    });
-  }
-
-  /**
-   * 处理 expose 函数调用
-   */
-  private processExposeCall(path: NodePath<t.CallExpression>): void {
-    this.hasExplicitExpose = true;
-    const arg = path.node.arguments[0];
-    if (t.isObjectExpression(arg)) {
-      arg.properties.forEach(prop => {
-        if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-          this.addExposedProperty(prop);
-        } else if (t.isSpreadElement(prop)) {
-          this.addExposedProperty(prop);
-        }
-      });
-    }
-  }
-
-  /**
-   * 分析 setup 函数中的返回语句
-   */
-  private analyzeReturnStatement(path: NodePath<t.ReturnStatement>): void {
-    if (!this.inSetupContext || this.hasExplicitExpose || this.hasOptionsExpose) return;
-    
-    const argument = path.node.argument;
-    if (t.isObjectExpression(argument)) {
-      argument.properties.forEach(prop => {
-        if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-          this.addExposedProperty(prop);
-        }
-      });
-    } else if (t.isIdentifier(argument)) {
-      // 处理标识符返回的情况
-      const binding = path.scope.getBinding(argument.name);
-      if (binding && t.isVariableDeclarator(binding.path.node)) {
-        const init = binding.path.node.init;
-        if (t.isObjectExpression(init)) {
-          init.properties.forEach(prop => {
-            if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-              this.addExposedProperty(prop);
-            }
-          });
-        }
-      }
-    }
-  }
-
-  /**
-   * 处理类型注解
-   */
-  private handleTypeAnnotation(typeAnnotation: t.TSType | t.TSTypeAnnotation | null, path: NodePath): void {
-    if (!typeAnnotation) return;
-    
-    const actualType = t.isTSTypeAnnotation(typeAnnotation) ? typeAnnotation.typeAnnotation : typeAnnotation;
-
-    if (t.isTSTypeLiteral(actualType)) {
-      actualType.members.forEach((member: t.TSTypeElement) => {
-        if (t.isTSPropertySignature(member) || t.isTSMethodSignature(member)) {
-          this.addExposedProperty(member);
-        }
-      });
-    } else if (t.isTSTypeReference(actualType) && t.isIdentifier(actualType.typeName)) {
-      this.resolveTypeReference(actualType.typeName.name, path);
-    } else if (t.isTSIntersectionType(actualType) || t.isTSUnionType(actualType)) {
-      actualType.types.forEach(type => this.handleTypeAnnotation(type, path));
-    }
-  }
-
-  /**
-   * 解析类型引用
-   */
-  private resolveTypeReference(typeName: string, path: NodePath): void {
-    let scope = path.scope;
-    while (scope) {
-      const binding = scope.getBinding(typeName);
-      if (binding) {
-        if (t.isTSInterfaceDeclaration(binding.path.node)) {
-          binding.path.node.body.body.forEach(member => {
-            this.addExposedProperty(member);
-          });
-          break;
-        } else if (t.isTSTypeAliasDeclaration(binding.path.node)) {
-          this.handleTypeAnnotation(binding.path.node.typeAnnotation, binding.path);
-          break;
-        }
-      }
-      scope = scope.parent;
+    } catch (error) {
+      logError(moduleName, `Error processing export declaration for options expose: ${error}`);
     }
   }
 
   /**
    * 添加暴露的属性
    */
-  private addExposedProperty(
-    prop: t.ObjectProperty | t.ObjectMethod | t.TSPropertySignature | t.Identifier | t.StringLiteral | t.TSTypeElement | t.SpreadElement, 
-    isOptionsExpose = false
-  ): void {
-    let name: string | null = null;
-    
-    if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-      if (t.isIdentifier(prop.key)) {
-        name = prop.key.name;
-      } else if (t.isStringLiteral(prop.key)) {
-        name = prop.key.value;
-      }
-    } else if (t.isIdentifier(prop)) {
-      name = prop.name;
-    } else if (t.isStringLiteral(prop)) {
-      name = prop.value;
-    } else if (t.isTSPropertySignature(prop) && t.isIdentifier(prop.key)) {
-      name = prop.key.name;
-    } else if (t.isTSMethodSignature(prop) && t.isIdentifier(prop.key)) {
-      name = prop.key.name;
-    } else if (t.isSpreadElement(prop) && t.isIdentifier(prop.argument)) {
-      // 处理展开运算符
-      name = prop.argument.name;
-    }
-
-    if (!name) return;
+  private addExposedProperty(propName: string, isOptionsExpose: boolean): void {
+    if (!propName) return;
     
     if (isOptionsExpose) {
-      if (!this.optionsExpose.has(name)) {
-        this.optionsExpose.add(name);
-        this.optionsExposeOrder.push(name);
+      if (!this.optionsExpose.has(propName)) {
+        this.optionsExpose.add(propName);
+        this.optionsExposeOrder.push(propName);
       }
     } else {
-      if (!this.exposed.has(name)) {
-        this.exposed.add(name);
-        this.exposeOrder.push(name);
+      if (!this.exposed.has(propName)) {
+        this.exposed.add(propName);
+        this.exposeOrder.push(propName);
       }
     }
   }
-}
-
-// 入口函数
-export function analyzeExpose(code: string, parsedAst?: ParseResult<File>, filePath?: string): string[] {
-  const ast = parsedAst || parseComponent(code).ast;
-  const analyzer = new ExposeAnalyzer(code, ast, filePath);
-  return analyzer.analyze(ast);
-}
-
-// 处理导入的 expose
-function processImportedExpose(
-  importInfo: ImportInfo,
-  filePath: string,
-  exposedCollection: Set<string> | string[]
-): void {
-  const importSource = importInfo.source;
-  const importedName = importInfo.importedName;
-  const isSet = exposedCollection instanceof Set;
-  const exposedSet = isSet ? exposedCollection as Set<string> : new Set<string>();
-  const exposeOrder = isSet ? [] : exposedCollection as string[];
   
-  try {
-    const currentDir = path.dirname(filePath);
-    const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') ? '' : '.ts'));
+  /**
+   * 解析类型引用
+   */
+  protected resolveTypeReference(typeName: string): void {
+    logDebug(moduleName, `Resolving type reference: ${typeName}`);
     
-    logDebug(moduleName, `Trying to resolve imported expose from ${importFilePath}, imported name: ${importedName}`);
+    // 查找类型别名
+    const typeAliases = this.sourceFile.getDescendantsOfKind(SyntaxKind.TypeAliasDeclaration)
+      .filter(typeAlias => typeAlias.getName() === typeName);
     
-    if (fs.existsSync(importFilePath)) {
-      const importedCode = fs.readFileSync(importFilePath, 'utf-8');
-      const importedAst = parseComponent(importedCode).ast;
+    if (typeAliases.length > 0) {
+      const typeAlias = typeAliases[0];
+      const typeNode = typeAlias.getTypeNode();
+      if (typeNode) {
+        this.processTypeNode(typeNode);
+      }
+      return;
+    }
+    
+    // 查找接口声明
+    const interfaces = this.sourceFile.getDescendantsOfKind(SyntaxKind.InterfaceDeclaration)
+      .filter(iface => iface.getName() === typeName);
+    
+    if (interfaces.length > 0) {
+      const interfaceDecl = interfaces[0];
       
-      // 查找导出的变量
-      const [exportedExposeObject, nestedImportDeclarations] = findExportedObjectAndImports(
-        importedAst, 
-        importedName, 
-      );
+      // 处理接口属性
+      const properties = interfaceDecl.getMembers()
+        .filter(member => member.getKind() === SyntaxKind.PropertySignature)
+        .map(member => member.asKind(SyntaxKind.PropertySignature));
       
-      if (exportedExposeObject) {
-        if (t.isArrayExpression(exportedExposeObject)) {
-          exportedExposeObject.elements.forEach(element => {
-            if (t.isStringLiteral(element)) {
-              const name = element.value;
-              if (!exposedSet.has(name)) {
-                exposedSet.add(name);
-                if (!isSet) exposeOrder.push(name);
-              }
-            } else if (t.isIdentifier(element)) {
-              const name = element.name;
-              if (!exposedSet.has(name)) {
-                exposedSet.add(name);
-                if (!isSet) exposeOrder.push(name);
+      for (const prop of properties) {
+        if (prop) {
+          this.addExposedProperty(prop.getName(), false);
+        }
+      }
+      
+      // 处理接口方法
+      const methods = interfaceDecl.getMembers()
+        .filter(member => member.getKind() === SyntaxKind.MethodSignature);
+      
+      for (const method of methods) {
+        const methodName = method.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
+        if (methodName) {
+          this.addExposedProperty(methodName, false);
+        }
+      }
+      
+      // 处理接口继承
+      const extendsTypes = interfaceDecl.getHeritageClauses()
+        .filter(clause => clause.getToken() === SyntaxKind.ExtendsKeyword)
+        .flatMap(clause => clause.getTypeNodes());
+      
+      for (const extendType of extendsTypes) {
+        const extendTypeName = extendType.getText();
+        // 递归处理继承的类型
+        this.resolveTypeReference(extendTypeName);
+      }
+      
+      return;
+    }
+    
+    // 查找导入的类型
+    const importedTypeInfo = this.findImportDeclaration(typeName);
+    if (importedTypeInfo) {
+      this.resolveImportedType(importedTypeInfo.moduleSpecifier, importedTypeInfo.importName);
+    }
+  }
+
+  /**
+   * 解析导入的类型
+   */
+  protected resolveImportedType(moduleSpecifier: string, typeName: string): void {
+    try {
+      logDebug(moduleName, `Resolving imported type from: ${moduleSpecifier}, name: ${typeName}`);
+      
+      // 导入源文件
+      const importSourceFile = this.tryImportFile(moduleSpecifier);
+      if (!importSourceFile) return;
+      
+      // 查找导出的类型别名
+      const typeAliases = importSourceFile.getDescendantsOfKind(SyntaxKind.TypeAliasDeclaration)
+        .filter(typeAlias => typeAlias.getName() === typeName);
+      
+      if (typeAliases.length > 0) {
+        const typeAlias = typeAliases[0];
+        const typeNode = typeAlias.getTypeNode();
+        if (typeNode) {
+          this.processTypeNode(typeNode);
+        }
+        return;
+      }
+      
+      // 查找导出的接口
+      const interfaces = importSourceFile.getDescendantsOfKind(SyntaxKind.InterfaceDeclaration)
+        .filter(iface => iface.getName() === typeName);
+      
+      if (interfaces.length > 0) {
+        const interfaceDecl = interfaces[0];
+        
+        // 处理接口属性
+        const properties = interfaceDecl.getMembers()
+          .filter(member => member.getKind() === SyntaxKind.PropertySignature)
+          .map(member => member.asKind(SyntaxKind.PropertySignature));
+        
+        for (const prop of properties) {
+          if (prop) {
+            this.addExposedProperty(prop.getName(), false);
+          }
+        }
+        
+        // 处理接口方法
+        const methods = interfaceDecl.getMembers()
+          .filter(member => member.getKind() === SyntaxKind.MethodSignature);
+      
+        for (const method of methods) {
+          const methodName = method.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
+          if (methodName) {
+            this.addExposedProperty(methodName, false);
+          }
+        }
+        
+        // 处理接口继承
+        const extendsTypes = interfaceDecl.getHeritageClauses()
+          .filter(clause => clause.getToken() === SyntaxKind.ExtendsKeyword)
+          .flatMap(clause => clause.getTypeNodes());
+        
+        for (const extendType of extendsTypes) {
+          const extendTypeName = extendType.getText();
+          
+          // 查找父接口并处理其属性
+          const parentInterfaces = importSourceFile.getDescendantsOfKind(SyntaxKind.InterfaceDeclaration)
+            .filter(iface => iface.getName() === extendTypeName);
+          
+          if (parentInterfaces.length > 0) {
+            const parentInterface = parentInterfaces[0];
+            
+            // 处理父接口属性
+            const parentProperties = parentInterface.getMembers()
+              .filter(member => member.getKind() === SyntaxKind.PropertySignature)
+              .map(member => member.asKind(SyntaxKind.PropertySignature));
+            
+            for (const prop of parentProperties) {
+              if (prop) {
+                this.addExposedProperty(prop.getName(), false);
               }
             }
-          });
-        } else if (t.isObjectExpression(exportedExposeObject)) {
-          processObjectProperties(
-            exportedExposeObject.properties, 
-            exposedCollection, 
-            importFilePath, 
-            nestedImportDeclarations, 
-            'expose', 
-            processImportedExpose
-          );
+            
+            // 处理父接口方法
+            const parentMethods = parentInterface.getMembers()
+              .filter(member => member.getKind() === SyntaxKind.MethodSignature);
+          
+            for (const method of parentMethods) {
+              const methodName = method.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
+              if (methodName) {
+                this.addExposedProperty(methodName, false);
+              }
+            }
+          }
         }
-      } else {
-        logDebug(moduleName, `Could not find export named ${importedName} in ${importFilePath}`);
       }
-    } else {
-      logDebug(moduleName, `Import file not found: ${importFilePath}`);
+    } catch (error) {
+      logError(moduleName, `Error resolving imported type: ${error}`);
     }
-  } catch (error) {
-    logError(moduleName, `Error analyzing imported expose:`, error);
   }
-} 
+
+  /**
+   * Override the base class method to properly handle expose arrays
+   */
+  protected processArrayExpression(node: Node): void {
+    // Call the parent method first
+    super.processArrayExpression(node);
+    
+    // Then do our specific processing if it's an array literal
+    if (Node.isArrayLiteralExpression(node)) {
+      this.processArrayExpressionForExpose(node, false);
+    }
+  }
+
+  /**
+   * Helper method to process array for options expose
+   */
+  private processArrayForOptionsExpose(node: Node): void {
+    if (Node.isArrayLiteralExpression(node)) {
+      this.processArrayExpressionForExpose(node, true);
+    }
+  }
+
+  /**
+   * Override the base class method to properly handle object literals
+   */
+  protected processObjectLiteral(node: Node): void {
+    // Call parent method first
+    super.processObjectLiteral(node);
+    
+    // Then do our specific processing
+    if (Node.isObjectLiteralExpression(node)) {
+      this.processObjectExpression(node, false);
+    }
+  }
+}
+
+export default ExposeAnalyzer;
