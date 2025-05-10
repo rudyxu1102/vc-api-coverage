@@ -95,12 +95,12 @@ export default class VcCoverageReporter implements Reporter {
     for (const emit of unitData.emits) {
       if (compData.props.includes(emit)) {
         propsDetails.push(emit)
-      } else {
+      } else if (compData.emits.includes(emit)) {
         emitsDetails.push(emit)
       }
     }
     for (const prop of unitData.props) {
-      if (!compData.emits.includes(prop)) {
+      if (!compData.emits.includes(prop) && compData.props.includes(prop)) {
         propsDetails.push(prop)
       }
     }

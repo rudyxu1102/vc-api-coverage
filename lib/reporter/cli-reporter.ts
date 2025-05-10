@@ -98,7 +98,7 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
       head: [],  // 保持标题颜色，不应用额外样式
       border: [], // 保持边框颜色
     },
-    colWidths: [30, null, null, null, null, 35],
+    colWidths: [35, null, null, null, null, 35],
     // 启用文本自动换行
     wordWrap: true,
     // 启用文本自动换行
