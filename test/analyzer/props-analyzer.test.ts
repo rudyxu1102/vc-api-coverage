@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import PropsAnalyzer from '../../lib/analyzer/props-analyzer';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,6 +15,9 @@ vi.mock('fs', () => ({
 }))
 
 describe('Props Analyzer', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  })
   // 测试简单对象形式的props
   it('should analyze object props correctly', () => {
     const code = `
@@ -187,11 +190,12 @@ describe('Props Analyzer', () => {
       };
     `
 
-   vi.mocked(fs.readFileSync).mockReturnValueOnce(mockImportedFileContent)
+   vi.mocked(fs.existsSync).mockReturnValue(true)
+   vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
     
     const code = `
     <script setup lang="ts">
-    import { buttonProps } from '../fixtures/props/imported-props';
+    import { buttonProps } from '../test-import';
     
     const props = defineProps(buttonProps);
     </script>
@@ -218,12 +222,14 @@ describe('Props Analyzer', () => {
     `
     const code = `
     <script setup lang="ts">
-    import { InputProps } from '../fixtures/props/imported-props';
+    import { InputProps } from '../test-instance-extend';
     
     const props = defineProps<InputProps>();
     </script>
     `;
-    vi.mocked(fs.readFileSync).mockReturnValueOnce(mockImportedFileContent)
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    
+    vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
     
     const morphResult = new PropsAnalyzer(tempFile, code).analyze();
     expect(morphResult.sort()).toEqual(['id', 'class', 'value', 'placeholder', 'disabled'].sort());

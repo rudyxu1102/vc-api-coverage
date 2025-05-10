@@ -29,7 +29,7 @@ export abstract class BaseAnalyzer {
         },
       });
       BaseAnalyzer.projectCache.set(filePath, project);
-    }
+    } 
     
     this.project = BaseAnalyzer.projectCache.get(filePath)!;
     
