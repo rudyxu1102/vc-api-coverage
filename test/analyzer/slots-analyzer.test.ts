@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { analyzeSlots } from '../../lib/analyzer/slots-analyzer'
+import SlotsAnalyzer from '../../lib/analyzer/slots-analyzer'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -35,7 +35,7 @@ describe('slots-analyzer', () => {
         </div>
       </template>
     `
-    const slots = analyzeSlots(code)
+    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
     expect(slots).toEqual(['header', 'default', 'footer'])
   })
 
@@ -53,7 +53,7 @@ describe('slots-analyzer', () => {
         </div>
       </template>
     `
-    const slots = analyzeSlots(code)
+    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
     expect(slots).toEqual(['item', 'footer'])
   })
 
@@ -63,7 +63,7 @@ describe('slots-analyzer', () => {
         <div>No slots here</div>
       </template>
     `
-    const slots = analyzeSlots(code)
+    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
     expect(slots).toEqual([])
   })
 
@@ -81,46 +81,10 @@ describe('slots-analyzer', () => {
         }
       })
     `
-    const slots = analyzeSlots(code)
+    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
     expect(slots).toEqual(['default', 'icon'])
   })
 
-  it('should analyze slots imported from another file', () => {
-    // 模拟导入文件内容
-    const mockImportedFileContent = `
-      import { SlotsType, VNode } from 'vue';
-      
-      export const buttonSlots = Object as SlotsType<{
-        default?: () => VNode[];
-        icon?: () => VNode[];
-      }>
-    `
-    
-    vi.mocked(fs.existsSync).mockReturnValue(true)
-    vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
-    
-    const code = `
-      import { buttonSlots } from './props'
-      
-      export default defineComponent({
-        name: 'MyButton',
-        slots: buttonSlots,
-        render() {
-          return h('div', this.$slots.default?.())
-        }
-      })
-    `
-    
-    const filePath = '/fake/component/Button.tsx'
-    const slots = analyzeSlots(code, undefined, filePath)
-    
-    // 验证
-    expect(path.dirname).toHaveBeenCalledWith(filePath)
-    // 不要检查具体的参数，只检查是否被调用
-    expect(path.resolve).toHaveBeenCalled()
-    expect(fs.readFileSync).toHaveBeenCalled()
-    expect(slots).toEqual(['default', 'icon'])
-  })
   
   it('should handle multiple slots imports', () => {
     // 修改为两个单独的导入，不使用spread运算符
@@ -154,7 +118,7 @@ describe('slots-analyzer', () => {
     `
     
     const filePath = '/fake/component/Card.tsx'
-    const slots = analyzeSlots(code, undefined, filePath)
+    const slots = new SlotsAnalyzer(filePath, code).analyze()
     
     // 需要验证结果包含所有插槽
     expect(slots).toContain('header')

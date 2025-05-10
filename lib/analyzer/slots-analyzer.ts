@@ -1,20 +1,9 @@
-import traverse from '@babel/traverse';
-import * as t from '@babel/types';
-import type { NodePath } from '@babel/traverse';
-import type { ParseResult } from '@babel/parser';
-import type { File } from '@babel/types';
-import { parseComponent } from '../common/shared-parser';
-import * as fs from 'fs';
-import * as path from 'path';
-import { 
-  ImportInfo, 
-  collectImportDeclarations, 
-  findExportedObjectAndImports, 
-  processIdentifierReference 
-} from '../common/import-analyzer';
+import { SyntaxKind, Node, TypeLiteralNode, PropertySignature } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
+import { BaseAnalyzer } from './base-analyzer';
+import { parseComponent } from '../common/shared-parser';
 
-const moduleName = 'slots-analyzer';
+const moduleName = 'slots-analyzer-morph';
 
 /**
  * 从模板中提取插槽名称
@@ -36,28 +25,31 @@ function extractSlotsFromTemplate(template: string): string[] {
 }
 
 /**
- * 插槽分析器类，包含不同的分析策略
+ * 插槽分析器类，使用ts-morph处理TypeScript AST
  */
-class SlotsAnalyzer {
-  private slots: Set<string> = new Set<string>();
+class SlotsAnalyzer extends BaseAnalyzer {
   private hasTemplateSlots: boolean = false;
   private templateContent: string;
-  private ast: ParseResult<File>;
-  private importDeclarations: Record<string, ImportInfo> = {};
-  private filePath?: string;
 
-  constructor(code: string, parsedContent?: { ast: ParseResult<File>; templateContent: string }, filePath?: string) {
-    const parsed = parsedContent || parseComponent(code);
-    this.templateContent = parsed.templateContent;
-    this.ast = parsed.ast;
-    this.filePath = filePath;
-    collectImportDeclarations(this.ast, this.importDeclarations);
+  constructor(filePath: string, code: string) {
+    super(filePath, code);
+    
+    // 解析Vue单文件组件，提取模板内容
+    const parsed = parseComponent(code);
+    this.templateContent = parsed.templateContent || '';
   }
 
   /**
-   * 分析并返回组件的插槽
+   * 返回模块名称
    */
-  analyze(): string[] {
+  protected getModuleName(): string {
+    return moduleName;
+  }
+
+  /**
+   * 执行分析
+   */
+  protected performAnalysis(): void {
     // 首先从模板中分析插槽
     this.analyzeTemplateSlots();
     
@@ -66,9 +58,6 @@ class SlotsAnalyzer {
     
     // 处理默认插槽的特殊情况
     this.handleDefaultSlot();
-    
-    // 返回排序后的数组
-    return Array.from(this.slots);
   }
 
   /**
@@ -80,7 +69,7 @@ class SlotsAnalyzer {
     const templateSlots = extractSlotsFromTemplate(this.templateContent);
     if (templateSlots.length > 0) {
       templateSlots.forEach(slot => {
-        this.slots.add(slot);
+        this.resultSet.add(slot);
       });
       this.hasTemplateSlots = true;
     }
@@ -90,69 +79,68 @@ class SlotsAnalyzer {
    * 分析脚本中的插槽使用
    */
   private analyzeScriptSlots(): void {
-    traverse(this.ast, {
-      ObjectProperty: this.analyzeObjectProperty.bind(this),
-    });
-  }
-
-  /**
-   * 分析 TSX 中的 slots 定义
-   */
-  private analyzeObjectProperty(path: NodePath<t.ObjectProperty>): void {
-    if (
-      t.isIdentifier(path.node.key) && 
-      path.node.key.name === 'slots'
-    ) {
-      // 处理 slots: identifier 形式，可能是导入的变量
-      if (t.isIdentifier(path.node.value)) {
-        this.analyzeIdentifierSlots(path.node.value, path);
-      }
-      // 处理 Object as SlotsType<{...}> 形式
-      else if (
-        t.isTSAsExpression(path.node.value) &&
-        t.isTSTypeReference(path.node.value.typeAnnotation)
-      ) {
-        this.analyzeSlotsTypeReference(path.node.value.typeAnnotation as t.TSTypeReference);
-      }
-      // 处理直接的 SlotsType<{...}> 形式
-      else if (t.isTSTypeReference(path.node.value)) {
-        this.analyzeSlotsTypeReference(path.node.value as t.TSTypeReference);
-      }
-    }
-  }
-
-  /**
-   * 分析 slots: identifier 形式
-   */
-  private analyzeIdentifierSlots(identifier: t.Identifier, path: NodePath<t.ObjectProperty>): void {
-    const slotsVarName = identifier.name;
-    logDebug(moduleName, `Found slots variable reference: ${slotsVarName}`);
+    // 查找所有对象属性，包括slots属性
+    const objectProperties = this.sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAssignment)
+      .filter(prop => prop.getName() === 'slots');
     
-    if (this.filePath) {
-      // 处理标识符引用，可能是导入的变量
-      processIdentifierReference(
-        identifier,
-        path,
-        this.slots,
-        this.importDeclarations,
-        this.filePath,
-        processImportedSlots
-      );
+    for (const propAssignment of objectProperties) {
+      const initializer = propAssignment.getInitializer();
+      
+      if (!initializer) continue;
+      
+      // 处理标识符引用: slots: slotsIdentifier
+      if (initializer.getKind() === SyntaxKind.Identifier) {
+        const identifier = initializer.getText();
+        this.resolveIdentifierReference(identifier);
+      }
+      // 处理类型断言: slots: (...) as SlotsType<{...}>
+      else if (initializer.getKind() === SyntaxKind.AsExpression) {
+        const asExpression = initializer.asKind(SyntaxKind.AsExpression);
+        if (asExpression) {
+          const typeNode = asExpression.getTypeNode();
+          if (typeNode && typeNode.getKind() === SyntaxKind.TypeReference) {
+            this.analyzeSlotsTypeReference(typeNode);
+          }
+        }
+      }
+      // 直接的类型引用: slots: SlotsType<{...}>
+      else if (initializer.getKind() === SyntaxKind.TypeReference) {
+        this.analyzeSlotsTypeReference(initializer);
+      }
     }
   }
 
   /**
    * 分析 SlotsType<{...}> 类型引用
    */
-  private analyzeSlotsTypeReference(typeRef: t.TSTypeReference): void {
-    if (t.isIdentifier(typeRef.typeName) && typeRef.typeName.name === 'SlotsType') {
-      const typeParameter = typeRef.typeParameters?.params[0];
-      if (t.isTSTypeLiteral(typeParameter)) {
-        typeParameter.members.forEach(member => {
-          if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-            this.slots.add(member.key.name);
+  private analyzeSlotsTypeReference(typeRef: Node): void {
+    if (typeRef.getKind() !== SyntaxKind.TypeReference) return;
+    
+    const typeRefNode = typeRef.asKind(SyntaxKind.TypeReference);
+    if (!typeRefNode) return;
+    
+    const typeName = typeRefNode.getTypeName().getText();
+    
+    if (typeName === 'SlotsType') {
+      const typeArgs = typeRefNode.getTypeArguments();
+      if (typeArgs.length > 0) {
+        const firstArg = typeArgs[0];
+        
+        // 检查类型参数是否为对象类型字面量
+        if (firstArg.getKind() === SyntaxKind.TypeLiteral) {
+          const typeLiteral = firstArg as TypeLiteralNode;
+          const members = typeLiteral.getMembers();
+          
+          for (const member of members) {
+            if (member.getKind() === SyntaxKind.PropertySignature) {
+              const propSig = member as PropertySignature;
+              const slotName = propSig.getName();
+              if (slotName) {
+                this.resultSet.add(slotName);
+              }
+            }
           }
-        });
+        }
       }
     }
   }
@@ -162,82 +150,199 @@ class SlotsAnalyzer {
    */
   private handleDefaultSlot(): void {
     // 只有在模板中找到插槽时才考虑添加默认插槽
-    if (this.hasTemplateSlots && !this.slots.has('default')) {
+    if (this.hasTemplateSlots && !this.resultSet.has('default')) {
       // 检查模板中是否有不带 name 属性的 slot 标签
       const hasDefaultSlot = /<slot(?!\s+[^>]*?(?:name|:name|v-bind:name)=["'][^"']+["'])[^>]*?>/.test(this.templateContent);
       if (hasDefaultSlot) {
-        this.slots.add('default');
+        this.resultSet.add('default');
       }
     }
   }
-}
 
-/**
- * 分析组件的插槽
- */
-export function analyzeSlots(code: string, parsedContent?: { ast: ParseResult<File>; templateContent: string }, filePath?: string): string[] {
-  const analyzer = new SlotsAnalyzer(code, parsedContent, filePath);
-  return analyzer.analyze();
-}
+  /**
+   * 解析类型引用，找出类型定义中的属性
+   */
+  protected resolveTypeReference(typeName: string): void {
+    logDebug(moduleName, `Resolving type reference: ${typeName}`);
+    
+    // 查找类型别名
+    const typeAliases = this.sourceFile.getDescendantsOfKind(SyntaxKind.TypeAliasDeclaration)
+      .filter(typeAlias => typeAlias.getName() === typeName);
+    
+    if (typeAliases.length > 0) {
+      const typeAlias = typeAliases[0];
+      const typeNode = typeAlias.getTypeNode();
+      if (typeNode) {
+        this.processTypeNode(typeNode);
+      }
+      return;
+    }
+    
+    // 查找接口声明
+    const interfaces = this.sourceFile.getDescendantsOfKind(SyntaxKind.InterfaceDeclaration)
+      .filter(iface => iface.getName() === typeName);
+    
+    if (interfaces.length > 0) {
+      const interfaceDecl = interfaces[0];
+      
+      // 处理接口属性
+      const properties = interfaceDecl.getMembers()
+        .filter(member => member.getKind() === SyntaxKind.PropertySignature)
+        .map(member => member.asKind(SyntaxKind.PropertySignature));
+      
+      for (const prop of properties) {
+        if (prop) {
+          this.resultSet.add(prop.getName());
+        }
+      }
+      
+      // 处理接口继承
+      const extendsTypes = interfaceDecl.getHeritageClauses()
+        .filter(clause => clause.getToken() === SyntaxKind.ExtendsKeyword)
+        .flatMap(clause => clause.getTypeNodes());
+      
+      for (const extendType of extendsTypes) {
+        const extendTypeName = extendType.getText();
+        // 递归处理继承的类型
+        this.resolveTypeReference(extendTypeName);
+      }
+      
+      return;
+    }
+    
+    // 查找导入的类型
+    const importedTypeInfo = this.findImportDeclaration(typeName);
+    if (importedTypeInfo) {
+      this.resolveImportedType(importedTypeInfo.moduleSpecifier, importedTypeInfo.importName);
+    }
+  }
 
-/**
- * 处理导入的插槽
- */
-function processImportedSlots(
-  importInfo: ImportInfo,
-  filePath: string,
-  slotsSet: Set<string> | string[]
-): void {
-  const importSource = importInfo.source;
-  const importedName = importInfo.importedName;
-  
-  try {
-    // 解析导入的文件路径
-    const currentDir = path.dirname(filePath);
-    const importFilePath = path.resolve(currentDir, importSource + (importSource.endsWith('.ts') || importSource.endsWith('.js') ? '' : '.ts'));
-    
-    logDebug(moduleName, `Trying to resolve imported slots from ${importFilePath}, imported name: ${importedName}`);
-    
-    // 读取并解析导入文件
-    if (fs.existsSync(importFilePath)) {
-      const importedCode = fs.readFileSync(importFilePath, 'utf-8');
-      const importedAst = parseComponent(importedCode).ast;
-      
-      // 从导入的文件中找到对应的导出变量
-      const [exportedObject] = findExportedObjectAndImports(importedAst, importedName);
-      
-      if (exportedObject) {
-        // 如果是 TSAsExpression (Object as SlotsType<{...}>)
-        if (t.isTSAsExpression(exportedObject)) {
-          if (t.isTSTypeReference(exportedObject.typeAnnotation)) {
-            analyzeExportedSlotsTypeReference(exportedObject.typeAnnotation, slotsSet);
+  /**
+   * 处理类型节点，提取属性
+   */
+  private processTypeNode(typeNode: Node): void {
+    if (typeNode.getKind() === SyntaxKind.TypeLiteral) {
+      // 处理类型字面量，如 { slot1: ..., slot2: ... }
+      const members = typeNode.asKind(SyntaxKind.TypeLiteral)?.getMembers() || [];
+      for (const member of members) {
+        if (member.getKind() === SyntaxKind.PropertySignature) {
+          const propName = member.asKind(SyntaxKind.PropertySignature)?.getName();
+          if (propName) {
+            this.resultSet.add(propName);
           }
         }
       }
-    } else {
-      logDebug(moduleName, `Import file not found: ${importFilePath}`);
+    } else if (typeNode.getKind() === SyntaxKind.TypeReference) {
+      // 处理类型引用，如 SlotsType<{...}>
+      const typeRefNode = typeNode.asKind(SyntaxKind.TypeReference);
+      if (typeRefNode) {
+        const typeName = typeRefNode.getTypeName().getText();
+        if (typeName === 'SlotsType') {
+          const typeArgs = typeRefNode.getTypeArguments();
+          if (typeArgs.length > 0) {
+            this.processTypeNode(typeArgs[0]);
+          }
+        } else {
+          // 普通类型引用，可能需要递归解析
+          this.resolveTypeReference(typeName);
+        }
+      }
+    } else if (typeNode.getKind() === SyntaxKind.IntersectionType) {
+      // 处理交集类型，如 A & B
+      const typeElements = typeNode.asKind(SyntaxKind.IntersectionType)?.getTypeNodes() || [];
+      for (const element of typeElements) {
+        this.processTypeNode(element);
+      }
+    } else if (typeNode.getKind() === SyntaxKind.UnionType) {
+      // 处理联合类型，如 A | B
+      const typeElements = typeNode.asKind(SyntaxKind.UnionType)?.getTypeNodes() || [];
+      for (const element of typeElements) {
+        this.processTypeNode(element);
+      }
     }
-  } catch (error) {
-    logError(moduleName, `Error analyzing imported slots:`, error);
+  }
+
+  /**
+   * 解析导入的类型
+   */
+  protected resolveImportedType(moduleSpecifier: string, typeName: string): void {
+    try {
+      logDebug(moduleName, `Resolving imported type from: ${moduleSpecifier}, name: ${typeName}`);
+      
+      // 使用tryImportFile方法获取源文件
+      const importSourceFile = this.tryImportFile(moduleSpecifier);
+      if (!importSourceFile) return;
+      
+      // 查找导出的类型别名
+      const typeAliases = importSourceFile.getDescendantsOfKind(SyntaxKind.TypeAliasDeclaration)
+        .filter(typeAlias => typeAlias.getName() === typeName);
+      
+      if (typeAliases.length > 0) {
+        const typeAlias = typeAliases[0];
+        const typeNode = typeAlias.getTypeNode();
+        if (typeNode) {
+          this.processTypeNode(typeNode);
+        }
+        return;
+      }
+      
+      // 查找导出的接口
+      const interfaces = importSourceFile.getDescendantsOfKind(SyntaxKind.InterfaceDeclaration)
+        .filter(iface => iface.getName() === typeName);
+      
+      if (interfaces.length > 0) {
+        const interfaceDecl = interfaces[0];
+        
+        // 处理接口属性
+        const properties = interfaceDecl.getMembers()
+          .filter(member => member.getKind() === SyntaxKind.PropertySignature)
+          .map(member => member.asKind(SyntaxKind.PropertySignature));
+        
+        for (const prop of properties) {
+          if (prop) {
+            this.resultSet.add(prop.getName());
+          }
+        }
+        
+        // 处理接口继承
+        const extendsTypes = interfaceDecl.getHeritageClauses()
+          .filter(clause => clause.getToken() === SyntaxKind.ExtendsKeyword)
+          .flatMap(clause => clause.getTypeNodes());
+        
+        for (const extendType of extendsTypes) {
+          const extendTypeName = extendType.getText();
+          // 递归处理继承的类型
+          this.resolveTypeReference(extendTypeName);
+        }
+      }
+      
+      // 查找导出的变量（对象类型的slots定义）
+      const exportedSymbols = importSourceFile.getExportSymbols();
+      const exportedSymbol = exportedSymbols.find(symbol => symbol.getName() === typeName);
+        
+      if (exportedSymbol) {
+        const declarations = exportedSymbol.getDeclarations();
+        for (const decl of declarations) {
+          if (decl.getKind() === SyntaxKind.VariableDeclaration) {
+            const initializer = decl.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
+            if (initializer) {
+              if (initializer.getKind() === SyntaxKind.AsExpression) {
+                const asExpr = initializer.asKind(SyntaxKind.AsExpression);
+                if (asExpr) {
+                  const typeNode = asExpr.getTypeNode();
+                  if (typeNode && typeNode.getKind() === SyntaxKind.TypeReference) {
+                    this.analyzeSlotsTypeReference(typeNode);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      logError(moduleName, `Error resolving imported type: ${error}`);
+    }
   }
 }
 
-/**
- * 分析导出的 SlotsType<{...}> 类型引用
- */
-function analyzeExportedSlotsTypeReference(typeRef: t.TSTypeReference, slotsSet: Set<string> | string[]): void {
-  if (t.isIdentifier(typeRef.typeName) && typeRef.typeName.name === 'SlotsType') {
-    const typeParameter = typeRef.typeParameters?.params[0];
-    if (t.isTSTypeLiteral(typeParameter)) {
-      typeParameter.members.forEach(member => {
-        if (t.isTSPropertySignature(member) && t.isIdentifier(member.key)) {
-          if (slotsSet instanceof Set) {
-            slotsSet.add(member.key.name);
-          } else if (Array.isArray(slotsSet) && !slotsSet.includes(member.key.name)) {
-            slotsSet.push(member.key.name);
-          }
-        }
-      });
-    }
-  }
-} 
+export default SlotsAnalyzer

@@ -5,13 +5,12 @@ import open from 'open';
 import _ from 'lodash';
 import PropsAnalyzer from '../lib/analyzer/props-analyzer';
 import EmitsAnalyzer from '../lib/analyzer/emits-analyzer';
-import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
+import SlotsAnalyzer from '../lib/analyzer/slots-analyzer';
 import ExposeAnalyzer from '../lib/analyzer/expose-analyzer';
 import { generateCliReport } from '../lib/reporter/cli-reporter';
 import { HTMLReporter } from '../lib/reporter/html-reporter';
 import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
-import { parseComponent } from '../lib/common/shared-parser';
 import type { VcCoverageData, VcData } from '../lib/types';
 import { analyzeTestUnits } from '../lib/analyzer/test-units-analyzer';
 import { ViteDevServer } from 'vite';
@@ -74,12 +73,11 @@ export default class VcCoverageReporter implements Reporter {
     for (const path in this.unitData) {
       const module = this.ctx.vite.moduleGraph.getModuleById(path);
       const code = (module?.transformResult?.map as SourceMap).sourcesContent[0] || '';
-      const parsedContent = parseComponent(code);
         
       // 分析组件API
       const props = new PropsAnalyzer(path, code).analyze();  // 传入文件路径
       const emits = new EmitsAnalyzer(path, code).analyze().map(e => toEventName(e))
-      const slots = analyzeSlots(code, parsedContent, path);
+      const slots = new SlotsAnalyzer(path, code).analyze();
       const exposes = new ExposeAnalyzer(path, code).analyze()
       this.compData[path] = {
         props,
