@@ -12,7 +12,7 @@ import { HTMLReporter } from '../lib/reporter/html-reporter';
 import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
 import type { VcCoverageData, VcData } from '../lib/types';
-import { analyzeTestUnits } from '../lib/analyzer/test-units-analyzer';
+import TestUnitAnalyzer from '../lib/analyzer/test-units-analyzer';
 import { ViteDevServer } from 'vite';
 import type { SourceMap } from 'rollup';
 import { toEventName } from '../lib/common/utils';
@@ -47,7 +47,7 @@ export default class VcCoverageReporter implements Reporter {
     const vitenode = testModule.project.vite
     const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
     const code = cache?.transformResult?.code || ''
-    const res = analyzeTestUnits(code, vitenode as unknown as ViteDevServer)
+    const res = new TestUnitAnalyzer(testModule.moduleId, code, vitenode as unknown as ViteDevServer).analyze()
     const rootDir = this.ctx.config.root
     for (const path in res) {
       const fullPath = `${rootDir}${path}`
@@ -92,6 +92,7 @@ export default class VcCoverageReporter implements Reporter {
   dealPropsEmits(compData: VcData, unitData: VcData) {
     const propsDetails = []
     const emitsDetails = []
+    console.log(compData, unitData)
     for (const emit of unitData.emits) {
       if (compData.props.includes(emit)) {
         propsDetails.push(emit)
@@ -104,6 +105,8 @@ export default class VcCoverageReporter implements Reporter {
         propsDetails.push(prop)
       }
     }
+    console.log('--------------------------------')
+    console.log(propsDetails, emitsDetails)
     return { propsDetails, emitsDetails }
   }
 

@@ -1,10 +1,7 @@
-import type { ParseResult } from '@babel/parser';
-import type { File } from '@babel/types';
-import * as parser from '@babel/parser';
-import traverse from '@babel/traverse';
-import * as t from '@babel/types';
-import { resolveExportedPathBabel } from '../common/export-parser';
+import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression } from 'ts-morph';
 import type { ViteDevServer } from 'vite';
+import { resolveExportedPathBabel } from '../common/export-parser';
+
 interface TestUnit {
     props?: string[];
     emits?: string[];
@@ -16,355 +13,420 @@ interface TestUnitsResult {
 }
 
 class TestUnitAnalyzer {
-    private ast: ParseResult<File>;
+    private sourceFile: SourceFile;
     private importedComponents: Map<string, string> = new Map();
     private result: TestUnitsResult = {};
     private vitenode?: ViteDevServer;
+    private project: Project;
     
-    constructor(ast: ParseResult<File>, vitenode?: ViteDevServer) {
-        this.ast = ast;
+    constructor(filePath: string, code: string, vitenode?: ViteDevServer) {
         this.vitenode = vitenode;
+        
+        // Create a project
+        this.project = new Project({
+            compilerOptions: {
+                jsx: 1, // Preserve JSX
+                target: 99, // ESNext
+            },
+        });
+        
+        // Add source file
+        this.sourceFile = this.project.createSourceFile(filePath, code, { overwrite: true });
+        
+        // Initialize result
+        this.result = {};
     }
 
     public analyze(): TestUnitsResult {
-        // 收集所有的导入组件
+        // Collect all imported components
         this.collectComponentImports();
         
-        // 分析传统的挂载方法调用
+        // Analyze traditional mount method calls
         this.analyzeTraditionalMountCalls();
         
-        // 分析所有的组件创建函数调用 (包括createVNode以及任意函数名)
+        // Analyze all component creation function calls
         this.analyzeComponentCreationCalls();
 
         return this.result;
     }
     
-    // 获取导入的组件
+    // Get imported components
     public getImportedComponents(): Map<string, string> {
         return this.importedComponents;
     }
     
     private collectComponentImports() {
-        traverse(this.ast, {
-            ImportDeclaration: (path) => {
-                const source = path.node.source.value;
+        const importDeclarations = this.sourceFile.getImportDeclarations();
+        
+        for (const importDecl of importDeclarations) {
+            const sourceValue = importDecl.getModuleSpecifierValue();
+            
+            if (sourceValue.endsWith(".tsx") || sourceValue.endsWith(".vue") || 
+                sourceValue.endsWith(".jsx") || sourceValue.endsWith(".ts")) {
                 
-                if (source.endsWith(".tsx") || source.endsWith(".vue") || source.endsWith(".jsx") || source.endsWith(".ts")) {
-                    path.node.specifiers.forEach(specifier => {
-                        // Handle default imports
-                        if (t.isImportDefaultSpecifier(specifier) && t.isIdentifier(specifier.local)) {
-                            // 保存完整的导入路径
-                            this.importedComponents.set(specifier.local.name, source);
+                // Handle default imports
+                const defaultImport = importDecl.getDefaultImport();
+                if (defaultImport) {
+                    this.importedComponents.set(defaultImport.getText(), sourceValue);
+                }
+                
+                // Handle named imports
+                const namedImports = importDecl.getNamedImports();
+                for (const namedImport of namedImports) {
+                    const localName = namedImport.getName();
+                    const moduleId = `${this.vitenode?.config.root}${sourceValue}`;
+                    
+                    // Try to get module from vite module graph
+                    const module = this.vitenode?.moduleGraph.getModuleById(moduleId);
+                    const code = module?.transformResult?.code || '';
+                    
+                    // If we have code, try to resolve the exported path
+                    if (code) {
+                        const exportedPath = resolveExportedPathBabel(code, localName);
+                        if (exportedPath) {
+                            this.importedComponents.set(localName, exportedPath);
                         }
-                        // Handle named imports
-                        else if (t.isImportSpecifier(specifier) && t.isIdentifier(specifier.local)) {
-                            const moduleId = `${this.vitenode?.config.root}${source}`
-                            // 通过vitenode.moduleGraph.getModuleById(testModule.moduleId)获取到模块的绝对路径
-                            const module = this.vitenode?.moduleGraph.getModuleById(moduleId);
-                            const code = module?.transformResult?.code || ''
-                            const name = specifier.local.name
-                            const path = resolveExportedPathBabel(code, name)
-                            if (path) {
-                                this.importedComponents.set(specifier.local.name,  path);
-                            }
-                        }
-                    });
+                    }
                 }
             }
-        });
+        }
     }
     
     private analyzeTraditionalMountCalls() {
-        traverse(this.ast, {
-            CallExpression: (path) => {
-                // 查找 it('...', () => {}) 或 test('...', () => {}) 语句内的挂载调用
-                if (
-                    t.isIdentifier(path.node.callee) && 
-                    (path.node.callee.name === 'it' || path.node.callee.name === 'test') && 
-                    t.isStringLiteral(path.node.arguments[0])
-                ) {
-                    // 检查测试用例中是否包含expect断言
-                    let hasExpect = false;
-                    
-                    // 遍历当前测试用例体内所有函数调用，检查是否有expect调用
-                    path.traverse({
-                        CallExpression: (innerPath) => {
-                            if (t.isIdentifier(innerPath.node.callee) && innerPath.node.callee.name === 'expect') {
-                                hasExpect = true;
-                            }
-                        }
-                    });
-                    
-                    // 如果没有expect断言，则跳过该测试用例
-                    if (!hasExpect) {
-                        return;
-                    }
-                    
-                    // 查找 shallowMount 或 mount 调用
-                    path.traverse({
-                        CallExpression: (mountPath) => {
-                            if (
-                                t.isIdentifier(mountPath.node.callee) && 
-                                (mountPath.node.callee.name === 'shallowMount' || mountPath.node.callee.name === 'mount')
-                            ) {
-                                const componentArg = mountPath.node.arguments[0];
-                                if (t.isIdentifier(componentArg)) {
-                                    const componentName = componentArg.name;
-                                    const componentFile = this.importedComponents.get(componentName);
-                                    
-                                    if (componentFile) {
-                                        if (!this.result[componentFile]) {
-                                            this.result[componentFile] = {};
-                                        }
-                                        
-                                        // 检查第二个参数（选项对象）
-                                        const options = mountPath.node.arguments[1];
-                                        if (options && t.isObjectExpression(options)) {
-                                            this.extractProps(options, this.result[componentFile]);
-                                            this.extractEmits(options, this.result[componentFile]);
-                                            this.extractSlots(options, this.result[componentFile]);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
+        // Find all test or it blocks
+        const testCalls = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
+            .filter(call => {
+                const expression = call.getExpression();
+                if (Node.isIdentifier(expression)) {
+                    const name = expression.getText();
+                    return name === 'it' || name === 'test';
+                }
+                return false;
+            });
+        
+        for (const testCall of testCalls) {
+            // Check if the test block has an expect assertion
+            let hasExpect = false;
+            
+            // Find all expect calls in this test block
+            const expectCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
+                .filter(call => {
+                    const expression = call.getExpression();
+                    return Node.isIdentifier(expression) && expression.getText() === 'expect';
+                });
+            
+            if (expectCalls.length > 0) {
+                hasExpect = true;
+            }
+            
+            // If there are no expect assertions, skip this test block
+            if (!hasExpect) {
+                continue;
+            }
+            
+            // Find all mount or shallowMount calls
+            const mountCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
+                .filter(call => {
+                    const expression = call.getExpression();
+                    return Node.isIdentifier(expression) && 
+                           (expression.getText() === 'mount' || expression.getText() === 'shallowMount');
+                });
+            
+            for (const mountCall of mountCalls) {
+                this.processMountCall(mountCall);
+            }
+        }
+    }
+    
+    private processMountCall(mountCall: CallExpression) {
+        const args = mountCall.getArguments();
+        if (args.length === 0) return;
+        
+        const componentArg = args[0];
+        if (Node.isIdentifier(componentArg)) {
+            const componentName = componentArg.getText();
+            const componentFile = this.importedComponents.get(componentName);
+            
+            if (componentFile) {
+                // Initialize component entry in result if not exists
+                if (!this.result[componentFile]) {
+                    this.result[componentFile] = {};
+                }
+                
+                // Check for options object (second argument)
+                if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
+                    const options = args[1] as ObjectLiteralExpression;
+                    this.extractProps(options, this.result[componentFile]);
+                    this.extractEmits(options, this.result[componentFile]);
+                    this.extractSlots(options, this.result[componentFile]);
                 }
             }
-        });
+        }
     }
     
     private analyzeComponentCreationCalls() {
         const skipFunctions = new Set(['mount', 'shallowMount', 'it', 'describe', 'test', 'expect']);
         
-        // 首先找到所有包含expect断言的测试用例的范围
-        const testBlocksWithExpect = new Set<t.CallExpression>();
+        // First, collect all test blocks with expect assertions
+        const testBlocksWithExpect = new Set<CallExpression>();
         
-        // 收集所有包含expect断言的测试块
-        traverse(this.ast, {
-            CallExpression: (path) => {
-                if (
-                    t.isIdentifier(path.node.callee) && 
-                    (path.node.callee.name === 'it' || path.node.callee.name === 'test')
-                ) {
-                    // 检查是否包含expect断言
-                    let hasExpect = false;
-                    path.traverse({
-                        CallExpression: (innerPath) => {
-                            if (t.isIdentifier(innerPath.node.callee) && innerPath.node.callee.name === 'expect') {
-                                hasExpect = true;
-                            }
-                        }
-                    });
-                    
-                    if (hasExpect) {
-                        testBlocksWithExpect.add(path.node);
-                    }
+        const testCalls = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
+            .filter(call => {
+                const expression = call.getExpression();
+                if (Node.isIdentifier(expression)) {
+                    const name = expression.getText();
+                    return name === 'it' || name === 'test';
                 }
-            }
-        });
+                return false;
+            });
         
-        traverse(this.ast, {
-            CallExpression: (path) => {
-                // 排除已知的非组件创建函数
-                if (t.isIdentifier(path.node.callee) && skipFunctions.has(path.node.callee.name)) {
-                    return;
-                }
-                
-                // 检查当前调用是否在包含expect断言的测试块内
-                let isInTestWithExpect = false;
-                let currentPath: any = path;
-                
-                while (currentPath && !isInTestWithExpect) {
-                    // 向上查找父级CallExpression节点
-                    currentPath = currentPath.findParent((p: any) => p.isCallExpression());
-                    
-                    if (!currentPath) break;
-                    
-                    if (t.isIdentifier(currentPath.node.callee) && 
-                        (currentPath.node.callee.name === 'it' || currentPath.node.callee.name === 'test')) {
-                        // 检查当前测试块是否包含expect断言
-                        isInTestWithExpect = testBlocksWithExpect.has(currentPath.node);
-                        break;
-                    }
-                }
-                
-                // 如果不在包含expect断言的测试块内，则跳过
-                if (!isInTestWithExpect) {
-                    return;
-                }
-                
-                // 检查是否是render函数调用
-                if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'render') {
-                    // 如果第一个参数是箭头函数
-                    const firstArg = path.node.arguments[0];
-                    if (t.isArrowFunctionExpression(firstArg) && firstArg.body) {
-                        // 如果箭头函数体是一个createVNode调用
-                        if (t.isCallExpression(firstArg.body)) {
-                            this.analyzeComponentCreationNode(firstArg.body);
-                        }
-                    }
-                    return;
-                }
-                
-                // 检查函数调用的第一个参数是否为我们已知的组件
-                this.analyzeComponentCreationNode(path.node);
+        for (const testCall of testCalls) {
+            const expectCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
+                .filter(call => {
+                    const expression = call.getExpression();
+                    return Node.isIdentifier(expression) && expression.getText() === 'expect';
+                });
+            
+            if (expectCalls.length > 0) {
+                testBlocksWithExpect.add(testCall);
             }
-        });
+        }
+        
+        // Now find all potential component creation calls
+        const allCallExpressions = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
+        
+        for (const callExpr of allCallExpressions) {
+            const expression = callExpr.getExpression();
+            
+            // Skip known non-component creation functions
+            if (Node.isIdentifier(expression) && skipFunctions.has(expression.getText())) {
+                continue;
+            }
+            
+            // Check if this call is inside a test block with expect assertions
+            const isInTestWithExpect = this.isCallInTestWithExpect(callExpr, testBlocksWithExpect);
+            
+            // If not in a test block with expect, skip
+            if (!isInTestWithExpect) {
+                continue;
+            }
+            
+            // Special handling for render function calls
+            if (Node.isIdentifier(expression) && expression.getText() === 'render') {
+                const args = callExpr.getArguments();
+                if (args.length > 0) {
+                    // Handle both arrow function and direct callbacks
+                    if (Node.isArrowFunction(args[0])) {
+                        const arrowFunc = args[0];
+                        const body = arrowFunc.getBody();
+                        
+                        if (Node.isCallExpression(body)) {
+                            this.analyzeComponentCreationNode(body);
+                        }
+                    } else if (Node.isCallExpression(args[0])) {
+                        // Handle direct call expressions
+                        this.analyzeComponentCreationNode(args[0]);
+                    }
+                }
+                continue;
+            }
+            
+            // Analyze other potential component creation calls
+            this.analyzeComponentCreationNode(callExpr);
+        }
     }
     
-    private analyzeComponentCreationNode(callExprNode: t.CallExpression) {
-        // 检查函数调用的第一个参数是否为我们已知的组件
-        if (callExprNode.arguments.length > 0) {
-            const componentArg = callExprNode.arguments[0];
-            
-            // 检查组件参数是否为标识符
-            if (t.isIdentifier(componentArg)) {
-                const componentName = componentArg.name;
-                const componentFile = this.importedComponents.get(componentName);
+    private isCallInTestWithExpect(callExpr: CallExpression, testBlocksWithExpect: Set<CallExpression>): boolean {
+        let currentNode: Node | undefined = callExpr;
+        
+        while (currentNode) {
+            if (Node.isCallExpression(currentNode)) {
+                const expression = currentNode.getExpression();
                 
-                if (componentFile) {
-                    // 只要函数调用的第一个参数是组件，我们就认为这是一个组件创建函数
-                    // 这样可以捕获 createVNode, h, jsx, _createVNode 等任意名称的函数
-                    
-                    if (!this.result[componentFile]) {
-                        this.result[componentFile] = {};
+                if (Node.isIdentifier(expression)) {
+                    const name = expression.getText();
+                    if (name === 'it' || name === 'test') {
+                        return testBlocksWithExpect.has(currentNode);
                     }
+                }
+            }
+            
+            currentNode = currentNode.getParent();
+        }
+        
+        return false;
+    }
+    
+    private analyzeComponentCreationNode(callExpr: CallExpression) {
+        const args = callExpr.getArguments();
+        if (args.length === 0) return;
+        
+        const componentArg = args[0];
+        
+        // Check if the first argument is a component identifier
+        if (Node.isIdentifier(componentArg)) {
+            const componentName = componentArg.getText();
+            const componentFile = this.importedComponents.get(componentName);
+            
+            if (componentFile) {
+                // Initialize component in result if not exists
+                if (!this.result[componentFile]) {
+                    this.result[componentFile] = {};
+                }
+                
+                // Initialize arrays if they don't exist
+                this.result[componentFile].props = this.result[componentFile].props || [];
+                this.result[componentFile].emits = this.result[componentFile].emits || [];
+                this.result[componentFile].slots = this.result[componentFile].slots || [];
+                
+                // Check for props object (second argument)
+                if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
+                    const propsObject = args[1];
                     
-                    // 初始化组件对象的各个属性
-                    this.result[componentFile].props = this.result[componentFile].props || [];
-                    this.result[componentFile].emits = this.result[componentFile].emits || [];
-                    this.result[componentFile].slots = this.result[componentFile].slots || [];
-                    
-                    // 检查是否有属性对象（第二个参数）
-                    if (callExprNode.arguments.length > 1 && t.isObjectExpression(callExprNode.arguments[1])) {
-                        const propsObject = callExprNode.arguments[1];
-                        
-                        // 提取属性和事件
-                        propsObject.properties.forEach(prop => {
-                            if (t.isObjectProperty(prop) && (t.isIdentifier(prop.key) || t.isStringLiteral(prop.key))) {
-                                let propName = '';
-                                
-                                if (t.isIdentifier(prop.key)) {
-                                    propName = prop.key.name;
-                                } else if (t.isStringLiteral(prop.key)) {
-                                    propName = prop.key.value;
+                    // Extract props and events
+                    for (const prop of propsObject.getProperties()) {
+                        if (Node.isPropertyAssignment(prop)) {
+                            let propName: string;
+                            
+                            // Handle both identifier and string literal property names
+                            const propNameNode = prop.getNameNode();
+                            if (Node.isIdentifier(propNameNode)) {
+                                propName = propNameNode.getText();
+                            } else if (Node.isStringLiteral(propNameNode)) {
+                                propName = propNameNode.getLiteralValue();
+                            } else {
+                                propName = prop.getName();
+                            }
+                            
+                            // Handle event handlers (onClick, onChange, etc.)
+                            if (propName.startsWith('on') && propName.length > 2) {
+                                if (!this.result[componentFile].emits!.includes(propName)) {
+                                    this.result[componentFile].emits!.push(propName);
                                 }
-                                
-                                // 处理事件处理器 (onClick, onChange, etc.)
-                                if (propName.startsWith('on') && propName.length > 2) {
-                                    this.result[componentFile].emits = [...new Set([...this.result[componentFile].emits!, propName])];
-                                } else {
-                                    // 普通属性
-                                    this.result[componentFile].props = [...new Set([...this.result[componentFile].props!, propName])];
+                            } else {
+                                // Regular props
+                                if (!this.result[componentFile].props!.includes(propName)) {
+                                    this.result[componentFile].props!.push(propName);
                                 }
                             }
-                        });
+                        }
                     }
+                }
+                
+                // Check for slots object (third argument)
+                if (args.length > 2 && Node.isObjectLiteralExpression(args[2])) {
+                    const slotsObject = args[2];
                     
-                    // 检查是否有插槽对象（第三个参数）
-                    if (callExprNode.arguments.length > 2 && t.isObjectExpression(callExprNode.arguments[2])) {
-                        const slotsObject = callExprNode.arguments[2];
-                        
-                        // 提取插槽名称
-                        slotsObject.properties.forEach(prop => {
-                            if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                                const slotName = prop.key.name;
-                                this.result[componentFile].slots = [...new Set([...this.result[componentFile].slots!, slotName])];
+                    // Extract slot names
+                    for (const prop of slotsObject.getProperties()) {
+                        if (Node.isPropertyAssignment(prop)) {
+                            const slotName = prop.getName();
+                            if (!this.result[componentFile].slots!.includes(slotName)) {
+                                this.result[componentFile].slots!.push(slotName);
                             }
-                        });
+                        }
                     }
                 }
             }
         }
     }
 
-    private extractProps(options: t.ObjectExpression, component: TestUnit) {
-        const propsProperty = options.properties.find(
-            prop => t.isObjectProperty(prop) && 
-                   t.isIdentifier(prop.key) && 
-                   prop.key.name === 'props'
-        );
-
-        if (propsProperty && t.isObjectProperty(propsProperty) && t.isObjectExpression(propsProperty.value)) {
-            const props = propsProperty.value.properties.map(prop => {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                    return prop.key.name;
-                }
-                return null;
-            }).filter(Boolean) as string[];
-
-            component.props = component.props || [];
-            component.props = [...new Set([...component.props, ...props])];
-        }
-    }
-
-    private extractEmits(options: t.ObjectExpression, component: TestUnit) {
-        const propsProperty = options.properties.find(
-            prop => t.isObjectProperty(prop) && 
-                   t.isIdentifier(prop.key) && 
-                   prop.key.name === 'props'
-        );
-
-        if (propsProperty && t.isObjectProperty(propsProperty) && t.isObjectExpression(propsProperty.value)) {
-            // 检查 props 中是否有 onClick 等事件处理器
-            const emitProps = propsProperty.value.properties
-                .filter(prop => t.isObjectProperty(prop) && (t.isIdentifier(prop.key) || t.isStringLiteral(prop.key)))
-                .map(prop => {
-                    const key = (prop as t.ObjectProperty).key;
-                    
-                    if (t.isIdentifier(key) && key.name.startsWith('on') && key.name.length > 2) {
-                        return key.name
-                    } else if (t.isStringLiteral(key) && key.value.startsWith('on')) {
-                        return key.value
-                    }
-                    
-                    return null;
-                })
-                .filter(Boolean) as string[];
-
-            if (emitProps.length > 0) {
-                component.emits = component.emits || [];
-                component.emits = [...new Set([...component.emits, ...emitProps])];
+    private extractProps(options: ObjectLiteralExpression, component: TestUnit) {
+        const propsProperty = options.getProperty('props');
+        
+        if (propsProperty && Node.isPropertyAssignment(propsProperty)) {
+            const initializer = propsProperty.getInitializer();
+            
+            if (initializer && Node.isObjectLiteralExpression(initializer)) {
+                const props = initializer.getProperties()
+                    .filter(Node.isPropertyAssignment)
+                    .map(prop => {
+                        // 处理字符串属性名
+                        const propNameNode = prop.getNameNode();
+                        let propName: string;
+                        
+                        if (Node.isStringLiteral(propNameNode)) {
+                            // 对于字符串字面量属性名，使用其值
+                            propName = propNameNode.getLiteralValue();
+                        } else {
+                            propName = prop.getName();
+                        }
+                        
+                        // 排除以on开头的事件处理器prop，它们应该被当作emit处理
+                        return propName.startsWith('on') && propName.length > 2 ? null : propName;
+                    })
+                    .filter(Boolean) as string[]; // 过滤掉null值
+                
+                component.props = component.props || [];
+                component.props = [...new Set([...component.props, ...props])];
             }
         }
     }
 
-    private extractSlots(options: t.ObjectExpression, component: TestUnit) {
-        const slotsProperty = options.properties.find(
-            prop => t.isObjectProperty(prop) && 
-                   t.isIdentifier(prop.key) && 
-                   prop.key.name === 'slots'
-        );
-
-        if (slotsProperty && t.isObjectProperty(slotsProperty) && t.isObjectExpression(slotsProperty.value)) {
-            const slots = slotsProperty.value.properties.map(prop => {
-                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                    return prop.key.name;
+    private extractEmits(options: ObjectLiteralExpression, component: TestUnit) {
+        const propsProperty = options.getProperty('props');
+        
+        if (propsProperty && Node.isPropertyAssignment(propsProperty)) {
+            const initializer = propsProperty.getInitializer();
+            
+            if (initializer && Node.isObjectLiteralExpression(initializer)) {
+                const emitProps: string[] = [];
+                
+                for (const prop of initializer.getProperties()) {
+                    if (Node.isPropertyAssignment(prop)) {
+                        // Handle both regular property names and string literals
+                        const propNameNode = prop.getNameNode();
+                        let propName: string;
+                        
+                        if (Node.isStringLiteral(propNameNode)) {
+                            // For string literal property names like 'onUpdate:modelValue'
+                            propName = propNameNode.getLiteralValue();
+                        } else {
+                            propName = prop.getName();
+                        }
+                        
+                        if (propName.startsWith('on') && propName.length > 2) {
+                            emitProps.push(propName);
+                        }
+                    }
                 }
-                return null;
-            }).filter(Boolean) as string[];
+                
+                if (emitProps.length > 0) {
+                    component.emits = component.emits || [];
+                    component.emits = [...new Set([...component.emits, ...emitProps])];
+                }
+            }
+        }
+    }
 
-            if (slots.length > 0) {
-                component.slots = component.slots || [];
-                component.slots = [...new Set([...component.slots, ...slots])];
+    private extractSlots(options: ObjectLiteralExpression, component: TestUnit) {
+        const slotsProperty = options.getProperty('slots');
+        
+        if (slotsProperty && Node.isPropertyAssignment(slotsProperty)) {
+            const initializer = slotsProperty.getInitializer();
+            
+            if (initializer && Node.isObjectLiteralExpression(initializer)) {
+                const slots = initializer.getProperties()
+                    .filter(Node.isPropertyAssignment)
+                    .map(prop => prop.getName());
+                
+                if (slots.length > 0) {
+                    component.slots = component.slots || [];
+                    component.slots = [...new Set([...component.slots, ...slots])];
+                }
             }
         }
     }
 }
 
 export function analyzeTestUnits(code: string, vitenode?: ViteDevServer) {
-    const ast = parser.parse(code, {
-        sourceType: 'module',
-        plugins: ['typescript', 'jsx'], // 测试文件也可能用 TSX
-        errorRecovery: true, // 增加容错性，避免因单个测试文件解析失败中断
-    });
+    const filePath = `temp-test-units-${Date.now()}.ts`;
     
-    // 分析测试用例
-    const analyzer = new TestUnitAnalyzer(ast, vitenode);
+    // Create the analyzer
+    const analyzer = new TestUnitAnalyzer(filePath, code, vitenode);
     const result = analyzer.analyze();
     
-    // 确保所有导入的组件都有一个条目
+    // Ensure all imported components have an entry
     analyzer.getImportedComponents().forEach((path) => {
         if (!result[path]) {
             result[path] = { props: [], emits: [], slots: [] };
@@ -377,3 +439,5 @@ export function analyzeTestUnits(code: string, vitenode?: ViteDevServer) {
     
     return result;
 }
+
+export default TestUnitAnalyzer;
