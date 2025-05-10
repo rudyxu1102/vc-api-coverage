@@ -75,13 +75,13 @@ export default class VcCoverageReporter implements Reporter {
       const code = (module?.transformResult?.map as SourceMap).sourcesContent[0] || '';
         
       // 分析组件API
-      const props = new PropsAnalyzer(path, code).analyze();  // 传入文件路径
-      const emits = new EmitsAnalyzer(path, code).analyze().map(e => toEventName(e))
+      const props = new PropsAnalyzer(path, code).analyze();
+      const emits = new EmitsAnalyzer(path, code).analyze()
       const slots = new SlotsAnalyzer(path, code).analyze();
       const exposes = new ExposeAnalyzer(path, code).analyze()
       this.compData[path] = {
         props,
-        emits,
+        emits: emits.map(e => toEventName(e)),
         slots,
         exposes
       }
@@ -92,7 +92,6 @@ export default class VcCoverageReporter implements Reporter {
   dealPropsEmits(compData: VcData, unitData: VcData) {
     const propsDetails = []
     const emitsDetails = []
-    console.log(compData, unitData)
     for (const emit of unitData.emits) {
       if (compData.props.includes(emit)) {
         propsDetails.push(emit)
@@ -105,8 +104,6 @@ export default class VcCoverageReporter implements Reporter {
         propsDetails.push(prop)
       }
     }
-    console.log('--------------------------------')
-    console.log(propsDetails, emitsDetails)
     return { propsDetails, emitsDetails }
   }
 
