@@ -26,10 +26,48 @@ class SlotsAnalyzer extends BaseAnalyzer {
    * 执行分析
    */
   protected performAnalysis(): void {
+    // 分析defineSlots语法
+    this.analyzeDefineSlots();
     
     // 然后从 JavaScript/TypeScript 中分析插槽
     this.analyzeScriptSlots();
+  }
 
+  /**
+   * 分析defineSlots语法
+   */
+  private analyzeDefineSlots(): void {
+    // 查找defineSlots调用
+    const callExpressions = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
+      .filter(call => {
+        const expression = call.getExpression();
+        return expression.getKind() === SyntaxKind.Identifier && 
+               expression.getText() === 'defineSlots';
+      });
+    
+    for (const call of callExpressions) {
+      // 检查泛型参数
+      const typeArgs = call.getTypeArguments();
+      if (typeArgs.length > 0) {
+        const firstArg = typeArgs[0];
+        
+        // 检查类型参数是否为对象类型字面量
+        if (firstArg.getKind() === SyntaxKind.TypeLiteral) {
+          const typeLiteral = firstArg as TypeLiteralNode;
+          const members = typeLiteral.getMembers();
+          
+          for (const member of members) {
+            if (member.getKind() === SyntaxKind.PropertySignature) {
+              const propSig = member as PropertySignature;
+              const slotName = propSig.getName();
+              if (slotName) {
+                this.resultSet.add(slotName);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   /**

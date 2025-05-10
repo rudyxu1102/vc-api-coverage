@@ -45,74 +45,74 @@ describe('slots-analyzer', () => {
     expect(slots).toEqual(['item', 'footer'])
   })
 
-  // it('should return empty array for component without slots', () => {
-  //   const code = `
-  //     <template>
-  //       <div>No slots here</div>
-  //     </template>
-  //   `
-  //   const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
-  //   expect(slots).toEqual([])
-  // })
+  it('should return empty array for component without slots', () => {
+    const code = `
+      <template>
+        <div>No slots here</div>
+      </template>
+    `
+    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
+    expect(slots).toEqual([])
+  })
 
-  // it('should analyze slots defined with SlotsType syntax', () => {
-  //   const code = `
-  //     import { SlotsType, VNode } from 'vue';
+  it('should analyze slots defined with SlotsType syntax', () => {
+    const code = `
+      import { SlotsType, VNode } from 'vue';
       
-  //     export default defineComponent({
-  //       slots: Object as SlotsType<{
-  //         default?: () => VNode[];
-  //         icon?: () => VNode[];
-  //       }>,
-  //       render() {
-  //         return h('div', this.$slots.default?.())
-  //       }
-  //     })
-  //   `
-  //   const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
-  //   expect(slots).toEqual(['default', 'icon'])
-  // })
+      export default defineComponent({
+        slots: Object as SlotsType<{
+          default?: () => VNode[];
+          icon?: () => VNode[];
+        }>,
+        render() {
+          return h('div', this.$slots.default?.())
+        }
+      })
+    `
+    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
+    expect(slots).toEqual(['default', 'icon'])
+  })
 
   
-  // it('should handle multiple slots imports', () => {
-  //   // 修改为两个单独的导入，不使用spread运算符
-  //   const mockPropsFileContent = `
-  //     import { SlotsType, VNode } from 'vue';
+  it('should handle multiple slots imports', () => {
+    // 修改为两个单独的导入，不使用spread运算符
+    const mockPropsFileContent = `
+      import { SlotsType, VNode } from 'vue';
       
-  //     export const cardSlots = Object as SlotsType<{
-  //       header?: () => VNode[];
-  //       footer?: () => VNode[];
-  //       default?: () => VNode[];
-  //     }>
-  //   `
+      export const cardSlots = Object as SlotsType<{
+        header?: () => VNode[];
+        footer?: () => VNode[];
+        default?: () => VNode[];
+      }>
+    `
     
-  //   vi.mocked(fs.existsSync).mockReturnValue(true)
-  //   vi.mocked(fs.readFileSync).mockReturnValue(mockPropsFileContent)
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue(mockPropsFileContent)
     
-  //   const code = `
-  //     import { cardSlots } from './props'
+    const code = `
+      import { cardSlots } from './props'
       
-  //     export default defineComponent({
-  //       name: 'MyCard',
-  //       slots: cardSlots,
-  //       render() {
-  //         return h('div', [
-  //           this.$slots.header?.(),
-  //           this.$slots.default?.(),
-  //           this.$slots.footer?.()
-  //         ])
-  //       }
-  //     })
-  //   `
+      export default defineComponent({
+        name: 'MyCard',
+        slots: cardSlots,
+        render() {
+          return h('div', [
+            this.$slots.header?.(),
+            this.$slots.default?.(),
+            this.$slots.footer?.()
+          ])
+        }
+      })
+    `
     
-  //   const filePath = '/fake/component/Card.tsx'
-  //   const slots = new SlotsAnalyzer(filePath, code).analyze()
+    const filePath = '/fake/component/Card.tsx'
+    const slots = new SlotsAnalyzer(filePath, code).analyze()
     
-  //   // 需要验证结果包含所有插槽
-  //   expect(slots).toContain('header')
-  //   expect(slots).toContain('footer')
-  //   expect(slots).toContain('default')
-  //   expect(slots.length).toBe(3) // header, footer, default
-  // })
+    // 需要验证结果包含所有插槽
+    expect(slots).toContain('header')
+    expect(slots).toContain('footer')
+    expect(slots).toContain('default')
+    expect(slots.length).toBe(3) // header, footer, default
+  })
 
 }) 
