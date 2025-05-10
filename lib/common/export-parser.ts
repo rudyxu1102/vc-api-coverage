@@ -1,11 +1,4 @@
-import { parse } from '@babel/parser'
-import traverse from '@babel/traverse'
-import type {
-    ExportNamedDeclaration,
-    ImportDeclaration,
-    Identifier,
-    ExportSpecifier
-} from '@babel/types'
+import { Project } from 'ts-morph'
 
 // 返回值类型更新为包含来源信息
 export interface ExportResolution {
@@ -15,66 +8,77 @@ export interface ExportResolution {
     type: 'external' | 'local-declaration' | 'local-reference' | 'default';
 }
 
-export function resolveExportedPathBabel(
+export function resolveExportedPath(
     sourceCode: string,
     exportName: string
 ): string | null {
-
-    const ast = parse(sourceCode, {
-        sourceType: 'module',
-        plugins: ['typescript', 'jsx'],
-    })
-
-    const importMap = new Map<string, string>() // localName -> source
+    // Create a project and add source file from string
+    const project = new Project()
+    const sourceFile = project.createSourceFile('temp.ts', sourceCode)
 
     let foundPath: string | null = null
 
-    traverse(ast, {
-        ImportDeclaration(path) {
-            const node = path.node as ImportDeclaration
-            const source = node.source.value
-            for (const specifier of node.specifiers) {
-                if (specifier.type === 'ImportSpecifier') {
-                    importMap.set(specifier.local.name, source)
-                } else if (specifier.type === 'ImportDefaultSpecifier') {
-                    importMap.set(specifier.local.name, source)
-                } else if (specifier.type === 'ImportNamespaceSpecifier') {
-                    importMap.set(specifier.local.name, source)
+    // Create a map to track imports
+    const importMap = new Map<string, string>() // localName -> source
+
+    // Process all import declarations
+    sourceFile.getImportDeclarations().forEach(importDecl => {
+        const source = importDecl.getModuleSpecifierValue()
+        
+        // Handle named imports
+        importDecl.getNamedImports().forEach(namedImport => {
+            importMap.set(namedImport.getName(), source)
+        })
+        
+        // Handle default imports
+        const defaultImport = importDecl.getDefaultImport()
+        if (defaultImport) {
+            importMap.set(defaultImport.getText(), source)
+        }
+        
+        // Handle namespace imports
+        const namespaceImport = importDecl.getNamespaceImport()
+        if (namespaceImport) {
+            importMap.set(namespaceImport.getText(), source)
+        }
+    })
+
+    // Process all export declarations
+    sourceFile.getExportDeclarations().forEach(exportDecl => {
+        const moduleSpecifier = exportDecl.getModuleSpecifier()
+        
+        // ✅ 方式一： export { Button } from './Button'
+        if (moduleSpecifier) {
+            const namedExports = exportDecl.getNamedExports()
+            for (const namedExport of namedExports) {
+                const name = namedExport.getName()
+                const aliasNode = namedExport.getAliasNode()
+                const exportedName = aliasNode ? aliasNode.getText() : name
+                
+                if (exportedName === exportName) {
+                    foundPath = moduleSpecifier.getLiteralValue()
+                    return
                 }
             }
-        },
-
-        ExportNamedDeclaration(path) {
-            const node = path.node as ExportNamedDeclaration
-
-            // ✅ 方式一： export { Button } from './Button'
-            if (node.source && node.specifiers.length > 0) {
-                const match = node.specifiers.find(s => (s.exported as Identifier).name === exportName)
-                if (match) {
-                    foundPath = node.source.value
-                    path.stop()
-                }
-            }
-
-            // ✅ 方式二：先 import Button，再 export { Button }
-            if (!node.source && node.specifiers.length > 0) {
-                const match = node.specifiers.find(s => (s.exported as Identifier).name === exportName)
-                if (match) {
-                    const localName = (match as ExportSpecifier).local.name
-                    const importSource = importMap.get(localName)
+        } 
+        // ✅ 方式二：先 import Button，再 export { Button }
+        else {
+            const namedExports = exportDecl.getNamedExports()
+            for (const namedExport of namedExports) {
+                const name = namedExport.getName()
+                const aliasNode = namedExport.getAliasNode()
+                const exportedName = aliasNode ? aliasNode.getText() : name
+                
+                if (exportedName === exportName) {
+                    const importSource = importMap.get(name)
                     if (importSource) {
                         foundPath = importSource
-                        path.stop()
+                        return
                     }
                 }
             }
-        },
+        }
     })
-
-    if (!foundPath) {
-        return null
-    }
-
 
     return foundPath;
 }

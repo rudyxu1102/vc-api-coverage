@@ -1,6 +1,6 @@
 import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression } from 'ts-morph';
 import type { ViteDevServer } from 'vite';
-import { resolveExportedPathBabel } from '../common/export-parser';
+import { resolveExportedPath } from '../common/export-parser';
 
 interface TestUnit {
     props?: string[];
@@ -82,7 +82,7 @@ class TestUnitAnalyzer {
                     
                     // If we have code, try to resolve the exported path
                     if (code) {
-                        const exportedPath = resolveExportedPathBabel(code, localName);
+                        const exportedPath = resolveExportedPath(code, localName);
                         if (exportedPath) {
                             this.importedComponents.set(localName, exportedPath);
                         }

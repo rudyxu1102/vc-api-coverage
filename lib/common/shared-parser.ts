@@ -1,11 +1,6 @@
-import { parse } from '@babel/parser';
-import type { ParseResult, ParserOptions } from '@babel/parser';
-import type { File } from '@babel/types';
-
 export interface ParsedContent {
   scriptContent: string;
   templateContent: string;
-  ast: ParseResult<File>;
 }
 
 export function extractTemplateContent(code: string): string {
@@ -28,31 +23,12 @@ export function extractScriptContent(code: string): string {
   return scriptContent;
 }
 
-const defaultParserOptions: ParserOptions = {
-  sourceType: 'module',
-  plugins: [
-    'typescript',
-    'jsx',
-    'decorators-legacy',
-    'classProperties',
-    'classPrivateProperties',
-    'classPrivateMethods',
-    'exportDefaultFrom',
-    'exportNamespaceFrom',
-    'objectRestSpread',
-    'optionalChaining',
-    'nullishCoalescingOperator'
-  ]
-};
-
 export function parseComponent(code: string): ParsedContent {
   const templateContent = extractTemplateContent(code);
   const scriptContent = extractScriptContent(code);
-  const ast = parse(scriptContent, defaultParserOptions);
 
   return {
     scriptContent,
     templateContent,
-    ast
   };
 } 
