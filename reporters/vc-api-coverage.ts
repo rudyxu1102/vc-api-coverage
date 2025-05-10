@@ -79,7 +79,6 @@ export default class VcCoverageReporter implements Reporter {
       // 分析组件API
       const props = new PropsAnalyzer(path, code).analyze();  // 传入文件路径
       const emits = new EmitsAnalyzer(path, code).analyze().map(e => toEventName(e))
-      console.log(emits, 111)
       const slots = analyzeSlots(code, parsedContent, path);
       const exposes = analyzeExpose(code, parsedContent.ast, path)
       this.compData[path] = {

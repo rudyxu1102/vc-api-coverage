@@ -1,55 +1,35 @@
-import { Project, SyntaxKind, Node, ts, SourceFile, TypeLiteralNode, PropertySignature, ArrayLiteralExpression } from 'ts-morph';
+import { SyntaxKind, Node, TypeLiteralNode, PropertySignature } from 'ts-morph';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logDebug, logError } from '../common/utils';
-import { parseComponent } from '../common/shared-parser';
+import { BaseAnalyzer } from './base-analyzer';
 
 const moduleName = 'props-analyzer-morph';
 
 /**
  * Props 分析器类，使用ts-morph处理TypeScript AST
  */
-class PropsAnalyzer {
-  private propsSet: Set<string> = new Set<string>();
-  private sourceFile: SourceFile;
-  private project: Project;
-  private filePath: string;
-
+class PropsAnalyzer extends BaseAnalyzer {
   constructor(filePath: string, code: string) {
-    this.filePath = filePath;
-    this.project = new Project({
-      compilerOptions: {
-        jsx: ts.JsxEmit.React,
-        jsxFactory: 'h',
-        target: ts.ScriptTarget.ESNext,
-      },
-    });
-    // 解析代码，处理Vue SFC文件
-    const sourceCode = this.getSourceCode(code);
-    // 读取文件并添加到项目中
-    this.sourceFile = this.project.createSourceFile(filePath, sourceCode, { overwrite: true });
+    super(filePath, code);
   }
 
   /**
-   * 解析源代码，处理Vue SFC文件
+   * 执行Props分析
    */
-  private getSourceCode(code: string): string {
-    // 解析Vue单文件组件，提取script部分
-    const parsed = parseComponent(code);
-    return parsed.scriptContent || code;
-  }
-
-  /**
-   * 分析并返回组件的 props
-   */
-  analyze(): string[] {
+  protected performAnalysis(): void {
     // 分析defineProps调用
     this.analyzeDefineProps();
     
     // 分析props属性
     this.analyzePropsProperty();
-    
-    return Array.from(this.propsSet);
+  }
+
+  /**
+   * 返回模块名称
+   */
+  protected getModuleName(): string {
+    return moduleName;
   }
 
   /**
@@ -79,7 +59,7 @@ class PropsAnalyzer {
               const propSig = prop as PropertySignature;
               const propName = propSig.getName();
               if (propName) {
-                this.propsSet.add(propName);
+                this.resultSet.add(propName);
               }
             }
           }
@@ -124,14 +104,9 @@ class PropsAnalyzer {
       
       // 数组形式: props: ['prop1', 'prop2']
       if (initializer.getKind() === SyntaxKind.ArrayLiteralExpression) {
-        const arrayLiteral = initializer as ArrayLiteralExpression;
-        const elements = arrayLiteral.getElements();
-        
-        for (const element of elements) {
-          if (element.getKind() === SyntaxKind.StringLiteral) {
-            const propName = element.getText().replace(/['"]/g, '');
-            this.propsSet.add(propName);
-          }
+        const arrayLiteral = initializer.asKind(SyntaxKind.ArrayLiteralExpression);
+        if (arrayLiteral) {
+          this.processArrayLiteral(arrayLiteral);
         }
       }
       // 对象形式: props: { prop1: {...}, prop2: {...} }
@@ -157,254 +132,9 @@ class PropsAnalyzer {
   }
 
   /**
-   * 处理对象字面量 { prop1: ..., prop2: ... }
-   */
-  private processObjectLiteral(node: Node): void {
-    if (node.getKind() !== SyntaxKind.ObjectLiteralExpression) return;
-    
-    // 处理常规属性
-    const properties = node.getChildrenOfKind(SyntaxKind.PropertyAssignment);
-    for (const prop of properties) {
-      const propName = prop.getName();
-      this.propsSet.add(propName);
-    }
-    
-    // 处理展开操作符
-    const spreadElements = node.getChildrenOfKind(SyntaxKind.SpreadAssignment);
-    for (const spread of spreadElements) {
-      const expression = spread.getExpression();
-      
-      if (expression.getKind() === SyntaxKind.Identifier) {
-        const spreadName = expression.getText();
-        this.resolveIdentifierReference(spreadName);
-      }
-    }
-  }
-
-  /**
-   * 解析标识符引用，追踪其定义
-   */
-  private resolveIdentifierReference(identifierName: string): void {
-    logDebug(moduleName, `Resolving identifier reference: ${identifierName}`);
-    
-    // 查找局部变量定义
-    const variableDeclarations = this.sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
-      .filter(decl => decl.getName() === identifierName);
-    
-    if (variableDeclarations.length > 0) {
-      for (const decl of variableDeclarations) {
-        const initializer = decl.getInitializer();
-        if (initializer && initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-          this.processObjectLiteral(initializer);
-          return;
-        }
-      }
-    }
-    
-    // 查找导入声明
-    const importedDecl = this.findImportDeclaration(identifierName);
-    if (importedDecl) {
-      const { moduleSpecifier, importName } = importedDecl;
-      this.resolveImportedReference(moduleSpecifier, importName);
-    }
-  }
-
-  /**
-   * 查找导入声明
-   */
-  private findImportDeclaration(name: string): { moduleSpecifier: string; importName: string } | null {
-    const importDeclarations = this.sourceFile.getImportDeclarations();
-    
-    for (const importDecl of importDeclarations) {
-      // 查找命名导入
-      const namedImports = importDecl.getNamedImports();
-      for (const namedImport of namedImports) {
-        const importName = namedImport.getName();
-        const alias = namedImport.getAliasNode()?.getText() || importName;
-        
-        if (alias === name) {
-          return {
-            moduleSpecifier: importDecl.getModuleSpecifierValue(),
-            importName
-          };
-        }
-      }
-      
-      // 查找默认导入
-      const defaultImport = importDecl.getDefaultImport();
-      if (defaultImport && defaultImport.getText() === name) {
-        return {
-          moduleSpecifier: importDecl.getModuleSpecifierValue(),
-          importName: 'default'
-        };
-      }
-      
-      // 查找命名空间导入
-      const namespaceImport = importDecl.getNamespaceImport();
-      if (namespaceImport && namespaceImport.getText() === name) {
-        return {
-          moduleSpecifier: importDecl.getModuleSpecifierValue(),
-          importName: '*'
-        };
-      }
-    }
-    
-    return null;
-  }
-
-  /**
-   * 解析导入的引用
-   */
-  private resolveImportedReference(moduleSpecifier: string, importName: string): void {
-    try {
-      logDebug(moduleName, `Resolving imported reference from: ${moduleSpecifier}, name: ${importName}`);
-      
-      // 解析导入文件路径
-      const currentDir = path.dirname(this.filePath);
-      let importFilePath = '';
-      
-      // 处理相对路径导入
-      if (moduleSpecifier.startsWith('.')) {
-        importFilePath = path.resolve(currentDir, moduleSpecifier);
-        
-        // 处理可能的扩展名
-        if (!importFilePath.endsWith('.ts') && !importFilePath.endsWith('.tsx')) {
-          const possibleExtensions = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
-          for (const ext of possibleExtensions) {
-            const testPath = `${importFilePath}${ext}`;
-            if (fs.existsSync(testPath)) {
-              importFilePath = testPath;
-              break;
-            }
-          }
-        }
-      }
-      
-      
-      // 读取和解析导入文件
-      const importFileContent = fs.readFileSync(importFilePath, 'utf-8');
-      const importSourceFile = this.project.createSourceFile(`import-${path.basename(importFilePath)}`, 
-                                                           importFileContent, 
-                                                           { overwrite: true });
-      
-      // 查找导出的标识符
-      if (importName === 'default') {
-        // 查找默认导出
-        const defaultExportAssignment = importSourceFile.getDefaultExportSymbol();
-        if (defaultExportAssignment) {
-          // 获取默认导出声明
-          const declarations = defaultExportAssignment.getDeclarations();
-          for (const decl of declarations) {
-            // 处理不同类型的默认导出
-            this.processExportDeclaration(decl);
-          }
-        }
-      } else if (importName === '*') {
-        // 处理所有命名导出
-        const exportedSymbols = importSourceFile.getExportSymbols();
-        for (const symbol of exportedSymbols) {
-          const declarations = symbol.getDeclarations();
-          for (const decl of declarations) {
-            this.processExportDeclaration(decl);
-          }
-        }
-      } else {
-        // 查找特定命名导出
-        const exportedSymbols = importSourceFile.getExportSymbols();
-        const exportedSymbol = exportedSymbols.find(symbol => symbol.getName() === importName);
-        
-        if (exportedSymbol) {
-          const declarations = exportedSymbol.getDeclarations();
-          for (const decl of declarations) {
-            this.processExportDeclaration(decl);
-          }
-        }
-        
-        // 查找变量声明并处理
-        const variableDeclarations = importSourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
-          .filter(decl => decl.getName() === importName);
-          
-        for (const varDecl of variableDeclarations) {
-          const initializer = varDecl.getInitializer();
-          if (initializer && initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-            
-            // 处理对象字面量
-            const objLiteral = initializer.asKind(SyntaxKind.ObjectLiteralExpression);
-            if (objLiteral) {
-              // 处理普通属性
-              const properties = objLiteral.getProperties();
-              for (const prop of properties) {
-                if (prop.getKind() === SyntaxKind.PropertyAssignment) {
-                  const propName = prop.asKind(SyntaxKind.PropertyAssignment)?.getName();
-                  if (propName) {
-                    this.propsSet.add(propName);
-                  }
-                }
-              }
-              
-              // 递归处理展开的属性
-              const spreadElements = objLiteral.getChildrenOfKind(SyntaxKind.SpreadAssignment);
-              for (const spread of spreadElements) {
-                const expression = spread.getExpression();
-                
-                if (expression.getKind() === SyntaxKind.Identifier) {
-                  const spreadName = expression.getText();
-                  
-                  // 创建一个临时 PropsAnalyzer 实例来分析导入文件中的展开属性
-                  const tempAnalyzer = new PropsAnalyzer(importFilePath, importFileContent);
-                  tempAnalyzer.resolveIdentifierReference(spreadName);
-                  
-                  // 合并找到的属性
-                  const foundProps = Array.from(tempAnalyzer.propsSet);
-                  for (const prop of foundProps) {
-                    this.propsSet.add(prop);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // 特别处理从测试用例中导入的类型
-      this.resolveImportedType(moduleSpecifier, importName);
-    } catch (error) {
-      logError(moduleName, `Error resolving imported reference: ${error}`);
-    }
-  }
-
-  /**
-   * 处理导出声明
-   */
-  private processExportDeclaration(node: Node): void {
-    try {
-      // 对象字面量导出
-      if (node.getKind() === SyntaxKind.ObjectLiteralExpression) {
-        this.processObjectLiteral(node);
-      }
-      // 变量声明导出
-      else if (node.getKind() === SyntaxKind.VariableDeclaration) {
-        const initializer = node.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
-        if (initializer && initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-          this.processObjectLiteral(initializer);
-        }
-      }
-      // 通过其他方式导出
-      else if (node.getKind() === SyntaxKind.ExportSpecifier) {
-        const name = node.asKind(SyntaxKind.ExportSpecifier)?.getName();
-        if (name) {
-          this.resolveTypeReference(name);
-        }
-      }
-    } catch (error) {
-      logError(moduleName, `Error processing export declaration: ${error}`);
-    }
-  }
-
-  /**
    * 解析类型引用，找出类型定义中的属性
    */
-  private resolveTypeReference(typeName: string): void {
+  protected resolveTypeReference(typeName: string): void {
     logDebug(moduleName, `Resolving type reference: ${typeName}`);
     
     // 查找类型别名
@@ -434,7 +164,7 @@ class PropsAnalyzer {
       
       for (const prop of properties) {
         if (prop) {
-          this.propsSet.add(prop.getName());
+          this.resultSet.add(prop.getName());
         }
       }
       
@@ -470,7 +200,7 @@ class PropsAnalyzer {
         if (member.getKind() === SyntaxKind.PropertySignature) {
           const propName = member.asKind(SyntaxKind.PropertySignature)?.getName();
           if (propName) {
-            this.propsSet.add(propName);
+            this.resultSet.add(propName);
           }
         }
       }
@@ -497,7 +227,7 @@ class PropsAnalyzer {
   /**
    * 解析导入的类型
    */
-  private resolveImportedType(moduleSpecifier: string, typeName: string): void {
+  protected resolveImportedType(moduleSpecifier: string, typeName: string): void {
     try {
       logDebug(moduleName, `Resolving imported type from: ${moduleSpecifier}, name: ${typeName}`);
       
@@ -552,7 +282,7 @@ class PropsAnalyzer {
         
         for (const prop of properties) {
           if (prop) {
-            this.propsSet.add(prop.getName());
+            this.resultSet.add(prop.getName());
           }
         }
         
@@ -575,7 +305,7 @@ class PropsAnalyzer {
             
             for (const prop of parentProperties) {
               if (prop) {
-                this.propsSet.add(prop.getName());
+                this.resultSet.add(prop.getName());
               }
             }
           } else {
