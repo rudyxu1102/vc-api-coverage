@@ -86,7 +86,7 @@ class SlotsAnalyzer extends BaseAnalyzer {
       // 处理标识符引用: slots: slotsIdentifier
       if (initializer.getKind() === SyntaxKind.Identifier) {
         const identifier = initializer.getText();
-        this.resolveIdentifierReference(identifier);
+        this.resolveIdentifierReference(identifier, this.sourceFile);
       }
       // 处理类型断言: slots: (...) as SlotsType<{...}>
       else if (initializer.getKind() === SyntaxKind.AsExpression) {
@@ -192,7 +192,7 @@ class SlotsAnalyzer extends BaseAnalyzer {
     }
     
     // 查找导入的类型
-    const importedTypeInfo = this.findImportDeclaration(typeName);
+    const importedTypeInfo = this.findImportDeclaration(typeName, this.sourceFile);
     if (importedTypeInfo) {
       this.resolveImportedType(importedTypeInfo.moduleSpecifier, importedTypeInfo.importName);
     }

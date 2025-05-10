@@ -62,12 +62,12 @@ class EmitsAnalyzer extends BaseAnalyzer {
         }
         // 对象字面量: defineEmits({ event1: null, event2: validator })
         else if (Node.isObjectLiteralExpression(arg)) {
-          this.processObjectLiteral(arg);
+          this.processObjectLiteral(arg, this.sourceFile);
         }
         // 标识符引用: defineEmits(emitsOptions)
         else if (Node.isIdentifier(arg)) {
           const identifier = arg.getText();
-          this.resolveIdentifierReference(identifier);
+          this.resolveIdentifierReference(identifier, this.sourceFile);
         }
       }
     }
@@ -109,12 +109,12 @@ class EmitsAnalyzer extends BaseAnalyzer {
             }
             // 对象形式: emits: { event1: null, event2: validator }
             else if (Node.isObjectLiteralExpression(initializer)) {
-              this.processObjectLiteral(initializer);
+              this.processObjectLiteral(initializer, this.sourceFile);
             }
             // 标识符引用: emits: emitsOptions
             else if (Node.isIdentifier(initializer)) {
               const identifier = initializer.getText();
-              this.resolveIdentifierReference(identifier);
+              this.resolveIdentifierReference(identifier, this.sourceFile);
             }
           }
           
@@ -210,7 +210,7 @@ class EmitsAnalyzer extends BaseAnalyzer {
     }
     
     // 查找导入的类型
-    const importedTypeInfo = this.findImportDeclaration(typeName);
+    const importedTypeInfo = this.findImportDeclaration(typeName, this.sourceFile);
     if (importedTypeInfo) {
       this.resolveImportedType(importedTypeInfo.moduleSpecifier, importedTypeInfo.importName);
     }

@@ -71,7 +71,7 @@ export abstract class BaseAnalyzer {
   /**
    * 处理对象字面量
    */
-  protected processObjectLiteral(node: Node): void {
+  protected processObjectLiteral(node: Node, sourceFile: SourceFile): void {
     if (!Node.isObjectLiteralExpression(node)) return;
     
     // 处理常规属性
@@ -100,7 +100,7 @@ export abstract class BaseAnalyzer {
       
       if (Node.isIdentifier(expression)) {
         const spreadName = expression.getText();
-        this.resolveIdentifierReference(spreadName);
+        this.resolveIdentifierReference(spreadName, sourceFile);
       } else if (Node.isArrayLiteralExpression(expression)) {
         // 处理数组展开操作符 {...array}
         this.processArrayLiteral(expression);
@@ -133,7 +133,7 @@ export abstract class BaseAnalyzer {
   /**
    * 处理可能包含展开运算符的数组表达式
    */
-  protected processArrayExpression(node: Node): void {
+  protected processArrayExpression(node: Node, sourceFile: SourceFile): void {
     // 处理普通数组
     if (Node.isArrayLiteralExpression(node)) {
       this.processArrayLiteral(node);
@@ -147,7 +147,7 @@ export abstract class BaseAnalyzer {
       
       // 排除运算符相关的标识符
       if (name !== 'baseEmits' && name !== 'baseProps' && name !== 'spread') {
-        this.resolveIdentifierReference(name);
+        this.resolveIdentifierReference(name, sourceFile);
       }
     }
 
@@ -161,11 +161,11 @@ export abstract class BaseAnalyzer {
   /**
    * 解析标识符引用，追踪其定义
    */
-  protected resolveIdentifierReference(identifierName: string): void {
+  protected resolveIdentifierReference(identifierName: string, sourceFile: SourceFile): void {
     logDebug(this.getModuleName(), `Resolving identifier reference: ${identifierName}`);
     
     // 查找局部变量定义
-    const variableDeclarations = this.sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+    const variableDeclarations = sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
       .filter(decl => decl.getName() === identifierName);
     
     if (variableDeclarations.length > 0) {
@@ -179,7 +179,7 @@ export abstract class BaseAnalyzer {
           }
           // 处理对象字面量
           else if (Node.isObjectLiteralExpression(initializer)) {
-            this.processObjectLiteral(initializer);
+            this.processObjectLiteral(initializer, sourceFile);
             return;
           }
           // 处理数组字面量表达式 - 例如 [...baseEmits, 'event1']
@@ -187,7 +187,7 @@ export abstract class BaseAnalyzer {
                   (Node.isBinaryExpression(initializer) && 
                    initializer.getOperatorToken().getText() === '...')) {
             // 数组展开操作符可能会包含在二元表达式中
-            this.processArrayExpression(initializer);
+            this.processArrayExpression(initializer, sourceFile);
             return;
           }
         }
@@ -195,7 +195,7 @@ export abstract class BaseAnalyzer {
     }
     
     // 查找导入声明
-    const importedDecl = this.findImportDeclaration(identifierName);
+    const importedDecl = this.findImportDeclaration(identifierName, sourceFile);
     if (importedDecl) {
       const { moduleSpecifier, importName } = importedDecl;
       this.resolveImportedReference(moduleSpecifier, importName);
@@ -205,8 +205,8 @@ export abstract class BaseAnalyzer {
   /**
    * 查找导入声明
    */
-  protected findImportDeclaration(name: string): { moduleSpecifier: string; importName: string } | null {
-    const importDeclarations = this.sourceFile.getImportDeclarations();
+  protected findImportDeclaration(name: string, sourceFile: SourceFile): { moduleSpecifier: string; importName: string } | null {
+    const importDeclarations = sourceFile.getImportDeclarations();
     
     for (const importDecl of importDeclarations) {
       // 查找命名导入
@@ -324,7 +324,7 @@ export abstract class BaseAnalyzer {
           const declarations = defaultExportAssignment.getDeclarations();
           for (const decl of declarations) {
             // 处理不同类型的默认导出
-            this.processExportDeclaration(decl);
+            this.processExportDeclaration(decl, importSourceFile);
           }
         }
       } else if (importName === '*') {
@@ -333,7 +333,7 @@ export abstract class BaseAnalyzer {
         for (const symbol of exportedSymbols) {
           const declarations = symbol.getDeclarations();
           for (const decl of declarations) {
-            this.processExportDeclaration(decl);
+            this.processExportDeclaration(decl, importSourceFile);
           }
         }
       } else {
@@ -344,7 +344,7 @@ export abstract class BaseAnalyzer {
         if (exportedSymbol) {
           const declarations = exportedSymbol.getDeclarations();
           for (const decl of declarations) {
-            this.processExportDeclaration(decl);
+            this.processExportDeclaration(decl,importSourceFile);
           }
         }
         
@@ -358,7 +358,7 @@ export abstract class BaseAnalyzer {
             if (initializer.getKind() === SyntaxKind.ArrayLiteralExpression) {
               this.processArrayLiteral(initializer as ArrayLiteralExpression);
             } else if (initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-              this.processObjectLiteral(initializer);
+              this.processObjectLiteral(initializer, importSourceFile);
             }
           }
         }
@@ -374,7 +374,7 @@ export abstract class BaseAnalyzer {
   /**
    * 处理导出声明
    */
-  protected processExportDeclaration(node: Node): void {
+  protected processExportDeclaration(node: Node, sourceFile: SourceFile): void {
     try {
       // 数组字面量导出
       if (Node.isArrayLiteralExpression(node)) {
@@ -382,7 +382,7 @@ export abstract class BaseAnalyzer {
       }
       // 对象字面量导出
       else if (Node.isObjectLiteralExpression(node)) {
-        this.processObjectLiteral(node);
+        this.processObjectLiteral(node, sourceFile);
       }
       // 变量声明导出
       else if (Node.isVariableDeclaration(node)) {
@@ -391,7 +391,7 @@ export abstract class BaseAnalyzer {
           if (Node.isArrayLiteralExpression(initializer)) {
             this.processArrayLiteral(initializer);
           } else if (Node.isObjectLiteralExpression(initializer)) {
-            this.processObjectLiteral(initializer);
+            this.processObjectLiteral(initializer, sourceFile);
           }
         }
       }

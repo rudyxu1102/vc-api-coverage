@@ -86,7 +86,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
         // 标识符参数: defineExpose(exposedObject)
         else if (arg.getKind() === SyntaxKind.Identifier) {
           const identifier = arg.getText();
-          this.resolveIdentifierReference(identifier);
+          this.resolveIdentifierReference(identifier, this.sourceFile);
         }
       }
     }
@@ -256,7 +256,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
           if (isOptionsExpose) {
             this.resolveIdentifierReferenceForOptionsExpose(spreadName);
           } else {
-            this.resolveIdentifierReference(spreadName);
+            this.resolveIdentifierReference(spreadName, this.sourceFile);
           }
         }
       }
@@ -374,7 +374,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
     }
     
     // 查找导入声明
-    const importedDecl = this.findImportDeclaration(identifierName);
+    const importedDecl = this.findImportDeclaration(identifierName, this.sourceFile);
     if (importedDecl) {
       const { moduleSpecifier, importName } = importedDecl;
       this.resolveImportedReferenceForOptionsExpose(moduleSpecifier, importName);
@@ -387,7 +387,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
   private resolveExpression(expression: Node): void {
     // 目前简单处理，可以根据需要扩展
     if (Node.isIdentifier(expression)) {
-      this.resolveIdentifierReference(expression.getText());
+      this.resolveIdentifierReference(expression.getText(), this.sourceFile);
     }
   }
 
@@ -563,7 +563,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
     }
     
     // 查找导入的类型
-    const importedTypeInfo = this.findImportDeclaration(typeName);
+    const importedTypeInfo = this.findImportDeclaration(typeName, this.sourceFile);
     if (importedTypeInfo) {
       this.resolveImportedType(importedTypeInfo.moduleSpecifier, importedTypeInfo.importName);
     }
@@ -671,7 +671,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
    */
   protected processArrayExpression(node: Node): void {
     // Call the parent method first
-    super.processArrayExpression(node);
+    super.processArrayExpression(node, this.sourceFile);
     
     // Then do our specific processing if it's an array literal
     if (Node.isArrayLiteralExpression(node)) {
@@ -693,7 +693,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
    */
   protected processObjectLiteral(node: Node): void {
     // Call parent method first
-    super.processObjectLiteral(node);
+    super.processObjectLiteral(node, this.sourceFile);
     
     // Then do our specific processing
     if (Node.isObjectLiteralExpression(node)) {

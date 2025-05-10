@@ -78,12 +78,12 @@ class PropsAnalyzer extends BaseAnalyzer {
         
         // 对象字面量: defineProps({ prop1: String, ... })
         if (arg.getKind() === SyntaxKind.ObjectLiteralExpression) {
-          this.processObjectLiteral(arg);
+          this.processObjectLiteral(arg, this.sourceFile);
         }
         // 标识符引用: defineProps(propsOptions)
         else if (arg.getKind() === SyntaxKind.Identifier) {
           const identifier = arg.getText();
-          this.resolveIdentifierReference(identifier);
+          this.resolveIdentifierReference(identifier, this.sourceFile);
         }
       }
     }
@@ -111,7 +111,7 @@ class PropsAnalyzer extends BaseAnalyzer {
       }
       // 对象形式: props: { prop1: {...}, prop2: {...} }
       else if (initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-        this.processObjectLiteral(initializer);
+        this.processObjectLiteral(initializer, this.sourceFile);
       }
       // 处理 AS 表达式，如 props: { ... } as const
       else if (initializer.getKind() === SyntaxKind.AsExpression) {
@@ -119,14 +119,14 @@ class PropsAnalyzer extends BaseAnalyzer {
         if (asExpression) {
           const expression = asExpression.getExpression();
           if (expression.getKind() === SyntaxKind.ObjectLiteralExpression) {
-            this.processObjectLiteral(expression);
+            this.processObjectLiteral(expression, this.sourceFile);
           }
         }
       }
       // 标识符引用: props: PropsOptions
       else if (initializer.getKind() === SyntaxKind.Identifier) {
         const identifier = initializer.getText();
-        this.resolveIdentifierReference(identifier);
+        this.resolveIdentifierReference(identifier, this.sourceFile);
       }
     }
   }
@@ -183,7 +183,7 @@ class PropsAnalyzer extends BaseAnalyzer {
     }
     
     // 查找导入的类型
-    const importedTypeInfo = this.findImportDeclaration(typeName);
+    const importedTypeInfo = this.findImportDeclaration(typeName, this.sourceFile);
     if (importedTypeInfo) {
       this.resolveImportedType(importedTypeInfo.moduleSpecifier, importedTypeInfo.importName);
     }
@@ -310,7 +310,7 @@ class PropsAnalyzer extends BaseAnalyzer {
             }
           } else {
             // 处理跨文件的接口继承
-            const importedParentTypeInfo = this.findImportDeclaration(extendTypeName);
+            const importedParentTypeInfo = this.findImportDeclaration(extendTypeName, this.sourceFile);
             if (importedParentTypeInfo) {
               this.resolveImportedType(importedParentTypeInfo.moduleSpecifier, importedParentTypeInfo.importName);
             }
@@ -328,7 +328,7 @@ class PropsAnalyzer extends BaseAnalyzer {
           if (decl.getKind() === SyntaxKind.VariableDeclaration) {
             const initializer = decl.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
             if (initializer && initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
-              this.processObjectLiteral(initializer);
+              this.processObjectLiteral(initializer, this.sourceFile);
             }
           }
         }
