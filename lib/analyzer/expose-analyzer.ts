@@ -9,9 +9,7 @@ const moduleName = 'expose-analyzer-morph';
  */
 class ExposeAnalyzer extends BaseAnalyzer {
   private exposed: Set<string> = new Set<string>();
-  private exposeOrder: string[] = [];
   private optionsExpose: Set<string> = new Set<string>();
-  private optionsExposeOrder: string[] = [];
   private hasExplicitExpose: boolean = false;
   private hasOptionsExpose: boolean = false;
 
@@ -239,15 +237,15 @@ class ExposeAnalyzer extends BaseAnalyzer {
     for (const prop of properties) {
       if (Node.isPropertyAssignment(prop)) {
         const propName = prop.getName();
-        this.addExposedProperty(propName, isOptionsExpose);
+        this.addExposedProperty(propName);
       }
       else if (Node.isShorthandPropertyAssignment(prop)) {
         const propName = prop.getName();
-        this.addExposedProperty(propName, isOptionsExpose);
+        this.addExposedProperty(propName);
       }
       else if (Node.isMethodDeclaration(prop)) {
         const methodName = prop.getName();
-        this.addExposedProperty(methodName, isOptionsExpose);
+        this.addExposedProperty(methodName);
       }
       else if (Node.isSpreadAssignment(prop)) {
         const expression = prop.getExpression();
@@ -275,12 +273,12 @@ class ExposeAnalyzer extends BaseAnalyzer {
       // 字符串字面量
       if (Node.isStringLiteral(element)) {
         const propName = element.getLiteralValue();
-        this.addExposedProperty(propName, isOptionsExpose);
+        this.addExposedProperty(propName);
       }
       // 标识符
       else if (Node.isIdentifier(element)) {
         const propName = element.getText();
-        this.addExposedProperty(propName, isOptionsExpose);
+        this.addExposedProperty(propName);
       }
       // 其他类型的表达式
       else if (isOptionsExpose) {
@@ -304,12 +302,12 @@ class ExposeAnalyzer extends BaseAnalyzer {
         if (member.getKind() === SyntaxKind.PropertySignature) {
           const propSig = member as PropertySignature;
           const propName = propSig.getName();
-          this.addExposedProperty(propName, false);
+          this.addExposedProperty(propName);
         }
         else if (member.getKind() === SyntaxKind.MethodSignature) {
           const methodName = member.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
           if (methodName) {
-            this.addExposedProperty(methodName, false);
+            this.addExposedProperty(methodName);
           }
         }
       }
@@ -496,20 +494,10 @@ class ExposeAnalyzer extends BaseAnalyzer {
   /**
    * 添加暴露的属性
    */
-  private addExposedProperty(propName: string, isOptionsExpose: boolean): void {
+  private addExposedProperty(propName: string): void {
     if (!propName) return;
     
-    if (isOptionsExpose) {
-      if (!this.optionsExpose.has(propName)) {
-        this.optionsExpose.add(propName);
-        this.optionsExposeOrder.push(propName);
-      }
-    } else {
-      if (!this.exposed.has(propName)) {
-        this.exposed.add(propName);
-        this.exposeOrder.push(propName);
-      }
-    }
+    this.resultSet.add(propName);
   }
   
   /**
@@ -545,7 +533,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
       
       for (const prop of properties) {
         if (prop) {
-          this.addExposedProperty(prop.getName(), false);
+          this.addExposedProperty(prop.getName());
         }
       }
       
@@ -556,7 +544,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
       for (const method of methods) {
         const methodName = method.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
         if (methodName) {
-          this.addExposedProperty(methodName, false);
+          this.addExposedProperty(methodName);
         }
       }
       
@@ -619,7 +607,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
         
         for (const prop of properties) {
           if (prop) {
-            this.addExposedProperty(prop.getName(), false);
+            this.addExposedProperty(prop.getName());
           }
         }
         
@@ -630,7 +618,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
         for (const method of methods) {
           const methodName = method.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
           if (methodName) {
-            this.addExposedProperty(methodName, false);
+            this.addExposedProperty(methodName);
           }
         }
         
@@ -656,7 +644,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
             
             for (const prop of parentProperties) {
               if (prop) {
-                this.addExposedProperty(prop.getName(), false);
+                this.addExposedProperty(prop.getName());
               }
             }
             
@@ -667,7 +655,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
             for (const method of parentMethods) {
               const methodName = method.getFirstChildByKind(SyntaxKind.Identifier)?.getText();
               if (methodName) {
-                this.addExposedProperty(methodName, false);
+                this.addExposedProperty(methodName);
               }
             }
           }

@@ -9,8 +9,6 @@ const moduleName = 'slots-analyzer-morph';
  * 插槽分析器类，使用ts-morph处理TypeScript AST
  */
 class SlotsAnalyzer extends BaseAnalyzer {
-  private hasTemplateSlots: boolean = false;
-
   constructor(filePath: string, code: string) {
     super(filePath, code);
   }
