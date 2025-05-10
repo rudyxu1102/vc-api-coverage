@@ -43,6 +43,29 @@ export function resolveExportedPath(
         }
     })
 
+    // 处理 export default 情况
+    if (exportName === 'default') {
+        const defaultExportDecl = sourceFile.getDefaultExportSymbol()
+        if (defaultExportDecl) {
+            // 检查是否是导出一个导入的标识符
+            // 例如：import Component from './Component'; export default Component;
+            const declarations = defaultExportDecl.getDeclarations()
+            for (const decl of declarations) {
+                const text = decl.getText()
+                // 从 "export default Component" 提取 "Component"
+                const matches = text.match(/export\s+default\s+([A-Za-z0-9_$]+)/)
+                if (matches && matches[1]) {
+                    const referencedIdentifier = matches[1]
+                    const importSource = importMap.get(referencedIdentifier)
+                    if (importSource) {
+                        foundPath = importSource
+                        return foundPath
+                    }
+                }
+            }
+        }
+    }
+
     // Process all export declarations
     sourceFile.getExportDeclarations().forEach(exportDecl => {
         const moduleSpecifier = exportDecl.getModuleSpecifier()
@@ -79,6 +102,22 @@ export function resolveExportedPath(
             }
         }
     })
+
+    // 查找 export default xxx 语句
+    if (exportName === 'default' && !foundPath) {
+        // 使用正则表达式查找 export default xxx 语句
+        const exportDefaultRegex = /export\s+default\s+([A-Za-z0-9_$]+)/g
+        let match
+        while ((match = exportDefaultRegex.exec(sourceCode)) !== null) {
+            const exportedValue = match[1]
+            // 检查导出的是否是导入的组件
+            const importSource = importMap.get(exportedValue)
+            if (importSource) {
+                foundPath = importSource
+                break
+            }
+        }
+    }
 
     return foundPath;
 }

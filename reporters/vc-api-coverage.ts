@@ -72,7 +72,15 @@ export default class VcCoverageReporter implements Reporter {
   analyzerComponent() {
     for (const path in this.unitData) {
       const module = this.ctx.vite.moduleGraph.getModuleById(path);
-      const code = (module?.transformResult?.map as SourceMap).sourcesContent[0] || '';
+      
+      // 增加防御性检查确保 map 和 sourcesContent 存在
+      const sourceMap = module?.transformResult?.map as SourceMap;
+      const code = sourceMap?.sourcesContent?.[0] || '';
+      
+      if (!code) {
+        console.warn(`[vc-api-coverage] Warning: Could not find source code for ${path}`);
+        continue; // 如果没有源代码，跳过此文件
+      }
         
       // 分析组件API
       const props = new PropsAnalyzer(path, code).analyze();
@@ -109,7 +117,42 @@ export default class VcCoverageReporter implements Reporter {
 
   mergeData(unitData: Record<string, VcData>, compData: Record<string, VcData>): VcCoverageData[] {
     const res: VcCoverageData[] = [] 
+    
+    // 预处理 unitData，将 index.ts 文件替换为实际组件文件
+    const processedUnitData: Record<string, VcData> = {};
+    
+    // 处理每个测试单元路径
     for (const path in unitData) {
+      // 检查是否是 index.ts 文件
+      if (path.endsWith('/index.ts') || path.endsWith('/index')) {
+        // 尝试查找该目录下的真实组件文件
+        const dirPath = path.replace(/\/index(\.ts)?$/, '');
+        const possibleComponentFiles = Object.keys(compData).filter(p => 
+          p.startsWith(dirPath) && !p.endsWith('/index.ts') && !p.endsWith('/index')
+        );
+        
+        if (possibleComponentFiles.length > 0) {
+          // 如果找到了可能的组件文件，使用第一个（通常只有一个）
+          const realComponentPath = possibleComponentFiles[0];
+          processedUnitData[realComponentPath] = unitData[path];
+        } else {
+          // 找不到真实组件文件，保留原路径
+          processedUnitData[path] = unitData[path];
+        }
+      } else {
+        // 不是 index.ts 文件，直接保留
+        processedUnitData[path] = unitData[path];
+      }
+    }
+    
+    // 使用处理后的数据
+    for (const path in processedUnitData) {
+      // 如果compData中不存在该路径的组件数据，跳过该路径
+      if (!compData[path]) {
+        console.warn(`[vc-api-coverage] Warning: No component data found for ${path}`);
+        continue;
+      }
+      
       const info: VcCoverageData = {
         name: '',
         file: '',
@@ -134,7 +177,7 @@ export default class VcCoverageReporter implements Reporter {
           details: []
         }
       }
-      const unit = unitData[path]
+      const unit = processedUnitData[path]
       const comp = compData[path]
       info.name = path.split('/').slice(-2).join('/') || ''
       info.file = path
@@ -153,6 +196,7 @@ export default class VcCoverageReporter implements Reporter {
       info.exposes.details = comp.exposes.map(e => ({ name: e, covered: unit.exposes.includes(e) }))
       res.push(info)
     }
+    
     res.sort((a, b) => a.name.localeCompare(b.name))
     return res
   }

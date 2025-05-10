@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
-import Input from './Input';
+import Input from '.';
 
 describe('Input.tsx', () => {
   // 测试 props

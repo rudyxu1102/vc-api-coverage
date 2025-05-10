@@ -62,12 +62,24 @@ class TestUnitAnalyzer {
             const sourceValue = importDecl.getModuleSpecifierValue();
             
             if (sourceValue.endsWith(".tsx") || sourceValue.endsWith(".vue") || 
-                sourceValue.endsWith(".jsx") || sourceValue.endsWith(".ts")) {
+                sourceValue.endsWith(".jsx") || sourceValue.endsWith(".ts") || 
+                !sourceValue.startsWith('@') && !sourceValue.includes('/node_modules/')) {
                 
                 // Handle default imports
                 const defaultImport = importDecl.getDefaultImport();
                 if (defaultImport) {
-                    this.importedComponents.set(defaultImport.getText(), sourceValue);
+                    const componentName = defaultImport.getText();
+                    // 如果导入路径是一个目录或者是index文件，需要查找实际的组件文件
+                    if (sourceValue.endsWith('/index') || sourceValue.endsWith('/index.ts')) {
+                        const realComponentPath = this.resolveRealComponentPath(sourceValue);
+                        if (realComponentPath) {
+                            this.importedComponents.set(componentName, realComponentPath);
+                        } else {
+                            this.importedComponents.set(componentName, sourceValue);
+                        }
+                    } else {
+                        this.importedComponents.set(componentName, sourceValue);
+                    }
                 }
                 
                 // Handle named imports
@@ -90,6 +102,66 @@ class TestUnitAnalyzer {
                 }
             }
         }
+    }
+    
+    private resolveRealComponentPath(sourceValue: string): string | null {
+        // 处理index文件，如 ./components/input/index.ts
+        if (sourceValue.endsWith('/index.ts') || sourceValue.endsWith('/index')) {
+            // 获取模块完整路径
+            const moduleId = `${this.vitenode?.config.root}${sourceValue}`;
+            const module = this.vitenode?.moduleGraph.getModuleById(moduleId);
+            
+            if (module?.transformResult?.code) {
+                // 直接分析index.ts文件的代码内容
+                const code = module.transformResult.code;
+                
+                // 检查导入语句，特别关注第一个导入的组件
+                // 通常在index.ts文件中，第一个导入的就是主要组件
+                const firstImportMatch = code.match(/import\s+([A-Za-z0-9_$]+).*?from\s+['"]([^'"]+)['"]/);
+                
+                if (firstImportMatch && firstImportMatch[2]) {
+                    const importPath = firstImportMatch[2];
+                    
+                    // 处理绝对路径和相对路径
+                    if (importPath.startsWith('/')) {
+                        // 绝对路径直接使用
+                        return importPath;
+                    } else if (importPath.startsWith('./') || importPath.startsWith('../')) {
+                        // 相对路径，需要与目录路径结合
+                        const normalizedPath = importPath.replace(/^\.\//, '');
+                        const dirPath = sourceValue.replace(/\/index(\.ts)?$/, '');
+                        return `${dirPath}/${normalizedPath}`;
+                    }
+                }
+                
+                // 如果无法从第一个导入确定，检查所有导入语句
+                const importMatches = code.match(/import\s+([A-Za-z0-9_$]+).*?from\s+['"]([^'"]+)['"]/g);
+                
+                if (importMatches) {
+                    // 查找导入组件文件的语句
+                    for (const importMatch of importMatches) {
+                        // 从import语句提取路径部分
+                        const pathMatch = importMatch.match(/from\s+['"]([^'"]+)['"]/);
+                        if (pathMatch && pathMatch[1]) {
+                            const importPath = pathMatch[1];
+                            
+                            // 处理相对路径导入或绝对路径
+                            if (importPath.startsWith('./') || importPath.startsWith('../')) {
+                                // 标准化路径：删除./前缀，确保是基于当前目录的相对路径
+                                const normalizedPath = importPath.replace(/^\.\//, '');
+                                const dirPath = sourceValue.replace(/\/index(\.ts)?$/, '');
+                                return `${dirPath}/${normalizedPath}`;
+                            } else if (importPath.startsWith('/')) {
+                                // 绝对路径
+                                return importPath;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
     }
     
     private analyzeTraditionalMountCalls() {
@@ -145,9 +217,17 @@ class TestUnitAnalyzer {
         const componentArg = args[0];
         if (Node.isIdentifier(componentArg)) {
             const componentName = componentArg.getText();
-            const componentFile = this.importedComponents.get(componentName);
+            let componentFile = this.importedComponents.get(componentName);
             
             if (componentFile) {
+                // 检查是否需要处理index.ts文件
+                if (componentFile.endsWith('/index.ts') || componentFile.endsWith('/index')) {
+                    const realComponentPath = this.resolveRealComponentPath(componentFile);
+                    if (realComponentPath) {
+                        componentFile = realComponentPath;
+                    }
+                }
+                
                 // Initialize component entry in result if not exists
                 if (!this.result[componentFile]) {
                     this.result[componentFile] = {};
@@ -266,9 +346,17 @@ class TestUnitAnalyzer {
         // Check if the first argument is a component identifier
         if (Node.isIdentifier(componentArg)) {
             const componentName = componentArg.getText();
-            const componentFile = this.importedComponents.get(componentName);
+            let componentFile = this.importedComponents.get(componentName);
             
             if (componentFile) {
+                // 检查是否需要处理index.ts文件
+                if (componentFile.endsWith('/index.ts') || componentFile.endsWith('/index')) {
+                    const realComponentPath = this.resolveRealComponentPath(componentFile);
+                    if (realComponentPath) {
+                        componentFile = realComponentPath;
+                    }
+                }
+                
                 // Initialize component in result if not exists
                 if (!this.result[componentFile]) {
                     this.result[componentFile] = {};

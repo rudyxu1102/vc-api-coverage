@@ -1,7 +1,7 @@
 import { defineComponent, ref, computed, SlotsType, VNode } from 'vue';
 import type { CSSProperties } from 'vue';
 
-const props = {
+export const props = {
   modelValue: { type: String, default: '' },
   placeholder: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
