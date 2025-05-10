@@ -19,13 +19,13 @@ describe('Emits Analyzer', () => {
   // 测试对象形式的emits
   it('should analyze object emits correctly', () => {
     const code = `
-    export default {
+    export default defineComponent({
       emits: {
         submit: null,
         change: (value) => typeof value === 'string',
         'update:modelValue': null
       }
-    }
+    })
     `
     const morphResult = new EmitsAnalyzer(tempFile, code).analyze()
     expect(morphResult.sort()).toEqual(['submit', 'change', 'update:modelValue'].sort())
@@ -34,9 +34,9 @@ describe('Emits Analyzer', () => {
   // 测试数组形式的emits
   it('should analyze array emits correctly', () => {
     const code = `
-    export default {
+    export default defineComponent({
       emits: ['submit', 'change', 'update:modelValue']
-    }
+    })
     `
     const morphResult = new EmitsAnalyzer(tempFile, code).analyze()
     expect(morphResult.sort()).toEqual(['submit', 'change', 'update:modelValue'].sort())
@@ -103,9 +103,9 @@ describe('Emits Analyzer', () => {
     const code = `
     const componentEmits = ['submit', 'change', 'update:modelValue'];
     
-    export default {
+    export default defineComponent({
       emits: componentEmits
-    };
+    });
     `
     const morphResult = new EmitsAnalyzer(tempFile, code).analyze()
     expect(morphResult.sort()).toEqual(['submit', 'change', 'update:modelValue'].sort())
@@ -159,9 +159,9 @@ describe('Emits Analyzer', () => {
     const baseEmits = ['change', 'input'];
     const componentEmits = [...baseEmits, 'submit', 'reset'];
     
-    export default {
+    export default defineComponent({
       emits: componentEmits
-    };
+    });
     `;
     
     const morphResult = new EmitsAnalyzer(tempFile, code).analyze();
@@ -173,11 +173,11 @@ describe('Emits Analyzer', () => {
   // 测试无emits的组件
   it('should return empty array for component without emits', () => {
     const code = `
-    export default {
+    export default defineComponent({
       props: {
         name: String
       }
-    };
+    });
     `
     const morphResult = new EmitsAnalyzer(tempFile, code).analyze()
     expect(morphResult).toEqual([])

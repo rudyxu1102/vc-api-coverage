@@ -23,7 +23,6 @@ class EmitsAnalyzer extends BaseAnalyzer {
     
     // 分析defineComponent中的emits属性
     this.analyzeDefineComponentEmits();
-    
   }
 
   /**
