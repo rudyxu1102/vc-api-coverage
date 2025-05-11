@@ -1,6 +1,5 @@
 import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression } from 'ts-morph';
-import type { ViteDevServer } from 'vite';
-import { resolveExportedPath } from '../common/export-parser';
+import { isComponentFile } from '../common/utils';
 
 interface TestUnit {
     props?: string[];
@@ -14,14 +13,10 @@ interface TestUnitsResult {
 
 class TestUnitAnalyzer {
     private sourceFile: SourceFile;
-    private importedComponents: Map<string, string> = new Map();
     private result: TestUnitsResult = {};
-    private vitenode?: ViteDevServer;
     private project: Project;
     
-    constructor(filePath: string, code: string, vitenode?: ViteDevServer) {
-        this.vitenode = vitenode;
-        
+    constructor(filePath: string) {
         // Create a project
         this.project = new Project({
             compilerOptions: {
@@ -29,17 +24,14 @@ class TestUnitAnalyzer {
                 target: 99, // ESNext
             },
         });
-        
         // Add source file
-        this.sourceFile = this.project.createSourceFile(filePath, code, { overwrite: true });
+        this.sourceFile = this.project.addSourceFileAtPath(filePath);
         
         // Initialize result
         this.result = {};
     }
 
     public analyze(): TestUnitsResult {
-        // Collect all imported components
-        this.collectComponentImports();
         
         // Analyze traditional mount method calls
         this.analyzeTraditionalMountCalls();
@@ -50,120 +42,114 @@ class TestUnitAnalyzer {
         return this.result;
     }
     
-    // Get imported components
-    public getImportedComponents(): Map<string, string> {
-        return this.importedComponents;
-    }
-    
-    private collectComponentImports() {
-        const importDeclarations = this.sourceFile.getImportDeclarations();
-        
-        for (const importDecl of importDeclarations) {
-            const sourceValue = importDecl.getModuleSpecifierValue();
-            
-            if (sourceValue.endsWith(".tsx") || sourceValue.endsWith(".vue") || 
-                sourceValue.endsWith(".jsx") || sourceValue.endsWith(".ts") || 
-                !sourceValue.startsWith('@') && !sourceValue.includes('/node_modules/')) {
-                
-                // Handle default imports
-                const defaultImport = importDecl.getDefaultImport();
-                if (defaultImport) {
-                    const componentName = defaultImport.getText();
-                    // 如果导入路径是一个目录或者是index文件，需要查找实际的组件文件
-                    if (sourceValue.endsWith('/index') || sourceValue.endsWith('/index.ts')) {
-                        const realComponentPath = this.resolveRealComponentPath(sourceValue);
-                        if (realComponentPath) {
-                            this.importedComponents.set(componentName, realComponentPath);
-                        } else {
-                            this.importedComponents.set(componentName, sourceValue);
-                        }
-                    } else {
-                        this.importedComponents.set(componentName, sourceValue);
-                    }
-                }
-                
-                // Handle named imports
-                const namedImports = importDecl.getNamedImports();
-                for (const namedImport of namedImports) {
-                    const localName = namedImport.getName();
-                    const moduleId = `${this.vitenode?.config.root}${sourceValue}`;
-                    
-                    // Try to get module from vite module graph
-                    const module = this.vitenode?.moduleGraph.getModuleById(moduleId);
-                    const code = module?.transformResult?.code || '';
-                    
-                    // If we have code, try to resolve the exported path
-                    if (code) {
-                        const exportedPath = resolveExportedPath(code, localName);
-                        if (exportedPath) {
-                            this.importedComponents.set(localName, exportedPath);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
     private resolveRealComponentPath(sourceValue: string): string | null {
+
         // 处理index文件，如 ./components/input/index.ts
-        if (sourceValue.endsWith('/index.ts') || sourceValue.endsWith('/index')) {
-            // 获取模块完整路径
-            const moduleId = `${this.vitenode?.config.root}${sourceValue}`;
-            const module = this.vitenode?.moduleGraph.getModuleById(moduleId);
-            
-            if (module?.transformResult?.code) {
-                // 直接分析index.ts文件的代码内容
-                const code = module.transformResult.code;
-                
-                // 检查导入语句，特别关注第一个导入的组件
-                // 通常在index.ts文件中，第一个导入的就是主要组件
-                const firstImportMatch = code.match(/import\s+([A-Za-z0-9_$]+).*?from\s+['"]([^'"]+)['"]/);
-                
-                if (firstImportMatch && firstImportMatch[2]) {
-                    const importPath = firstImportMatch[2];
-                    
-                    // 处理绝对路径和相对路径
-                    if (importPath.startsWith('/')) {
-                        // 绝对路径直接使用
-                        return importPath;
-                    } else if (importPath.startsWith('./') || importPath.startsWith('../')) {
-                        // 相对路径，需要与目录路径结合
-                        const normalizedPath = importPath.replace(/^\.\//, '');
-                        const dirPath = sourceValue.replace(/\/index(\.ts)?$/, '');
-                        return `${dirPath}/${normalizedPath}`;
-                    }
-                }
-                
-                // 如果无法从第一个导入确定，检查所有导入语句
-                const importMatches = code.match(/import\s+([A-Za-z0-9_$]+).*?from\s+['"]([^'"]+)['"]/g);
-                
-                if (importMatches) {
-                    // 查找导入组件文件的语句
-                    for (const importMatch of importMatches) {
-                        // 从import语句提取路径部分
-                        const pathMatch = importMatch.match(/from\s+['"]([^'"]+)['"]/);
-                        if (pathMatch && pathMatch[1]) {
-                            const importPath = pathMatch[1];
+        if (!isComponentFile(sourceValue)) {
+            // 使用ts-morph解析代码，获取结构化信息
+            const sourceFile = this.project.addSourceFileAtPath(sourceValue);
+            // 查找默认导出
+            const defaultExport = sourceFile.getDefaultExportSymbol();
+            let componentImportPath = null;
+            if (defaultExport) {
+                // 获取默认导出的声明
+                const declarations = defaultExport.getDeclarations();
+                for (const declaration of declarations) {
+                    // 如果是导出的表达式语句
+                    if (Node.isExportAssignment(declaration)) {
+                        const expression = declaration.getExpression();
+                        
+                        // 如果是函数调用(如 export default withInstall(Component))
+                        if (Node.isCallExpression(expression)) {
+                            const args = expression.getArguments();
+                            if (args.length > 0 && Node.isIdentifier(args[0])) {
+                                // 获取函数的第一个参数，通常是组件标识符
+                                const componentName = args[0].getText();
+                                // 查找这个标识符的导入
+                                const importDecls = sourceFile.getImportDeclarations();
+                                for (const importDecl of importDecls) {
+                                    // 检查默认导入
+                                    const defaultImport = importDecl.getDefaultImport();
+                                    if (defaultImport && defaultImport.getText() === componentName) {
+                                        const importResolved = importDecl.getModuleSpecifierSourceFile();
+                                        componentImportPath = importResolved!.getFilePath();
+                                        break;  
+                                    }
+                                    
+                                    // 检查命名导入
+                                    const namedImports = importDecl.getNamedImports();
+                                    for (const namedImport of namedImports) {
+                                        if (namedImport.getName() === componentName) {
+                                            const importResolved = importDecl.getModuleSpecifierSourceFile();
+                                            componentImportPath = importResolved!.getFilePath();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // 如果是标识符(如 export default Component
+                        else if (Node.isIdentifier(expression)) {
+                            const componentName = expression.getText();
                             
-                            // 处理相对路径导入或绝对路径
-                            if (importPath.startsWith('./') || importPath.startsWith('../')) {
-                                // 标准化路径：删除./前缀，确保是基于当前目录的相对路径
-                                const normalizedPath = importPath.replace(/^\.\//, '');
-                                const dirPath = sourceValue.replace(/\/index(\.ts)?$/, '');
-                                return `${dirPath}/${normalizedPath}`;
-                            } else if (importPath.startsWith('/')) {
-                                // 绝对路径
-                                return importPath;
+                            // 查找这个标识符的导入
+                            const importDecls = sourceFile.getImportDeclarations();
+                            for (const importDecl of importDecls) {
+                                // 检查默认导入
+                                const defaultImport = importDecl.getDefaultImport();
+                                if (defaultImport && defaultImport.getText() === componentName) {
+                                    const importResolved = importDecl.getModuleSpecifierSourceFile();
+                                    componentImportPath = importResolved!.getFilePath();
+                                    break;
+                                }
+                                
+                                // 检查命名导入
+                                const namedImports = importDecl.getNamedImports();
+                                for (const namedImport of namedImports) {
+                                    if (namedImport.getName() === componentName) {
+                                        const importResolved = importDecl.getModuleSpecifierSourceFile();
+                                        componentImportPath = importResolved!.getFilePath();
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
                 }
+                if (!componentImportPath) return null;
+                if (isComponentFile(componentImportPath)) return componentImportPath;
+                // 如果找不到，则递归查找
+                const componentSourceFile = this.project.addSourceFileAtPath(componentImportPath);
+                const res = this.searchComponentFilePath(componentSourceFile) as string | null;
+                if (res) return res;
             }
         }
+        
+
         
         return null;
     }
     
+    // 递归层序遍历文件引用，文件后缀为tsx或者vue
+    private searchComponentFilePath(sourceFile: SourceFile) {
+        const importDeclarations = sourceFile.getImportDeclarations();
+        for (const importDecl of importDeclarations) {
+            const resolved = importDecl.getModuleSpecifierSourceFile();
+            const absolutePath = resolved?.getFilePath();
+            if (absolutePath && isComponentFile(absolutePath)) {
+                return absolutePath;
+            }
+        }
+        for (const importDecl of importDeclarations) {
+            const res = this.searchComponentFilePath(importDecl.getSourceFile()) as string | null;
+            if (res) {
+                return res;
+            }
+        }
+        return null
+    }
+
+    // 分析传统挂载mount/shallowMount方法调用
     private analyzeTraditionalMountCalls() {
         // Find all test or it blocks
         const testCalls = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
@@ -209,6 +195,17 @@ class TestUnitAnalyzer {
             }
         }
     }
+
+    getImportDecl(componentName: string) {
+        const importDecls = this.sourceFile.getImportDeclarations();
+        for (const importDecl of importDecls) {
+            const defaultImport = importDecl.getDefaultImport();
+            if (defaultImport && defaultImport.getText() === componentName) {
+                return importDecl;
+            }
+        }
+        return null;
+    }
     
     private processMountCall(mountCall: CallExpression) {
         const args = mountCall.getArguments();
@@ -217,11 +214,13 @@ class TestUnitAnalyzer {
         const componentArg = args[0];
         if (Node.isIdentifier(componentArg)) {
             const componentName = componentArg.getText();
-            let componentFile = this.importedComponents.get(componentName);
-            
-            if (componentFile) {
+            const importDecl = this.getImportDecl(componentName);
+        
+            if (importDecl) {
+                const resolved = importDecl.getModuleSpecifierSourceFile();
+                let componentFile: string | null = resolved!.getFilePath();
                 // 检查是否需要处理index.ts文件
-                if (componentFile.endsWith('/index.ts') || componentFile.endsWith('/index')) {
+                if (!isComponentFile(componentFile)) {
                     const realComponentPath = this.resolveRealComponentPath(componentFile);
                     if (realComponentPath) {
                         componentFile = realComponentPath;
@@ -346,11 +345,13 @@ class TestUnitAnalyzer {
         // Check if the first argument is a component identifier
         if (Node.isIdentifier(componentArg)) {
             const componentName = componentArg.getText();
-            let componentFile = this.importedComponents.get(componentName);
+            const importDecl = this.getImportDecl(componentName);
             
-            if (componentFile) {
+            if (importDecl) {
+                const resolved = importDecl.getModuleSpecifierSourceFile();
+                let  componentFile: string | null = resolved!.getFilePath();
                 // 检查是否需要处理index.ts文件
-                if (componentFile.endsWith('/index.ts') || componentFile.endsWith('/index')) {
+                if (!isComponentFile(componentFile)) {
                     const realComponentPath = this.resolveRealComponentPath(componentFile);
                     if (realComponentPath) {
                         componentFile = realComponentPath;
@@ -505,25 +506,13 @@ class TestUnitAnalyzer {
             }
         }
     }
+
 }
 
-export function analyzeTestUnits(code: string, vitenode?: ViteDevServer) {
-    const filePath = `temp-test-units-${Date.now()}.ts`;
-    
+export function analyzeTestUnits(filePath: string) {
     // Create the analyzer
-    const analyzer = new TestUnitAnalyzer(filePath, code, vitenode);
+    const analyzer = new TestUnitAnalyzer(filePath);
     const result = analyzer.analyze();
-    
-    // Ensure all imported components have an entry
-    analyzer.getImportedComponents().forEach((path) => {
-        if (!result[path]) {
-            result[path] = { props: [], emits: [], slots: [] };
-        } else {
-            result[path].props = result[path].props || [];
-            result[path].emits = result[path].emits || [];
-            result[path].slots = result[path].slots || [];
-        }
-    });
     
     return result;
 }

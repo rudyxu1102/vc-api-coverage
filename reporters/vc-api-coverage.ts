@@ -13,7 +13,6 @@ import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
 import type { VcCoverageData, VcData } from '../lib/types';
 import TestUnitAnalyzer from '../lib/analyzer/test-units-analyzer';
-import { ViteDevServer } from 'vite';
 import type { SourceMap } from 'rollup';
 import { toEventName } from '../lib/common/utils';
 
@@ -44,13 +43,8 @@ export default class VcCoverageReporter implements Reporter {
   }
 
   onTestModuleEnd(testModule: TestModule) {
-    const vitenode = testModule.project.vite
-    const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
-    const code = cache?.transformResult?.code || ''
-    const res = new TestUnitAnalyzer(testModule.moduleId, code, vitenode as unknown as ViteDevServer).analyze()
-    const rootDir = this.ctx.config.root
-    for (const path in res) {
-      const fullPath = `${rootDir}${path}`
+    const res = new TestUnitAnalyzer(testModule.moduleId).analyze()
+    for (const fullPath in res) {
       let info: VcData = {
         props: [],
         emits: [],
@@ -60,7 +54,7 @@ export default class VcCoverageReporter implements Reporter {
       if (this.unitData[fullPath]) {
         info = this.unitData[fullPath]
       } 
-      this.unitData[fullPath] = _.mergeWith({}, info, res[path], (objValue: unknown, srcValue: unknown) => {
+      this.unitData[fullPath] = _.mergeWith({}, info, res[fullPath], (objValue: unknown, srcValue: unknown) => {
         if (Array.isArray(objValue) && Array.isArray(srcValue)) {
           return Array.from(new Set([...objValue, ...srcValue]));
         }
@@ -118,35 +112,8 @@ export default class VcCoverageReporter implements Reporter {
   mergeData(unitData: Record<string, VcData>, compData: Record<string, VcData>): VcCoverageData[] {
     const res: VcCoverageData[] = [] 
     
-    // 预处理 unitData，将 index.ts 文件替换为实际组件文件
-    const processedUnitData: Record<string, VcData> = {};
-    
-    // 处理每个测试单元路径
-    for (const path in unitData) {
-      // 检查是否是 index.ts 文件
-      if (path.endsWith('/index.ts') || path.endsWith('/index')) {
-        // 尝试查找该目录下的真实组件文件
-        const dirPath = path.replace(/\/index(\.ts)?$/, '');
-        const possibleComponentFiles = Object.keys(compData).filter(p => 
-          p.startsWith(dirPath) && !p.endsWith('/index.ts') && !p.endsWith('/index')
-        );
-        
-        if (possibleComponentFiles.length > 0) {
-          // 如果找到了可能的组件文件，使用第一个（通常只有一个）
-          const realComponentPath = possibleComponentFiles[0];
-          processedUnitData[realComponentPath] = unitData[path];
-        } else {
-          // 找不到真实组件文件，保留原路径
-          processedUnitData[path] = unitData[path];
-        }
-      } else {
-        // 不是 index.ts 文件，直接保留
-        processedUnitData[path] = unitData[path];
-      }
-    }
-    
     // 使用处理后的数据
-    for (const path in processedUnitData) {
+    for (const path in unitData) {
       // 如果compData中不存在该路径的组件数据，跳过该路径
       if (!compData[path]) {
         console.warn(`[vc-api-coverage] Warning: No component data found for ${path}`);
@@ -177,7 +144,7 @@ export default class VcCoverageReporter implements Reporter {
           details: []
         }
       }
-      const unit = processedUnitData[path]
+      const unit = unitData[path]
       const comp = compData[path]
       info.name = path.split('/').slice(-2).join('/') || ''
       info.file = path

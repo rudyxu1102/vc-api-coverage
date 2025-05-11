@@ -81,3 +81,7 @@ export function toEventName(str: string) {
   }
   return `on${str.charAt(0).toUpperCase()}${str.slice(1)}`
 }
+
+export function isComponentFile(filePath: string) {
+  return filePath.endsWith('.vue') || filePath.endsWith('.tsx') || filePath.endsWith('.jsx')
+}

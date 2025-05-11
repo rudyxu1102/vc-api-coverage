@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
-import Input from '.';
+import Input from './index';
+import { render, screen } from '@testing-library/vue';
 
 describe('Input.tsx', () => {
   // 测试 props
@@ -14,6 +15,12 @@ describe('Input.tsx', () => {
     expect(wrapper.classes()).toContain('input-md');
   });
 
+
+  it('size prop', () => {
+    const { container } = render(() => <Input size="sm" />);
+    expect(container.querySelector('.input-sm')).not.toBeNull();
+  })
+
   it('renders with custom props', () => {
     const wrapper = mount(Input, {
       props: {
@@ -21,7 +28,6 @@ describe('Input.tsx', () => {
         placeholder: 'Enter text',
         disabled: true,
         type: 'password',
-        size: 'sm',
         clearable: true,
       }
     });
@@ -31,7 +37,6 @@ describe('Input.tsx', () => {
     expect(input.attributes('placeholder')).toBe('Enter text');
     expect(input.attributes('disabled')).toBeDefined();
     expect(input.attributes('type')).toBe('password');
-    expect(wrapper.classes()).toContain('input-sm');
     expect(wrapper.classes()).toContain('disabled');
   });
 
