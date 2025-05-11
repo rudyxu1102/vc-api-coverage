@@ -196,9 +196,18 @@ class TestUnitAnalyzer {
     getImportDecl(componentName: string) {
         const importDecls = this.sourceFile.getImportDeclarations();
         for (const importDecl of importDecls) {
+            // 检查默认导入
             const defaultImport = importDecl.getDefaultImport();
             if (defaultImport && defaultImport.getText() === componentName) {
                 return importDecl;
+            }
+            
+            // 检查命名导入
+            const namedImports = importDecl.getNamedImports();
+            for (const namedImport of namedImports) {
+                if (namedImport.getName() === componentName) {
+                    return importDecl;
+                }
             }
         }
         return null;

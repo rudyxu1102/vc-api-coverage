@@ -94,18 +94,26 @@ export default class VcCoverageReporter implements Reporter {
   dealPropsEmits(compData: VcData, unitData: VcData) {
     const propsDetails = []
     const emitsDetails = []
+    
+    // 处理测试中的emits
     for (const emit of unitData.emits) {
       if (compData.props.includes(emit)) {
+        // 如果emit名在组件prop定义中存在，则视为prop使用
         propsDetails.push(emit)
       } else if (compData.emits.includes(emit)) {
+        // 否则如果在组件emit定义中存在，则视为emit使用
         emitsDetails.push(emit)
       }
     }
+    
+    // 处理测试中的props
     for (const prop of unitData.props) {
-      if (!compData.emits.includes(prop) && compData.props.includes(prop)) {
+      // 防止重复添加，只有当prop不是emit且是组件中定义的prop时才添加
+      if (!propsDetails.includes(prop) && compData.props.includes(prop)) {
         propsDetails.push(prop)
       }
     }
+    
     return { propsDetails, emitsDetails }
   }
 
@@ -148,7 +156,9 @@ export default class VcCoverageReporter implements Reporter {
       const comp = compData[path]
       info.name = path.split('/').slice(-2).join('/') || ''
       info.file = path
+      
       const { propsDetails, emitsDetails } = this.dealPropsEmits(comp, unit)
+      
       info.props.total += comp.props.length
       info.props.covered += propsDetails.length
       info.emits.total += comp.emits.length
