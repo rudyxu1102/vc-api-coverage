@@ -32,11 +32,12 @@ class TestUnitAnalyzer {
     }
 
     public analyze(): TestUnitsResult {
-        
         // Analyze traditional mount method calls
         this.analyzeTraditionalMountCalls();
         
-
+        // Analyze JSX elements in the file
+        this.analyzeJSXElements();
+        
         return this.result;
     }
     
@@ -122,8 +123,6 @@ class TestUnitAnalyzer {
                 if (res) return res;
             }
         }
-        
-
         
         return null;
     }
@@ -216,12 +215,16 @@ class TestUnitAnalyzer {
         
             if (importDecl) {
                 const resolved = importDecl.getModuleSpecifierSourceFile();
-                let componentFile: string | null = resolved!.getFilePath();
+                if (!resolved) return;
+                let componentFile: string = resolved.getFilePath();
+                
                 // 检查是否需要处理index.ts文件
                 if (!isComponentFile(componentFile)) {
                     const realComponentPath = this.resolveRealComponentPath(componentFile);
                     if (realComponentPath) {
                         componentFile = realComponentPath;
+                    } else {
+                        return; // Skip if we can't resolve the component path
                     }
                 }
                 
@@ -328,14 +331,82 @@ class TestUnitAnalyzer {
         }
     }
 
+    // Analyze JSX elements in the source file
+    private analyzeJSXElements() {
+        // Find all JSX elements and self-closing elements
+        const jsxElements = [
+            ...this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxElement),
+            ...this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)
+        ];
+        
+        for (const jsxElement of jsxElements) {
+            // Get the opening element (or the self-closing element itself)
+            const openingElement = Node.isJsxElement(jsxElement) 
+                ? jsxElement.getOpeningElement()
+                : jsxElement;
+            
+            // Get component name
+            const tagName = openingElement.getTagNameNode().getText();
+            
+            // Find the corresponding import declaration
+            const importDecl = this.getImportDecl(tagName);
+            if (!importDecl) continue;
+            
+            const resolved = importDecl.getModuleSpecifierSourceFile();
+            if (!resolved) continue;
+            
+            const filePath = resolved.getFilePath();
+            
+            // Check if we need to handle index.ts files
+            if (!isComponentFile(filePath)) {
+                const realComponentPath = this.resolveRealComponentPath(filePath);
+                if (realComponentPath) {
+                    // Initialize component entry in result if not exists
+                    if (!this.result[realComponentPath]) {
+                        this.result[realComponentPath] = {};
+                    }
+                    
+                    // Extract props from JSX attributes
+                    this.extractJSXAttrs(openingElement, this.result[realComponentPath]);
+                } 
+            } else {
+                // Initialize component entry in result if not exists
+                if (!this.result[filePath]) {
+                    this.result[filePath] = {};
+                }
+                
+                // Extract props from JSX attributes
+                this.extractJSXAttrs(openingElement, this.result[filePath]);
+            }
+        }
+    }
+    
+    // Helper method to extract attributes from JSX elements
+    private extractJSXAttrs(element: Node, component: TestUnit) {
+        if (Node.isJsxOpeningElement(element) || Node.isJsxSelfClosingElement(element)) {
+            const attributes = element.getAttributes();
+            
+            for (const attr of attributes) {
+                if (Node.isJsxAttribute(attr)) {
+                    const propName = attr.getNameNode().getText();
+                    
+                    // Skip event handlers (props starting with "on")
+                    if (propName.startsWith('on') && propName.length > 2) continue;
+                    
+                    // Add the prop to the result
+                    if (!component.props) {
+                        component.props = [];
+                    }
+                    
+                    if (!component.props.includes(propName)) {
+                        component.props.push(propName);
+                    }
+                }
+            }
+        }
+    }
+
 }
 
-export function analyzeTestUnits(filePath: string) {
-    // Create the analyzer
-    const analyzer = new TestUnitAnalyzer(filePath);
-    const result = analyzer.analyze();
-    
-    return result;
-}
 
 export default TestUnitAnalyzer;
