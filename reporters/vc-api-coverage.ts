@@ -67,7 +67,14 @@ export default class VcCoverageReporter implements Reporter {
 
   analyzerComponent() {
     for (const path in this.unitData) {
-      const sourceFile = this.project.addSourceFileAtPath(path)
+      let sourceFile = this.project.addSourceFileAtPath(path)
+      if (path.endsWith('.vue')) {
+        const sourceCode = sourceFile.getText()
+        const scriptContent = sourceCode.match(/<script>([\s\S]*?)<\/script>/)?.[1]
+        if (scriptContent) {
+          sourceFile = this.project.createSourceFile(path, scriptContent, { overwrite: true })
+        }
+      }
       // 分析组件API
       const props = new PropsAnalyzer(sourceFile, this.project).analyze();
       const emits = new EmitsAnalyzer(sourceFile, this.project).analyze()

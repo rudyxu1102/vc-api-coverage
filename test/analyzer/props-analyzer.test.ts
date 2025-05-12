@@ -1,19 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import PropsAnalyzer from '../../lib/analyzer/props-analyzer';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { Project } from 'ts-morph';
-
-// 获取当前文件的目录路径
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const tempFile = path.join(__dirname, '_temp_test_file.tsx');
-// Mock fs and path modules for import testing
-vi.mock('fs', () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-}))
 
 describe('Props Analyzer', () => {
   afterEach(() => {
@@ -31,7 +18,7 @@ describe('Props Analyzer', () => {
     }
     `;
     const project = new Project();
-    const sourceFile = project.createSourceFile(tempFile, code);
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
     const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
     expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
   });
@@ -48,7 +35,7 @@ describe('Props Analyzer', () => {
     }
     `;
     const project = new Project();
-    const sourceFile = project.createSourceFile(tempFile, code);
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
     const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
     expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
   });
@@ -68,7 +55,7 @@ describe('Props Analyzer', () => {
     }
     `;
     const project = new Project();
-    const sourceFile = project.createSourceFile(tempFile, code);
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
     const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
     expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
   });
@@ -80,7 +67,7 @@ describe('Props Analyzer', () => {
     }
     `;
     const project = new Project();
-    const sourceFile = project.createSourceFile(tempFile, code);
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
     const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
     expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
   });
@@ -88,134 +75,123 @@ describe('Props Analyzer', () => {
   // 测试defineProps的泛型形式
   it('should analyze defineProps with generics correctly', () => {
     const code = `
-    <script setup lang="ts">
     const props = defineProps<{
       name: string;
       age: number;
       isActive: boolean;
     }>();
-    </script>
     `;
     const project = new Project();
-    const sourceFile = project.createSourceFile(tempFile, code);
+    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
     const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
     expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
   });
   
-  // // 测试defineProps的对象字面量形式
-  // it('should analyze defineProps with object correctly', () => {
-  //   const code = `
-  //   <script setup>
-  //   const props = defineProps({
-  //     name: String,
-  //     age: Number,
-  //     isActive: Boolean
-  //   });
-  //   </script>
-  //   `;
-  //   const project = new Project();
-  //   const sourceFile = project.createSourceFile(tempFile, code);
-  //   const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
-  //   expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
-  // });
+  // 测试defineProps的对象字面量形式
+  it('should analyze defineProps with object correctly', () => {
+    const code = `
+    <script setup>
+    const props = defineProps({
+      name: String,
+      age: Number,
+      isActive: Boolean
+    });
+    </script>
+    `;
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
+    const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
+    expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+  });
   
-  // // 测试带有类型引用的defineProps
-  // it('should analyze defineProps with type reference correctly', () => {
-  //   const code = `
-  //   <script setup lang="ts">
-  //   interface Props {
-  //     name: string;
-  //     age: number;
-  //     isActive: boolean;
-  //   }
+  // 测试带有类型引用的defineProps
+  it('should analyze defineProps with type reference correctly', () => {
+    const code = `
+    interface Props {
+      name: string;
+      age: number;
+      isActive: boolean;
+    }
     
-  //   const props = defineProps<Props>();
-  //   </script>
-  //   `;
-  //   const project = new Project();
-  //   const sourceFile = project.createSourceFile(tempFile, code);
-  //   const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
-  //   expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
-  // });
+    const props = defineProps<Props>();
+    `;
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
+    const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
+    expect(morphResult.sort()).toEqual(['name', 'age', 'isActive'].sort());
+  });
   
-  // // 测试带有交叉类型(intersection types)的props
-  // it('should analyze props with intersection types correctly', () => {
-  //   const code = `
-  //   <script setup lang="ts">
-  //   interface BaseProps {
-  //     id: string;
-  //     class: string;
-  //   }
+  // 测试带有交叉类型(intersection types)的props
+  it('should analyze props with intersection types correctly', () => {
+    const code = `
+    interface BaseProps {
+      id: string;
+      class: string;
+    }
     
-  //   interface SpecificProps {
-  //     name: string;
-  //     age: number;
-  //   }
+    interface SpecificProps {
+      name: string;
+      age: number;
+    }
     
-  //   type Props = BaseProps & SpecificProps;
+    type Props = BaseProps & SpecificProps;
     
-  //   const props = defineProps<Props>();
-  //   </script>
-  //   `;
-  //   const project = new Project();
-  //   const sourceFile = project.createSourceFile(tempFile, code);
-  //   const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
-  //   expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
-  // });
+    const props = defineProps<Props>();
+    `;
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
+    const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
+    expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
+  });
   
-  // // 测试继承的接口
-  // it('should analyze props with interface extension correctly', () => {
-  //   const code = `
-  //   <script setup lang="ts">
-  //   interface BaseProps {
-  //     id: string;
-  //     class: string;
-  //   }
+  // 测试继承的接口
+  it('should analyze props with interface extension correctly', () => {
+    const code = `
+    interface BaseProps {
+      id: string;
+      class: string;
+    }
     
-  //   interface Props extends BaseProps {
-  //     name: string;
-  //     age: number;
-  //   }
+    interface Props extends BaseProps {
+      name: string;
+      age: number;
+    }
     
-  //   const props = defineProps<Props>();
-  //   </script>
-  //   `;
-  //   const project = new Project();
-  //   const sourceFile = project.createSourceFile(tempFile, code);
-  //   const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
-  //   expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
-  // });
+    const props = defineProps<Props>();
+    `;
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
+    const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
+    expect(morphResult.sort()).toEqual(['id', 'class', 'name', 'age'].sort());
+  });
   
-  // // 测试导入的props对象
-  // it('should analyze imported props object correctly', () => {
-  //   const mockImportedFileContent = `
-  //     export const buttonProps = {
-  //       type: String,
-  //       size: {
-  //         type: String,
-  //         default: 'medium'
-  //       },
-  //       disabled: Boolean,
-  //       loading: Boolean,
-  //       icon: String
-  //     } as const;
-  //   `
+  // 测试导入的props对象
+  it('should analyze imported props object correctly', () => {
+    const mockImportedFileContent = `
+      export const buttonProps = {
+        type: String,
+        size: {
+          type: String,
+          default: 'medium'
+        },
+        disabled: Boolean,
+        loading: Boolean,
+        icon: String
+      } as const;
+    `
 
-  //  vi.mocked(fs.existsSync).mockReturnValue(true)
-  //  vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
     
-  //   const code = `
-  //   <script setup lang="ts">
-  //   import { buttonProps } from '../test-import';
+    const code = `
+    import { buttonProps } from './test-import';
     
-  //   const props = defineProps(buttonProps);
-  //   </script>
-  //   `;
-  //   const project = new Project();
-  //   const sourceFile = project.createSourceFile(tempFile, code);
-  //   const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
-  //   expect(morphResult.sort()).toEqual(['type', 'size', 'disabled', 'loading', 'icon'].sort());
-  // });
+    const props = defineProps(buttonProps);
+    `;
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
+    project.createSourceFile('./test-import.ts', mockImportedFileContent)
+    const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
+    expect(morphResult.sort()).toEqual(['type', 'size', 'disabled', 'loading', 'icon'].sort());
+  });
   
   // // 测试导入的接口类型
   // it('should analyze imported interface correctly', () => {
@@ -233,18 +209,16 @@ describe('Props Analyzer', () => {
   //     }
   //   `
   //   const code = `
-  //   <script setup lang="ts">
   //   import { InputProps } from '../test-instance-extend';
     
   //   const props = defineProps<InputProps>();
-  //   </script>
   //   `;
   //   vi.mocked(fs.existsSync).mockReturnValue(true)
     
   //   vi.mocked(fs.readFileSync).mockReturnValue(mockImportedFileContent)
     
   //   const project = new Project();
-  //   const sourceFile = project.createSourceFile(tempFile, code);
+  //   const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
   //   const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
   //   expect(morphResult.sort()).toEqual(['id', 'class', 'value', 'placeholder', 'disabled'].sort());
   // });
