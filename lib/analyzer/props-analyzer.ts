@@ -1,6 +1,4 @@
-import { SyntaxKind, Node, TypeLiteralNode, PropertySignature } from 'ts-morph';
-import * as fs from 'fs';
-import * as path from 'path';
+import { SyntaxKind, Node, TypeLiteralNode, PropertySignature, SourceFile, Project } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
 
@@ -10,8 +8,8 @@ const moduleName = 'props-analyzer-morph';
  * Props 分析器类，使用ts-morph处理TypeScript AST
  */
 class PropsAnalyzer extends BaseAnalyzer {
-  constructor(filePath: string, code: string) {
-    super(filePath, code);
+  constructor(sourceFile: SourceFile, project: Project) {
+    super(sourceFile, project);
   }
 
   /**
@@ -230,32 +228,10 @@ class PropsAnalyzer extends BaseAnalyzer {
   protected resolveImportedType(moduleSpecifier: string, typeName: string): void {
     try {
       logDebug(moduleName, `Resolving imported type from: ${moduleSpecifier}, name: ${typeName}`);
-      
-      // 解析导入文件路径，类似resolveImportedReference
-      const currentDir = path.dirname(this.filePath);
-      let importFilePath = '';
-      
-      if (moduleSpecifier.startsWith('.')) {
-        importFilePath = path.resolve(currentDir, moduleSpecifier);
-        
-        if (!importFilePath.endsWith('.ts') && !importFilePath.endsWith('.tsx')) {
-          const possibleExtensions = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
-          for (const ext of possibleExtensions) {
-            const testPath = `${importFilePath}${ext}`;
-            if (fs.existsSync(testPath)) {
-              importFilePath = testPath;
-              break;
-            }
-          }
-        }
-      }
-      // 读取和解析导入文件
-      const importFileContent = fs.readFileSync(importFilePath, 'utf-8');
-      const importSourceFile = this.project.createSourceFile(`import-type-${path.basename(importFilePath)}`, 
-                                                           importFileContent, 
-                                                           { overwrite: true });
-      
-      // 查找导出的类型别名
+      const importDecls = this.sourceFile.getImportDeclarations();
+      const importDecl = importDecls.find(decl => decl.getModuleSpecifierValue() === moduleSpecifier);
+      if (!importDecl) return;
+      const importSourceFile=  importDecl.getSourceFile();
       const typeAliases = importSourceFile.getDescendantsOfKind(SyntaxKind.TypeAliasDeclaration)
         .filter(typeAlias => typeAlias.getName() === typeName);
       

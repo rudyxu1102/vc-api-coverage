@@ -1,5 +1,5 @@
 import type { Reporter } from 'vitest/reporters'
-import type { TestModule, Vitest } from 'vitest/node'
+import type { TestModule } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
@@ -13,17 +13,17 @@ import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
 import type { VcCoverageData, VcData } from '../lib/types';
 import TestUnitAnalyzer from '../lib/analyzer/test-units-analyzer';
-import type { SourceMap } from 'rollup';
 import { toEventName } from '../lib/common/utils';
+import { Project } from 'ts-morph';
 
 export default class VcCoverageReporter implements Reporter {
-  private ctx!: Vitest;
   private options: VcCoverageOptions;
   private htmlReporter: HTMLReporter;
   private jsonReporter: JSONReporter;
   private coverageData: Array<VcCoverageData> = [];
   private unitData: Record<string, VcData> = {};
   private compData: Record<string, VcData> = {};
+  private project: Project;
 
   constructor(options: VcCoverageOptions = {}) {
     this.options = {
@@ -35,15 +35,17 @@ export default class VcCoverageReporter implements Reporter {
 
     this.htmlReporter = new HTMLReporter(this.options.outputDir);
     this.jsonReporter = new JSONReporter(this.options.outputDir);
-  }
-
-  onInit(ctx: Vitest): void {
-    this.ctx = ctx;
-    console.log('\n[vc-api-coverage] Initialized.');
+    this.project = new Project({
+      compilerOptions: {
+          jsx: 1, // Preserve JSX
+          target: 99, // ESNext
+      },
+  });
   }
 
   onTestModuleEnd(testModule: TestModule) {
-    const res = new TestUnitAnalyzer(testModule.moduleId).analyze()
+    const sourceFile = this.project.addSourceFileAtPath(testModule.moduleId)
+    const res = new TestUnitAnalyzer(sourceFile, this.project).analyze()
     for (const fullPath in res) {
       let info: VcData = {
         props: [],
@@ -65,22 +67,12 @@ export default class VcCoverageReporter implements Reporter {
 
   analyzerComponent() {
     for (const path in this.unitData) {
-      const module = this.ctx.vite.moduleGraph.getModuleById(path);
-      
-      // 增加防御性检查确保 map 和 sourcesContent 存在
-      const sourceMap = module?.transformResult?.map as SourceMap;
-      const code = sourceMap?.sourcesContent?.[0] || '';
-      
-      if (!code) {
-        console.warn(`[vc-api-coverage] Warning: Could not find source code for ${path}`);
-        continue; // 如果没有源代码，跳过此文件
-      }
-        
+      const sourceFile = this.project.addSourceFileAtPath(path)
       // 分析组件API
-      const props = new PropsAnalyzer(path, code).analyze();
-      const emits = new EmitsAnalyzer(path, code).analyze()
-      const slots = new SlotsAnalyzer(path, code).analyze();
-      const exposes = new ExposeAnalyzer(path, code).analyze()
+      const props = new PropsAnalyzer(sourceFile, this.project).analyze();
+      const emits = new EmitsAnalyzer(sourceFile, this.project).analyze()
+      const slots = new SlotsAnalyzer(sourceFile, this.project).analyze();
+      const exposes = new ExposeAnalyzer(sourceFile, this.project).analyze()
       this.compData[path] = {
         props,
         emits: emits.map(e => toEventName(e)),

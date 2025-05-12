@@ -1,6 +1,4 @@
-import { SyntaxKind, Node, TypeLiteralNode, PropertySignature, SourceFile } from 'ts-morph';
-import * as fs from 'fs';
-import * as path from 'path';
+import { SyntaxKind, Node, TypeLiteralNode, PropertySignature, SourceFile, Project } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
 
@@ -11,8 +9,8 @@ const moduleName = 'slots-analyzer-morph';
  * 插槽分析器类，使用ts-morph处理TypeScript AST
  */
 class SlotsAnalyzer extends BaseAnalyzer {
-  constructor(filePath: string, code: string) {
-    super(filePath, code);
+  constructor(sourceFile: SourceFile, project: Project) {
+    super(sourceFile, project);
   }
 
   /**
@@ -252,45 +250,8 @@ class SlotsAnalyzer extends BaseAnalyzer {
       
       // 首先尝试使用BaseAnalyzer中的tryImportFile方法
       const importSourceFile = this.tryImportFile(moduleSpecifier);
-      
-      // 如果tryImportFile失败，则尝试直接方法
-      if (!importSourceFile) {
-        // 解析导入文件路径
-        const currentDir = path.dirname(this.filePath);
-        let importFilePath = '';
-        
-        if (moduleSpecifier.startsWith('.')) {
-          importFilePath = path.resolve(currentDir, moduleSpecifier);
-          
-          if (!importFilePath.endsWith('.ts') && !importFilePath.endsWith('.tsx')) {
-            const possibleExtensions = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
-            for (const ext of possibleExtensions) {
-              const testPath = `${importFilePath}${ext}`;
-              if (fs.existsSync(testPath)) {
-                importFilePath = testPath;
-                break;
-              }
-            }
-          }
-        }
-        
-        if (!fs.existsSync(importFilePath)) {
-          logDebug(moduleName, `File not found: ${importFilePath}`);
-          return;
-        }
-        
-        // 读取和解析导入文件
-        const importFileContent = fs.readFileSync(importFilePath, 'utf-8');
-        const sourceFile = this.project.createSourceFile(
-          `import-type-${path.basename(importFilePath)}`,
-          importFileContent, 
-          { overwrite: true }
-        );
-        
-        this.processImportedSourceFile(sourceFile, typeName);
-      } else {
-        this.processImportedSourceFile(importSourceFile, typeName);
-      }
+      if (!importSourceFile) return;
+      this.processImportedSourceFile(importSourceFile, typeName);
     } catch (error) {
       logError(moduleName, `Error resolving imported type: ${error}`);
     }
@@ -391,79 +352,12 @@ class SlotsAnalyzer extends BaseAnalyzer {
     try {
       logDebug(moduleName, `Resolving imported reference from: ${moduleSpecifier}, name: ${importName}`);
       
-      // 1. 首先尝试使用BaseAnalyzer中的tryImportFile方法处理真实文件
       const importSourceFile = this.tryImportFile(moduleSpecifier);
       if (importSourceFile) {
-        // 处理真实的导入文件
         super.resolveImportedReference(moduleSpecifier, importName);
         return;
       }
       
-      // 2. 如果无法导入真实文件且模块说明符以./props结尾，则可能是测试模拟
-      // 这是针对测试用例中特定模式的处理
-      if (moduleSpecifier.endsWith('./props') || moduleSpecifier.endsWith('/props')) {
-        try {
-          // 读取可能的模拟内容 - 对于测试环境，fs会被模拟
-          if (fs.existsSync(moduleSpecifier)) {
-            const content = fs.readFileSync(moduleSpecifier, 'utf-8');
-            if (content) {
-              // 在模拟内容中寻找SlotsType
-              const mockFile = this.project.createSourceFile(`mock-${importName}`, content, { overwrite: true });
-              
-              // 查找导出符合导入名称的变量
-              const exportedSymbols = mockFile.getExportSymbols();
-              const exportedSymbol = exportedSymbols.find(symbol => symbol.getName() === importName);
-              
-              if (exportedSymbol) {
-                const declarations = exportedSymbol.getDeclarations();
-                for (const decl of declarations) {
-                  if (decl.getKind() === SyntaxKind.VariableDeclaration) {
-                    const initializer = decl.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
-                    if (initializer && initializer.getKind() === SyntaxKind.AsExpression) {
-                      const asExpr = initializer.asKind(SyntaxKind.AsExpression);
-                      if (asExpr) {
-                        const typeNode = asExpr.getTypeNode();
-                        if (typeNode && typeNode.getKind() === SyntaxKind.TypeReference) {
-                          this.analyzeSlotsTypeReference(typeNode);
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              
-              // 如果没有找到匹配的导出，直接查找所有SlotsType引用
-              const asExpressions = mockFile.getDescendantsOfKind(SyntaxKind.AsExpression);
-              for (const asExpr of asExpressions) {
-                const typeNode = asExpr.getTypeNode();
-                if (typeNode && typeNode.getKind() === SyntaxKind.TypeReference) {
-                  const typeRef = typeNode.asKind(SyntaxKind.TypeReference);
-                  if (typeRef && typeRef.getTypeName().getText() === 'SlotsType') {
-                    // 直接从SlotsType中提取属性
-                    const typeArgs = typeRef.getTypeArguments();
-                    if (typeArgs.length > 0 && typeArgs[0].getKind() === SyntaxKind.TypeLiteral) {
-                      const members = typeArgs[0].asKind(SyntaxKind.TypeLiteral)?.getMembers() || [];
-                      for (const member of members) {
-                        if (member.getKind() === SyntaxKind.PropertySignature) {
-                          const propName = member.asKind(SyntaxKind.PropertySignature)?.getName();
-                          if (propName) {
-                            this.resultSet.add(propName);
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          logError(moduleName, `Error processing mock content: ${error}`);
-        }
-      }
-      
-      // 3. 尝试直接解析导入的类型（可能是从其他地方导入的类型定义）
-      this.resolveImportedType(moduleSpecifier, importName);
     } catch (error) {
       logError(moduleName, `Error resolving imported reference: ${error}`);
     }

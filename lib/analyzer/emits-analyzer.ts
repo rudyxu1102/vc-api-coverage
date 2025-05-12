@@ -1,4 +1,4 @@
-import { SyntaxKind, Node } from 'ts-morph';
+import { SyntaxKind, Node, Project, SourceFile } from 'ts-morph';
 import { logDebug } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
 
@@ -10,8 +10,8 @@ const moduleName = 'emits-analyzer-morph';
 class EmitsAnalyzer extends BaseAnalyzer {
   private foundDefineComponentEmits: boolean = false;
 
-  constructor(filePath: string, code: string) {
-    super(filePath, code);
+  constructor(sourceFile: SourceFile, project: Project) {
+    super(sourceFile, project);
   }
 
   /**

@@ -1,4 +1,4 @@
-import { SyntaxKind, Node, ArrayLiteralExpression, TypeLiteralNode, PropertySignature, ObjectLiteralExpression } from 'ts-morph';
+import { SyntaxKind, Node, ArrayLiteralExpression, TypeLiteralNode, PropertySignature, ObjectLiteralExpression, Project, SourceFile } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
 
@@ -13,8 +13,8 @@ class ExposeAnalyzer extends BaseAnalyzer {
   private hasExplicitExpose: boolean = false;
   private hasOptionsExpose: boolean = false;
 
-  constructor(filePath: string, code: string) {
-    super(filePath, code);
+  constructor(sourceFile: SourceFile, project: Project) {
+    super(sourceFile, project);
   }
 
   /**

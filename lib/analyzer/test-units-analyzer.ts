@@ -16,18 +16,9 @@ class TestUnitAnalyzer {
     private result: TestUnitsResult = {};
     private project: Project;
     
-    constructor(filePath: string) {
-        // Create a project
-        this.project = new Project({
-            compilerOptions: {
-                jsx: 1, // Preserve JSX
-                target: 99, // ESNext
-            },
-        });
-        // Add source file
-        this.sourceFile = this.project.addSourceFileAtPath(filePath);
-        
-        // Initialize result
+    constructor(sourceFile: SourceFile, project: Project) {
+        this.project = project;
+        this.sourceFile = sourceFile;
         this.result = {};
     }
 
@@ -37,7 +28,7 @@ class TestUnitAnalyzer {
         
         // Analyze JSX elements in the file
         this.analyzeJSXElements();
-        
+
         return this.result;
     }
     
@@ -226,7 +217,6 @@ class TestUnitAnalyzer {
                 const resolved = importDecl.getModuleSpecifierSourceFile();
                 if (!resolved) return;
                 let componentFile: string = resolved.getFilePath();
-                
                 // 检查是否需要处理index.ts文件
                 if (!isComponentFile(componentFile)) {
                     const realComponentPath = this.resolveRealComponentPath(componentFile);
@@ -347,7 +337,6 @@ class TestUnitAnalyzer {
             ...this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxElement),
             ...this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)
         ];
-        
         for (const jsxElement of jsxElements) {
             // Get the opening element (or the self-closing element itself)
             const openingElement = Node.isJsxElement(jsxElement) 

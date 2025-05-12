@@ -1,6 +1,4 @@
-import { Project, SyntaxKind, Node, ts, SourceFile, ArrayLiteralExpression } from 'ts-morph';
-import * as fs from 'fs';
-import * as path from 'path';
+import { Project, SyntaxKind, Node, SourceFile, ArrayLiteralExpression } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { parseComponent } from '../common/shared-parser';
 
@@ -12,38 +10,11 @@ export abstract class BaseAnalyzer {
   protected sourceFile: SourceFile;
   protected project: Project;
   protected filePath: string;
-  private static projectCache: Map<string, Project> = new Map();
-  private static sourceFileCache: Map<string, SourceFile> = new Map();
-  private static importedFileCache: Map<string, SourceFile> = new Map();
 
-  constructor(filePath: string, code: string) {
-    this.filePath = filePath;
-    
-    // 使用缓存的项目实例或创建新的
-    if (!BaseAnalyzer.projectCache.has(filePath)) {
-      const project = new Project({
-        compilerOptions: {
-          jsx: ts.JsxEmit.React,
-          jsxFactory: 'h',
-          target: ts.ScriptTarget.ESNext,
-        },
-      });
-      BaseAnalyzer.projectCache.set(filePath, project);
-    } 
-    
-    this.project = BaseAnalyzer.projectCache.get(filePath)!;
-    
-    // 解析代码，处理Vue SFC文件
-    const sourceCode = this.getSourceCode(code);
-    
-    // 使用缓存的源文件或创建新的
-    const cacheKey = `${filePath}-${sourceCode.length}`;
-    if (!BaseAnalyzer.sourceFileCache.has(cacheKey)) {
-      const sourceFile = this.project.createSourceFile(filePath, sourceCode, { overwrite: true });
-      BaseAnalyzer.sourceFileCache.set(cacheKey, sourceFile);
-    }
-    
-    this.sourceFile = BaseAnalyzer.sourceFileCache.get(cacheKey)!;
+  constructor(sourceFile: SourceFile, project: Project) {
+    this.project = project;
+    this.filePath = sourceFile.getFilePath();
+    this.sourceFile = sourceFile;
   }
 
   /**
@@ -261,58 +232,10 @@ export abstract class BaseAnalyzer {
    * 共享缓存已导入的文件，提高性能
    */
   protected tryImportFile(moduleSpecifier: string): SourceFile | null {
-    try {
-      // 使用缓存，避免重复导入
-      const cacheKey = `${this.filePath}-${moduleSpecifier}`;
-      
-      if (BaseAnalyzer.importedFileCache.has(cacheKey)) {
-        return BaseAnalyzer.importedFileCache.get(cacheKey)!;
-      }
-      
-      // 解析导入文件路径
-      const currentDir = path.dirname(this.filePath);
-      let importFilePath = '';
-      
-      // 处理相对路径导入
-      if (moduleSpecifier.startsWith('.')) {
-        importFilePath = path.resolve(currentDir, moduleSpecifier);
-        
-        // 处理可能的扩展名
-        if (!importFilePath.endsWith('.ts') && !importFilePath.endsWith('.tsx')) {
-          const possibleExtensions = ['.ts', '.tsx', '/index.ts', '/index.tsx'];
-          for (const ext of possibleExtensions) {
-            const testPath = `${importFilePath}${ext}`;
-            if (fs.existsSync(testPath)) {
-              importFilePath = testPath;
-              break;
-            }
-          }
-        }
-      } else {
-        // 处理非相对路径导入 (需扩展为完整实现)
-        return null;
-      }
-      
-      if (!fs.existsSync(importFilePath)) {
-        logDebug(this.getModuleName(), `File not found: ${importFilePath}`);
-        return null;
-      }
-      
-      // 读取和解析导入文件
-      const importFileContent = fs.readFileSync(importFilePath, 'utf-8');
-      const importSourceFile = this.project.createSourceFile(
-        `import-${path.basename(importFilePath)}`,
-        importFileContent, 
-        { overwrite: true }
-      );
-      
-      // 缓存结果
-      BaseAnalyzer.importedFileCache.set(cacheKey, importSourceFile);
-      return importSourceFile;
-    } catch (error) {
-      logError(this.getModuleName(), `Error importing file: ${error}`);
-      return null;
-    }
+    const importDecls = this.sourceFile.getImportDeclarations();
+    const importDecl = importDecls.find(decl => decl.getModuleSpecifierValue() === moduleSpecifier);
+    if (!importDecl) return null;
+    return importDecl.getSourceFile();
   }
 
   /**
