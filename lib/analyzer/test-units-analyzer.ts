@@ -280,22 +280,26 @@ class TestUnitAnalyzer {
             if (initializer && Node.isObjectLiteralExpression(initializer)) {
                 const emitProps: string[] = [];
                 
-                for (const prop of initializer.getProperties()) {
+                // Get all properties including identifiers and shorthand properties
+                const properties = initializer.getProperties();
+                
+                for (const prop of properties) {
+                    let propName = '';
                     if (Node.isPropertyAssignment(prop)) {
-                        // Handle both regular property names and string literals
                         const propNameNode = prop.getNameNode();
-                        let propName: string;
-                        
                         if (Node.isStringLiteral(propNameNode)) {
-                            // For string literal property names like 'onUpdate:modelValue'
                             propName = propNameNode.getLiteralValue();
                         } else {
                             propName = prop.getName();
                         }
-                        console.log(propName, 111)
-                        if (propName.startsWith('on') && propName.length > 2) {
-                            emitProps.push(propName);
-                        }
+                    } else if (Node.isShorthandPropertyAssignment(prop)) {
+                        propName = prop.getName();
+                    }
+                    
+                    if (propName.startsWith('on') && propName.length > 2) {
+                        // Convert 'onClick' to 'click' by removing the 'on' prefix and lowercasing the first letter
+                        const eventName = propName.slice(2).charAt(0).toLowerCase() + propName.slice(3);
+                        emitProps.push(eventName);
                     }
                 }
                 

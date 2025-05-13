@@ -53,10 +53,15 @@ describe('test-units-analyzer', () => {
                     })
                     expect(1).toBe(1)
                 })
+                it('should render correctly 1', () => {
+                    const onHover = vi.fn();
+                    render(() => <Button onHover={onHover}></Button>, {});
+                    expect(1).toBe(1)
+                })
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
+        expect(res['src/components/Button.tsx'].emits).toEqual(['click', 'hover'])
     })
 
     // it('should analyze slots in test units', () => {
