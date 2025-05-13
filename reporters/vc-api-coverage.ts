@@ -1,5 +1,5 @@
 import type { Reporter } from 'vitest/reporters'
-import type { TestModule } from 'vitest/node'
+import type { TestModule, Vitest } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
@@ -24,6 +24,7 @@ export default class VcCoverageReporter implements Reporter {
   private unitData: Record<string, VcData> = {};
   private compData: Record<string, VcData> = {};
   private project: Project;
+  private ctx!: Vitest;
 
   constructor(options: VcCoverageOptions = {}) {
     this.options = {
@@ -40,13 +41,21 @@ export default class VcCoverageReporter implements Reporter {
           jsx: 1, // Preserve JSX
           target: 99, // ESNext
       },
-  });
+    });
+  }
+
+  onInit(ctx: Vitest) {
+    this.ctx = ctx;
   }
 
   onTestModuleEnd(testModule: TestModule) {
-    const sourceFile = this.project.addSourceFileAtPath(testModule.moduleId)
+    const vitenode = testModule.project.vite
+    const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
+    const code = cache?.transformResult?.code || ''
+    const rootDir = this.ctx.config.root
+    const sourceFile = this.project.createSourceFile(testModule.moduleId, code, { overwrite: true })
 
-    const res = new TestUnitAnalyzer(sourceFile, this.project).analyze()
+    const res = new TestUnitAnalyzer(sourceFile, this.project, rootDir).analyze()
     for (const fullPath in res) {
       let info: VcData = {
         props: [],
@@ -94,7 +103,6 @@ export default class VcCoverageReporter implements Reporter {
   dealPropsEmits(compData: VcData, unitData: VcData) {
     const propsDetails = []
     const emitsDetails = []
-    
     // 处理测试中的emits
     for (const emit of unitData.emits) {
       if (compData.props.includes(emit)) {
@@ -113,7 +121,7 @@ export default class VcCoverageReporter implements Reporter {
         propsDetails.push(prop)
       }
     }
-    
+
     return { propsDetails, emitsDetails }
   }
 

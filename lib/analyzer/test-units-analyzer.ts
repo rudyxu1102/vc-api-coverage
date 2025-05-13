@@ -1,7 +1,8 @@
 import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression } from 'ts-morph';
 import { isComponentFile } from '../common/utils';
+// import path from 'path';
 
-interface TestUnit {
+interface TestUnit {    
     props?: string[];
     emits?: string[];
     slots?: string[];
@@ -15,11 +16,13 @@ class TestUnitAnalyzer {
     private sourceFile: SourceFile;
     private result: TestUnitsResult = {};
     private project: Project;
+    private rootDir: string;
     
-    constructor(sourceFile: SourceFile, project: Project) {
+    constructor(sourceFile: SourceFile, project: Project, rootDir: string = '') {
         this.project = project;
         this.sourceFile = sourceFile;
         this.result = {};
+        this.rootDir = rootDir;
     }
 
     public analyze(): TestUnitsResult {
@@ -214,9 +217,8 @@ class TestUnitAnalyzer {
             const importDecl = this.getImportDecl(componentName);
             if (!importDecl) return;
             const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-            let componentFile: string | null = modulePath;
-            const resolved = importDecl.getModuleSpecifierSourceFile();
-            if (resolved && !isComponentFile(resolved.getFilePath())) {
+            let componentFile: string | null = `${this.rootDir}${modulePath}`;
+            if (!isComponentFile(componentFile)) {
                 const realComponentPath = this.resolveRealComponentPath(componentFile);
                 if (realComponentPath) {
                     componentFile = realComponentPath;
@@ -295,11 +297,8 @@ class TestUnitAnalyzer {
                     } else if (Node.isShorthandPropertyAssignment(prop)) {
                         propName = prop.getName();
                     }
-                    
                     if (propName.startsWith('on') && propName.length > 2) {
-                        // Convert 'onClick' to 'click' by removing the 'on' prefix and lowercasing the first letter
-                        const eventName = propName.slice(2).charAt(0).toLowerCase() + propName.slice(3);
-                        emitProps.push(eventName);
+                        emitProps.push(propName);
                     }
                 }
                 
@@ -352,11 +351,10 @@ class TestUnitAnalyzer {
             
             const resolved = importDecl.getModuleSpecifierSourceFile();
             const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-            let filePath: string | null = modulePath;
+            let filePath: string | null = `${this.rootDir}${modulePath}`;
             if (resolved) {
                 filePath = resolved.getFilePath();
             };
-            
             // Check if we need to handle index.ts files
             if (!isComponentFile(filePath)) {
                 const realComponentPath = this.resolveRealComponentPath(filePath);
@@ -368,6 +366,11 @@ class TestUnitAnalyzer {
                     
                     // Extract props from JSX attributes
                     this.extractJSXAttrs(openingElement, this.result[realComponentPath]);
+                    
+                    // Extract slots from JSX children if it's a JSX element (not self-closing)
+                    if (Node.isJsxElement(jsxElement)) {
+                        this.extractJSXSlots(jsxElement, this.result[realComponentPath]);
+                    }
                 } 
             } else {
                 // Initialize component entry in result if not exists
@@ -377,6 +380,11 @@ class TestUnitAnalyzer {
                 
                 // Extract props from JSX attributes
                 this.extractJSXAttrs(openingElement, this.result[filePath]);
+                
+                // Extract slots from JSX children if it's a JSX element (not self-closing)
+                if (Node.isJsxElement(jsxElement)) {
+                    this.extractJSXSlots(jsxElement, this.result[filePath]);
+                }
             }
         }
     }
@@ -389,19 +397,16 @@ class TestUnitAnalyzer {
             for (const attr of attributes) {
                 if (Node.isJsxAttribute(attr)) {
                     const propName = attr.getNameNode().getText();
-                    
+                    console.log(propName, 111)
                     // Handle event handlers (props starting with "on")
                     if (propName.startsWith('on') && propName.length > 2) {
-                        // Convert 'onHover' to 'hover' by removing the 'on' prefix and lowercasing the first letter
-                        const eventName = propName.slice(2).charAt(0).toLowerCase() + propName.slice(3);
-                        
                         // Add to emits list
                         if (!component.emits) {
                             component.emits = [];
                         }
                         
-                        if (!component.emits.includes(eventName)) {
-                            component.emits.push(eventName);
+                        if (!component.emits.includes(propName)) {
+                            component.emits.push(propName);
                         }
                     } else {
                         // Add regular prop to the result
@@ -411,6 +416,42 @@ class TestUnitAnalyzer {
                         
                         if (!component.props.includes(propName)) {
                             component.props.push(propName);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Helper method to extract slots from JSX elements
+    private extractJSXSlots(element: Node, component: TestUnit) {
+        if (Node.isJsxElement(element)) {
+            // First, add the default slot if the element has children
+            const children = element.getJsxChildren();
+            if (children.length > 0) {
+                component.slots = component.slots || [];
+                if (!component.slots.includes('default')) {
+                    component.slots.push('default');
+                }
+            }
+            
+            // Look for Vue-style named slots pattern: {{ slotName: content }}
+            const objectLiteralExpressions = element.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression);
+            for (const objLiteral of objectLiteralExpressions) {
+                // Check if this is inside a JSX expression
+                const parent = objLiteral.getParent();
+                if (parent && Node.isJsxExpression(parent)) {
+                    // Extract slot names from object properties
+                    const properties = objLiteral.getProperties();
+                    for (const prop of properties) {
+                        if (Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) {
+                            const slotName = prop.getName();
+                            if (slotName) {
+                                component.slots = component.slots || [];
+                                if (!component.slots.includes(slotName)) {
+                                    component.slots.push(slotName);
+                                }
+                            }
                         }
                     }
                 }

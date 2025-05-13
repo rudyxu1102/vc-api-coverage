@@ -25,7 +25,7 @@ describe('test-units-analyzer', () => {
                     expect(1).toBe(1)
                 })
                 it('should render correctly 1', () => {
-                    render(() => <Button size="large"></Button>, {})
+                    render(() => <Button size="large" />, {})
                     expect(1).toBe(1)
                 })
             })
@@ -45,10 +45,12 @@ describe('test-units-analyzer', () => {
             describe('components', () => {
                 test('should render correctly 1', () => {
                     const onClick = vi.fn()
+                    const fn = vi.fn()
                     const wrapper = shallowMount(Button, {
                         props: {
                             type: 'primary',
                             onClick,
+                            onFocus: fn
                         }
                     })
                     expect(1).toBe(1)
@@ -61,7 +63,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click', 'hover'])
+        expect(res['src/components/Button.tsx'].emits).toEqual(['onClick', 'onFocus', 'onHover'])
     })
 
     it('should analyze slots in test units', () => {
