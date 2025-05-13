@@ -3,6 +3,7 @@ import ExposeAnalyzer from '../../lib/analyzer/expose-analyzer'
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { Project } from 'ts-morph'
 
 // 获取当前文件的目录路径
 const __filename = fileURLToPath(import.meta.url)
@@ -22,7 +23,6 @@ describe('Expose Analyzer', () => {
 
   it('should analyze expose in Vue SFC with defineExpose', () => {
     const code = `
-      <script setup>
       import { ref } from 'vue'
       
       const count = ref(0)
@@ -34,9 +34,10 @@ describe('Expose Analyzer', () => {
         increment,
         reset
       })
-      </script>
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['count', 'increment', 'reset'].sort())
   })
 
@@ -57,7 +58,9 @@ describe('Expose Analyzer', () => {
         expose: ['getValue', 'increment']
       })
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['getValue', 'increment'].sort())
   })
 
@@ -78,8 +81,9 @@ describe('Expose Analyzer', () => {
         },
       })
     `
-    
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['getValue', 'increment'].sort())
   })
   
@@ -107,13 +111,14 @@ describe('Expose Analyzer', () => {
         }
       })
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['focus', 'blur'].sort())
   })
 
   it('should analyze expose with type annotations', () => {
     const code = `
-      <script setup lang="ts">
       interface Exposed {
         submit: () => Promise<void>
         validate: () => boolean
@@ -125,19 +130,20 @@ describe('Expose Analyzer', () => {
         validate: () => true,
         reset: () => { /* ... */ }
       })
-      </script>
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['submit', 'validate', 'reset'].sort())
   })
 
   it('should return empty array when nothing is exposed', () => {
     const code = `
-      <script setup>
       const internal = 'not exposed'
-      </script>
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult).toEqual([])
   })
 
@@ -157,7 +163,9 @@ describe('Expose Analyzer', () => {
         expose: ['count', 'increment']
       }
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['count', 'increment'].sort())
   })
 })
@@ -171,7 +179,9 @@ describe('ExposeAnalyzer', () => {
         method2() {}
       })
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['method1', 'prop1', 'method2'].sort())
   })
 
@@ -187,7 +197,9 @@ describe('ExposeAnalyzer', () => {
         method2
       })
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['method1', 'prop1', 'method2'].sort())
   })
 
@@ -202,7 +214,9 @@ describe('ExposeAnalyzer', () => {
         }
       }
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['method1', 'method2'].sort())
   })
 
@@ -222,7 +236,9 @@ describe('ExposeAnalyzer', () => {
         }
       }
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult).toEqual([])
   })
 
@@ -241,7 +257,9 @@ describe('ExposeAnalyzer', () => {
         }
       }
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['method1', 'method2', 'prop1'].sort())
   })
 
@@ -253,7 +271,9 @@ describe('ExposeAnalyzer', () => {
         }
       }
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult).toEqual([])
   })
 
@@ -269,7 +289,9 @@ describe('ExposeAnalyzer', () => {
         prop1
       })
     `
-    const exposeResult = new ExposeAnalyzer(tempFile, code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const exposeResult = new ExposeAnalyzer(sourceFile, project).analyze()
     expect(exposeResult.sort()).toEqual(['method1', 'prop1'].sort())
   })
 }) 

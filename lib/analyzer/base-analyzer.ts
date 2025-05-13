@@ -1,6 +1,8 @@
 import { Project, SyntaxKind, Node, SourceFile, ArrayLiteralExpression } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { parseComponent } from '../common/shared-parser';
+import path from 'path';
+import fs from 'fs';
 
 /**
  * 基础分析器类，提供通用的AST分析功能
@@ -10,10 +12,12 @@ export abstract class BaseAnalyzer {
   protected sourceFile: SourceFile;
   protected project: Project;
   protected filePath: string;
+  protected dirPath: string;
 
   constructor(sourceFile: SourceFile, project: Project) {
     this.project = project;
     this.filePath = sourceFile.getFilePath();
+    this.dirPath = path.dirname(this.filePath);
     this.sourceFile = sourceFile;
   }
 
@@ -44,7 +48,6 @@ export abstract class BaseAnalyzer {
    */
   protected processObjectLiteral(node: Node, sourceFile: SourceFile): void {
     if (!Node.isObjectLiteralExpression(node)) return;
-    
     // 处理常规属性
     const properties = node.getProperties().filter(Node.isPropertyAssignment);
     for (const prop of properties) {
@@ -138,7 +141,6 @@ export abstract class BaseAnalyzer {
     // 查找局部变量定义
     const variableDeclarations = sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
       .filter(decl => decl.getName() === identifierName);
-    
     if (variableDeclarations.length > 0) {
       for (const decl of variableDeclarations) {
         const initializer = decl.getInitializer();
@@ -228,14 +230,39 @@ export abstract class BaseAnalyzer {
   }
 
   /**
+   * 获取文件路径
+   */
+  protected getFilePath(moduleSpecifier: string): string {
+    const ext = ['.ts', '.tsx', '.js', '.jsx', '.vue'];
+    const hasExt = ext.some(e => moduleSpecifier.endsWith(e));
+    if (hasExt) {
+      return path.resolve(this.dirPath, moduleSpecifier);
+    }
+    for (const e of ext) {
+      const filePath = path.resolve(this.dirPath, moduleSpecifier + e);
+      if (fs.existsSync(filePath)) {
+        return filePath;
+      }
+    }
+    for (const e of ext) {
+      const filePath = path.resolve(this.dirPath, moduleSpecifier, 'index' + e);
+      if (fs.existsSync(filePath)) {
+        return filePath;
+      }
+    }
+    return '';
+  }
+
+  /**
    * 尝试导入文件并返回源文件
    * 共享缓存已导入的文件，提高性能
    */
   protected tryImportFile(moduleSpecifier: string): SourceFile | null {
-    const importDecls = this.sourceFile.getImportDeclarations();
-    const importDecl = importDecls.find(decl => decl.getModuleSpecifierValue() === moduleSpecifier);
-    if (!importDecl) return null;
-    return importDecl.getSourceFile();
+    const filePath = this.getFilePath(moduleSpecifier);
+    const existSourceFile = this.project.getSourceFile(filePath)
+    if (existSourceFile) return existSourceFile
+    const sourceFile =  this.project.addSourceFileAtPath(filePath);
+    return sourceFile || null;
   }
 
   /**
@@ -274,7 +301,6 @@ export abstract class BaseAnalyzer {
         // 查找特定命名导出
         const exportedSymbols = importSourceFile.getExportSymbols();
         const exportedSymbol = exportedSymbols.find(symbol => symbol.getName() === importName);
-        
         if (exportedSymbol) {
           const declarations = exportedSymbol.getDeclarations();
           for (const decl of declarations) {
@@ -321,11 +347,17 @@ export abstract class BaseAnalyzer {
       // 变量声明导出
       else if (Node.isVariableDeclaration(node)) {
         const initializer = node.getInitializer();
+
         if (initializer) {
           if (Node.isArrayLiteralExpression(initializer)) {
             this.processArrayLiteral(initializer);
           } else if (Node.isObjectLiteralExpression(initializer)) {
             this.processObjectLiteral(initializer, sourceFile);
+          } else if (Node.isAsExpression(initializer)) {
+            const expression = initializer.getExpression();
+            if (Node.isObjectLiteralExpression(expression)) {
+              this.processObjectLiteral(expression, sourceFile);
+            }
           }
         }
       }

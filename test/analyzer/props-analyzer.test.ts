@@ -182,13 +182,13 @@ describe('Props Analyzer', () => {
 
     
     const code = `
-    import { buttonProps } from './test-import';
+    import { buttonProps } from './test-import.ts';
     
     const props = defineProps(buttonProps);
     `;
     const project = new Project();
-    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
     project.createSourceFile('./test-import.ts', mockImportedFileContent)
+    const sourceFile = project.createSourceFile('./_temp_test_file.vue', code);
     const morphResult = new PropsAnalyzer(sourceFile, project).analyze();
     expect(morphResult.sort()).toEqual(['type', 'size', 'disabled', 'loading', 'icon'].sort());
   });

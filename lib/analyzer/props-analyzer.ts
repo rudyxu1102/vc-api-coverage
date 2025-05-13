@@ -91,7 +91,7 @@ class PropsAnalyzer extends BaseAnalyzer {
    * 分析 props 对象属性
    */
   private analyzePropsProperty(): void {
-    // 查找所有的对象属性
+    // 查找所有的对象属性 
     const objectProperties = this.sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAssignment)
       .filter(prop => prop.getName() === 'props');
     

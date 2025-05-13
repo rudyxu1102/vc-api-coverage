@@ -2,17 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import SlotsAnalyzer from '../../lib/analyzer/slots-analyzer'
 import * as fs from 'fs'
 import * as path from 'path'
+import { Project } from 'ts-morph'
 
 // Mock fs and path modules for import testing
-vi.mock('fs', () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-}))
-
-vi.mock('path', () => ({
-  dirname: vi.fn().mockReturnValue('/fake/path'),
-  resolve: vi.fn().mockImplementation((...args) => args.join('/')),
-}))
 
 describe('slots-analyzer', () => {
   beforeEach(() => {
@@ -25,23 +17,16 @@ describe('slots-analyzer', () => {
 
   it('should analyze scoped slots', () => {
     const code = `
-      <script setup lang="ts">
       const items = [{ text: 'Hello' }]
       const count = 5
       defineSlots<{
         item: () => VNode[];
         footer: () => VNode[];
       }>()
-      </script>
-
-      <template>
-        <div>
-          <slot name="item"></slot>
-          <slot name="footer"></slot>
-        </div>
-      </template>
     `
-    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const slots = new SlotsAnalyzer(sourceFile, project).analyze()
     expect(slots).toEqual(['item', 'footer'])
   })
 
@@ -51,7 +36,9 @@ describe('slots-analyzer', () => {
         <div>No slots here</div>
       </template>
     `
-    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const slots = new SlotsAnalyzer(sourceFile, project).analyze()
     expect(slots).toEqual([])
   })
 
@@ -69,7 +56,9 @@ describe('slots-analyzer', () => {
         }
       })
     `
-    const slots = new SlotsAnalyzer('/fake/component/Button.tsx', code).analyze()
+    const project = new Project();
+    const sourceFile = project.createSourceFile('./_temp_test_file.tsx', code);
+    const slots = new SlotsAnalyzer(sourceFile, project).analyze()
     expect(slots).toEqual(['default', 'icon'])
   })
 
@@ -85,7 +74,7 @@ describe('slots-analyzer', () => {
         default?: () => VNode[];
       }>
     `
-    
+    const project = new Project();
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue(mockPropsFileContent)
     
