@@ -212,33 +212,29 @@ class TestUnitAnalyzer {
         if (Node.isIdentifier(componentArg)) {
             const componentName = componentArg.getText();
             const importDecl = this.getImportDecl(componentName);
-        
-            if (importDecl) {
-                const resolved = importDecl.getModuleSpecifierSourceFile();
-                if (!resolved) return;
-                let componentFile: string = resolved.getFilePath();
-                // 检查是否需要处理index.ts文件
-                if (!isComponentFile(componentFile)) {
-                    const realComponentPath = this.resolveRealComponentPath(componentFile);
-                    if (realComponentPath) {
-                        componentFile = realComponentPath;
-                    } else {
-                        return; // Skip if we can't resolve the component path
-                    }
+            if (!importDecl) return;
+            const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
+            let componentFile: string | null = modulePath;
+            const resolved = importDecl.getModuleSpecifierSourceFile();
+            if (resolved && !isComponentFile(resolved.getFilePath())) {
+                const realComponentPath = this.resolveRealComponentPath(componentFile);
+                if (realComponentPath) {
+                    componentFile = realComponentPath;
+                } else {
+                    return; // Skip if we can't resolve the component path
                 }
-                
-                // Initialize component entry in result if not exists
-                if (!this.result[componentFile]) {
-                    this.result[componentFile] = {};
-                }
-                
-                // Check for options object (second argument)
-                if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
-                    const options = args[1] as ObjectLiteralExpression;
-                    this.extractProps(options, this.result[componentFile]);
-                    this.extractEmits(options, this.result[componentFile]);
-                    this.extractSlots(options, this.result[componentFile]);
-                }
+            } 
+            // Initialize component entry in result if not exists
+            if (!this.result[componentFile]) {
+                this.result[componentFile] = {};
+            }
+            
+            // Check for options object (second argument)
+            if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
+                const options = args[1] as ObjectLiteralExpression;
+                this.extractProps(options, this.result[componentFile]);
+                this.extractEmits(options, this.result[componentFile]);
+                this.extractSlots(options, this.result[componentFile]);
             }
         }
     }
@@ -296,7 +292,7 @@ class TestUnitAnalyzer {
                         } else {
                             propName = prop.getName();
                         }
-                        
+                        console.log(propName, 111)
                         if (propName.startsWith('on') && propName.length > 2) {
                             emitProps.push(propName);
                         }
@@ -351,9 +347,11 @@ class TestUnitAnalyzer {
             if (!importDecl) continue;
             
             const resolved = importDecl.getModuleSpecifierSourceFile();
-            if (!resolved) continue;
-            
-            const filePath = resolved.getFilePath();
+            const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
+            let filePath: string | null = modulePath;
+            if (resolved) {
+                filePath = resolved.getFilePath();
+            };
             
             // Check if we need to handle index.ts files
             if (!isComponentFile(filePath)) {

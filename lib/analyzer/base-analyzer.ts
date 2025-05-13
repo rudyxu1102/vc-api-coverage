@@ -234,18 +234,20 @@ export abstract class BaseAnalyzer {
    */
   protected getFilePath(moduleSpecifier: string): string {
     const ext = ['.ts', '.tsx', '.js', '.jsx', '.vue'];
-    const hasExt = ext.some(e => moduleSpecifier.endsWith(e));
+    const fileData = moduleSpecifier.split('/');
+    const fileName = fileData.pop() || '';
+    const hasExt = ext.some(e => fileName.endsWith(e));
     if (hasExt) {
       return path.resolve(this.dirPath, moduleSpecifier);
     }
     for (const e of ext) {
-      const filePath = path.resolve(this.dirPath, moduleSpecifier + e);
+      const filePath = path.resolve(this.dirPath, ...fileData, fileName + e);
       if (fs.existsSync(filePath)) {
         return filePath;
       }
     }
     for (const e of ext) {
-      const filePath = path.resolve(this.dirPath, moduleSpecifier, 'index' + e);
+      const filePath = path.resolve(this.dirPath, ...fileData, fileName, 'index' + e);
       if (fs.existsSync(filePath)) {
         return filePath;
       }

@@ -45,6 +45,7 @@ export default class VcCoverageReporter implements Reporter {
 
   onTestModuleEnd(testModule: TestModule) {
     const sourceFile = this.project.addSourceFileAtPath(testModule.moduleId)
+
     const res = new TestUnitAnalyzer(sourceFile, this.project).analyze()
     for (const fullPath in res) {
       let info: VcData = {

@@ -85,3 +85,11 @@ export function toEventName(str: string) {
 export function isComponentFile(filePath: string) {
   return filePath.endsWith('.vue') || filePath.endsWith('.tsx') || filePath.endsWith('.jsx')
 }
+
+export function getThrowableMessage(e: Error, split = '\n') {
+  let name    = e && e.name ? e.name : 'Error';
+  let stack   = e && e.stack ? e.stack : '';
+  let message = e && e.message ? e.message : '';
+
+  return split + 'name: ' + name + split + 'message: ' + message + split + 'stack: ' + stack + split;
+}
