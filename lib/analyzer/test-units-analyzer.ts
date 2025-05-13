@@ -390,16 +390,28 @@ class TestUnitAnalyzer {
                 if (Node.isJsxAttribute(attr)) {
                     const propName = attr.getNameNode().getText();
                     
-                    // Skip event handlers (props starting with "on")
-                    if (propName.startsWith('on') && propName.length > 2) continue;
-                    
-                    // Add the prop to the result
-                    if (!component.props) {
-                        component.props = [];
-                    }
-                    
-                    if (!component.props.includes(propName)) {
-                        component.props.push(propName);
+                    // Handle event handlers (props starting with "on")
+                    if (propName.startsWith('on') && propName.length > 2) {
+                        // Convert 'onHover' to 'hover' by removing the 'on' prefix and lowercasing the first letter
+                        const eventName = propName.slice(2).charAt(0).toLowerCase() + propName.slice(3);
+                        
+                        // Add to emits list
+                        if (!component.emits) {
+                            component.emits = [];
+                        }
+                        
+                        if (!component.emits.includes(eventName)) {
+                            component.emits.push(eventName);
+                        }
+                    } else {
+                        // Add regular prop to the result
+                        if (!component.props) {
+                            component.props = [];
+                        }
+                        
+                        if (!component.props.includes(propName)) {
+                            component.props.push(propName);
+                        }
                     }
                 }
             }
