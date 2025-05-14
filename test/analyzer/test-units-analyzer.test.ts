@@ -38,10 +38,19 @@ describe('test-units-analyzer', () => {
                     })
                     expect(1).toBe(1)
                 })
+                it('should render correctly 3', () => {
+                    mount({
+                        template: '<Button shape="circle" />',
+                        components: {
+                            Button
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].props).toEqual(['type', 'block', 'size'])
+        expect(res[`${rootDir}/Button.tsx`].props!.sort()).toEqual(['type', 'block', 'size', 'shape'].sort())
     })
     it('should analyze emits in test units', () => {
         const fakeTestFilePath = './emits-analyzer.test.tsx'

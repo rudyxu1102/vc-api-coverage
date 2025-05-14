@@ -211,34 +211,115 @@ class TestUnitAnalyzer {
     private processMountCall(mountCall: CallExpression) {
         const args = mountCall.getArguments();
         if (args.length === 0) return;
-        
-        const componentArg = args[0];
-        if (Node.isIdentifier(componentArg)) {
-            const componentName = componentArg.getText();
-            const importDecl = this.getImportDecl(componentName);
-            if (!importDecl) return;
-            const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-            let componentFile: string | null = getAsbFilePath(modulePath, this.dirname);
-            if (!isComponentFile(componentFile)) {
-                const realComponentPath = this.resolveRealComponentPath(componentFile);
-                if (realComponentPath) {
-                    componentFile = realComponentPath;
-                } else {
-                    return; // Skip if we can't resolve the component path
-                }
-            } 
-            // Initialize component entry in result if not exists
-            if (!this.result[componentFile]) {
-                this.result[componentFile] = {};
-            }
-            
-            // Check for options object (second argument)
+
+        let componentArgNode: Node | undefined = args[0];
+        let optionsNode: Node | undefined;
+        let componentName: string | undefined;
+        let mountOptionsObject: ObjectLiteralExpression | undefined;
+
+        if (Node.isIdentifier(componentArgNode)) {
+            // Existing logic: mount(Component, options) or render(Component, options)
+            componentName = componentArgNode.getText();
             if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
-                const options = args[1] as ObjectLiteralExpression;
-                this.extractProps(options, this.result[componentFile]);
-                this.extractEmits(options, this.result[componentFile]);
-                this.extractSlots(options, this.result[componentFile]);
+                optionsNode = args[1];
             }
+        } else if (Node.isObjectLiteralExpression(componentArgNode)) {
+            // New logic: mount({ template: '...', components: { ... } })
+            mountOptionsObject = componentArgNode as ObjectLiteralExpression;
+            optionsNode = mountOptionsObject; // The entire object is effectively the options
+
+            const componentsProperty = mountOptionsObject.getProperty('components');
+            if (componentsProperty && Node.isPropertyAssignment(componentsProperty)) {
+                const componentsInitializer = componentsProperty.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+                if (componentsInitializer) {
+                    // Take the first component found in the 'components' object
+                    // This is a simplification. A more robust solution might parse the template.
+                    const firstComponentProp = componentsInitializer.getProperties()[0];
+                    if (firstComponentProp && (Node.isPropertyAssignment(firstComponentProp) || Node.isShorthandPropertyAssignment(firstComponentProp))) {
+                        componentName = firstComponentProp.getName();
+                    }
+                }
+            }
+        }
+
+        if (!componentName) return;
+
+        const importDecl = this.getImportDecl(componentName);
+        if (!importDecl) return;
+
+        const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
+        let componentFile: string | null = getAsbFilePath(modulePath, this.dirname);
+
+        if (!isComponentFile(componentFile)) {
+            const realComponentPath = this.resolveRealComponentPath(componentFile);
+            if (realComponentPath) {
+                componentFile = realComponentPath;
+            } else {
+                return; // Skip if we can't resolve the component path
+            }
+        }
+
+        if (!this.result[componentFile]) {
+            this.result[componentFile] = {};
+        }
+
+        // Process props, emits, slots from optionsNode or template
+        if (optionsNode && Node.isObjectLiteralExpression(optionsNode)) {
+            const options = optionsNode as ObjectLiteralExpression;
+            this.extractProps(options, this.result[componentFile]); // Standard props
+            this.extractEmits(options, this.result[componentFile]);
+            this.extractSlots(options, this.result[componentFile]);
+
+            // If this was a mount({ template: '...' }) call, also try to extract props from template
+            if (mountOptionsObject) {
+                const templateProperty = mountOptionsObject.getProperty('template');
+                if (templateProperty && Node.isPropertyAssignment(templateProperty)) {
+                    const templateInitializer = templateProperty.getInitializer();
+                    if (templateInitializer && (Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) {
+                        const templateContent = templateInitializer.getLiteralText();
+                        // Extract props from template string for the identified componentName
+                        this.extractPropsFromTemplate(templateContent, componentName, this.result[componentFile]);
+                    }
+                }
+            }
+        }
+    }
+
+    private extractPropsFromTemplate(template: string, componentTagName: string, componentTestUnit: TestUnit) {
+        // Simple regex to find attributes for a given component tag.
+        // This is a basic implementation and might need to be made more robust.
+        // Example: <Button prop1="value1" prop2 />
+        // It won't handle complex bindings like :prop or v-bind well.
+        const tagRegex = new RegExp(`<${componentTagName}(\\s+[^>]*)?>`, 'ig'); // Case-insensitive, global
+        let match;
+        const propsFound: string[] = [];
+
+        while ((match = tagRegex.exec(template)) !== null) {
+            const attrsString = match[1]; // Group 1 captures the attributes string
+            if (!attrsString) continue;
+
+            // Regex to find attribute names (e.g., prop1, prop2)
+            // Handles: prop="value", prop='value', prop, prop={expr}, prop-name, :prop-name
+            const attrRegex = /([@:a-zA-Z0-9_-]+)(?:=(?:"[^"]*"|'[^']*'|[^\s>]*))?/g;
+            let attrMatch;
+            while ((attrMatch = attrRegex.exec(attrsString)) !== null) {
+                let propName = attrMatch[1];
+                // Remove potential Vue binding prefixes like : or v-bind:
+                if (propName.startsWith(':')) {
+                    propName = propName.substring(1);
+                } else if (propName.startsWith('v-bind:')) {
+                    propName = propName.substring(7);
+                }
+                // Exclude event handlers (onXxx or @xxx) as they are handled by emits
+                if (!((propName.startsWith('on') && propName.length > 2 && propName[2] === propName[2].toUpperCase()) || propName.startsWith('@'))) {
+                    propsFound.push(propName);
+                }
+            }
+        }
+
+        if (propsFound.length > 0) {
+            componentTestUnit.props = componentTestUnit.props || [];
+            componentTestUnit.props = [...new Set([...componentTestUnit.props, ...propsFound])];
         }
     }
 
