@@ -355,11 +355,9 @@ class TestUnitAnalyzer {
     }
 
     private extractSlotsFromTemplate(template: string, componentTestUnit: TestUnit) {
-        // 查找Vue模板中的具名插槽，如 <template #trigger> 或 <template v-slot:trigger>
         const slotsFound: string[] = [];
         
-        // 寻找模板中任何组件内的 <template #slotName> 格式的插槽
-        // 这种格式是组件内部的具名插槽，任何组件名，不仅限于Button
+        // 1. Find all explicitly named slots first
         const componentSlotRegex = /<[A-Za-z][A-Za-z0-9-]*[^>]*>.*?<template\s+#([a-zA-Z0-9_-]+)[^>]*>.*?<\/template>/gs;
         let componentSlotMatch;
         while ((componentSlotMatch = componentSlotRegex.exec(template)) !== null) {
@@ -369,7 +367,6 @@ class TestUnitAnalyzer {
             }
         }
         
-        // 寻找 <template #slotName> 格式的插槽（一般格式）
         const hashSlotRegex = /<template\s+#([a-zA-Z0-9_-]+)[^>]*>/g;
         let hashMatch;
         while ((hashMatch = hashSlotRegex.exec(template)) !== null) {
@@ -379,7 +376,6 @@ class TestUnitAnalyzer {
             }
         }
         
-        // 寻找 <template v-slot:slotName> 格式的插槽
         const vSlotRegex = /<template\s+v-slot:([a-zA-Z0-9_-]+)[^>]*>/g;
         let vSlotMatch;
         while ((vSlotMatch = vSlotRegex.exec(template)) !== null) {
@@ -388,19 +384,41 @@ class TestUnitAnalyzer {
                 slotsFound.push(slotName);
             }
         }
+
+        // 2. Create a version of the template with all named slot <template> blocks removed.
+        let templateWithoutNamedSlotDeclarations = template;
+        slotsFound.forEach(slotName => {
+            const specificSlotBlockRegexText = `<template\\s+(?:#${slotName}|v-slot:${slotName})[^>]*>[\\s\\S]*?<\\/template>`;
+            const specificSlotBlockRegex = new RegExp(specificSlotBlockRegexText, 'g');
+            templateWithoutNamedSlotDeclarations = templateWithoutNamedSlotDeclarations.replace(specificSlotBlockRegex, '');
+        });
+
+        // 3. Check if the remaining template (inside the main component tags) has actual content for a default slot.
+        const mainComponentContentRegex = /<([A-Za-z][A-Za-z0-9-]+)[^>]*>([\s\S]*?)<\/\1>/i;
+        const mainComponentMatch = mainComponentContentRegex.exec(templateWithoutNamedSlotDeclarations);
+
+        let hasActualDefaultContent = false;
+        if (mainComponentMatch && mainComponentMatch[2] !== undefined) {
+            let innerContent = mainComponentMatch[2];
+            innerContent = innerContent.replace(/<!--[\s\S]*?-->/g, '');
+            innerContent = innerContent.trim();
+            if (innerContent !== '') {
+                hasActualDefaultContent = true;
+            }
+        }
         
-        // 如果有组件标签内有内容（不是自闭合标签），则认为使用了默认插槽
-        // 匹配任何组件标签，不仅限于Button
-        if (/<[A-Za-z][A-Za-z0-9-]*[^>]*>(?!<\/)/i.test(template)) {
+        if (hasActualDefaultContent) {
             if (!slotsFound.includes('default')) {
                 slotsFound.push('default');
             }
         }
         
+        // 4. Add all found slots to the componentTestUnit
         if (slotsFound.length > 0) {
             componentTestUnit.slots = componentTestUnit.slots || [];
             componentTestUnit.slots = [...new Set([...componentTestUnit.slots, ...slotsFound])];
         }
+
     }
 
     private extractProps(options: ObjectLiteralExpression, component: TestUnit) {
