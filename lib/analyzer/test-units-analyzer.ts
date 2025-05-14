@@ -588,23 +588,42 @@ class TestUnitAnalyzer {
     // Helper method to extract slots from JSX elements
     private extractJSXSlots(element: Node, component: TestUnit) {
         if (Node.isJsxElement(element)) {
-            // First, add the default slot if the element has children
+            let hasPotentialDefaultSlotContent = false;
             const children = element.getJsxChildren();
+
             for (const child of children) {
-                if (Node.isStringLiteral(child) || Node.isJsxElement(child.getParent())) {
-                    component.slots = component.slots || [];
-                    if (!component.slots.includes('default')) {
-                        component.slots.push('default');
+                if (Node.isJsxText(child) && child.getText().trim() !== '') { // Non-empty text node
+                    hasPotentialDefaultSlotContent = true;
+                    break;
+                }
+                if (Node.isJsxElement(child)) { // Direct JSX element child
+                    hasPotentialDefaultSlotContent = true;
+                    break;
+                }
+                if (Node.isJsxExpression(child)) {
+                    const expression = child.getExpression();
+                    // If the JsxExpression is not an ObjectLiteral (which is used for named slots)
+                    // it could be default slot content e.g. <Button>{() => <div/>}</Button> or <Button>{someVariable}</Button>
+                    if (expression && !Node.isObjectLiteralExpression(expression)) {
+                        hasPotentialDefaultSlotContent = true;
+                        break;
                     }
-                } 
+                }
             }
+
+            if (hasPotentialDefaultSlotContent) {
+                component.slots = component.slots || [];
+                if (!component.slots.includes('default')) {
+                    component.slots.push('default');
+                }
+            }
+
             // Look for Vue-style named slots pattern: {{ slotName: content }}
             const objectLiteralExpressions = element.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression);
             for (const objLiteral of objectLiteralExpressions) {
-                // Check if this is inside a JSX expression
-                const parent = objLiteral.getParent();
-                if (parent && Node.isJsxExpression(parent)) {
-                    // Extract slot names from object properties
+                // Check if this is inside a JSX expression that is a direct child of the current element
+                const parentJsxExpression = objLiteral.getParentIfKind(SyntaxKind.JsxExpression);
+                if (parentJsxExpression && parentJsxExpression.getParentIfKind(SyntaxKind.JsxElement) === element) {
                     const properties = objLiteral.getProperties();
                     for (const prop of properties) {
                         if (Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) {
