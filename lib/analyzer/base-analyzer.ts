@@ -141,6 +141,7 @@ export abstract class BaseAnalyzer {
     // 查找局部变量定义
     const variableDeclarations = sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
       .filter(decl => decl.getName() === identifierName);
+
     if (variableDeclarations.length > 0) {
       for (const decl of variableDeclarations) {
         const initializer = decl.getInitializer();
@@ -173,7 +174,7 @@ export abstract class BaseAnalyzer {
               this.processArrayLiteral(expression);
               return;
             }
-          }
+          } 
         }
       }
     }
@@ -343,9 +344,27 @@ export abstract class BaseAnalyzer {
       }
       // 通过其他方式导出
       else if (Node.isExportSpecifier(node)) {
-        const name = node.getName();
-        if (name) {
-          this.resolveIdentifierReference(name, node.getSourceFile());
+        const exportSpecifier = node.asKindOrThrow(SyntaxKind.ExportSpecifier);
+        const exportDeclaration = exportSpecifier.getExportDeclaration();
+        const moduleSpecifier = exportDeclaration.getModuleSpecifierValue(); // Get like './test'
+        // const name = exportSpecifier.getName(); // 'commonProps' - this is the alias or original name in THIS file
+        const originalNameInTargetModule = exportSpecifier.getNameNode().getText(); // Name as it appears before 'as', or the name itself
+
+        if (moduleSpecifier) {
+          // This is a re-export, like export { commonProps } from './test'
+          // Or export { originalName as aliasName } from './test'
+          // We need to resolve 'originalNameInTargetModule' from the module 'moduleSpecifier'
+          // The referencingSourceFile for this call should be the current `sourceFile`
+          // so that 'moduleSpecifier' (e.g. './test') is resolved relative to it.
+          this.resolveImportedReference(moduleSpecifier, originalNameInTargetModule, sourceFile);
+        } else {
+          // This is an export of a variable defined in the current file, e.g.
+          // const myVar = {}; export { myVar }; OR export { myVar as myAlias }
+          // In this case, resolve the identifier as it is named in the export specifier (could be an alias).
+          const nameToResolveLocally = exportSpecifier.getName(); // This gives the alias if present, else original name
+          if (nameToResolveLocally) {
+            this.resolveIdentifierReference(nameToResolveLocally, sourceFile);
+          }
         }
       }
     } catch (error) {

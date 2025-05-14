@@ -30,10 +30,18 @@ describe('test-units-analyzer', () => {
                     render(() => <Button size="large" />, {})
                     expect(1).toBe(1)
                 })
+                it('should render correctly 2', () => {
+                    render(Button, {
+                        props: {
+                            block: true
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].props).toEqual(['type', 'size'])
+        expect(res[`${rootDir}/Button.tsx`].props).toEqual(['type', 'size', 'block'])
     })
     it('should analyze emits in test units', () => {
         const fakeTestFilePath = './emits-analyzer.test.tsx'
