@@ -2,7 +2,7 @@ import { Project, SyntaxKind, Node, SourceFile, ArrayLiteralExpression } from 't
 import { logDebug, logError } from '../common/utils';
 import { parseComponent } from '../common/shared-parser';
 import path from 'path';
-import fs from 'fs';
+import { getAsbFilePath } from '../common/utils';
 
 /**
  * 基础分析器类，提供通用的AST分析功能
@@ -230,37 +230,11 @@ export abstract class BaseAnalyzer {
   }
 
   /**
-   * 获取文件路径
-   */
-  protected getFilePath(moduleSpecifier: string): string {
-    const ext = ['.ts', '.tsx', '.js', '.jsx', '.vue'];
-    const fileData = moduleSpecifier.split('/');
-    const fileName = fileData.pop() || '';
-    const hasExt = ext.some(e => fileName.endsWith(e));
-    if (hasExt) {
-      return path.resolve(this.dirPath, moduleSpecifier);
-    }
-    for (const e of ext) {
-      const filePath = path.resolve(this.dirPath, ...fileData, fileName + e);
-      if (fs.existsSync(filePath)) {
-        return filePath;
-      }
-    }
-    for (const e of ext) {
-      const filePath = path.resolve(this.dirPath, ...fileData, fileName, 'index' + e);
-      if (fs.existsSync(filePath)) {
-        return filePath;
-      }
-    }
-    return '';
-  }
-
-  /**
    * 尝试导入文件并返回源文件
    * 共享缓存已导入的文件，提高性能
    */
   protected tryImportFile(moduleSpecifier: string): SourceFile | null {
-    const filePath = this.getFilePath(moduleSpecifier);
+    const filePath = getAsbFilePath(moduleSpecifier, this.dirPath);
     const existSourceFile = this.project.getSourceFile(filePath)
     if (existSourceFile) return existSourceFile
     const sourceFile =  this.project.addSourceFileAtPath(filePath);

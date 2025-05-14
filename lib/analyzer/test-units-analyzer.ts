@@ -1,6 +1,6 @@
 import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression } from 'ts-morph';
-import { isComponentFile } from '../common/utils';
-// import path from 'path';
+import { getAsbFilePath, isComponentFile } from '../common/utils';
+import path from 'path';
 
 interface TestUnit {    
     props?: string[];
@@ -16,13 +16,14 @@ class TestUnitAnalyzer {
     private sourceFile: SourceFile;
     private result: TestUnitsResult = {};
     private project: Project;
-    private rootDir: string;
+    private dirname: string;
     
-    constructor(sourceFile: SourceFile, project: Project, rootDir: string = '') {
+    constructor(sourceFile: SourceFile, project: Project) {
         this.project = project;
         this.sourceFile = sourceFile;
         this.result = {};
-        this.rootDir = rootDir;
+        const filePath = sourceFile.getFilePath();
+        this.dirname = path.dirname(filePath);
     }
 
     public analyze(): TestUnitsResult {
@@ -217,7 +218,7 @@ class TestUnitAnalyzer {
             const importDecl = this.getImportDecl(componentName);
             if (!importDecl) return;
             const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-            let componentFile: string | null = `${this.rootDir}${modulePath}`;
+            let componentFile: string | null = getAsbFilePath(modulePath, this.dirname);
             if (!isComponentFile(componentFile)) {
                 const realComponentPath = this.resolveRealComponentPath(componentFile);
                 if (realComponentPath) {
@@ -351,7 +352,7 @@ class TestUnitAnalyzer {
             
             const resolved = importDecl.getModuleSpecifierSourceFile();
             const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-            let filePath: string | null = `${this.rootDir}${modulePath}`;
+            let filePath: string | null = getAsbFilePath(modulePath, this.dirname);
             if (resolved) {
                 filePath = resolved.getFilePath();
             };
@@ -397,7 +398,6 @@ class TestUnitAnalyzer {
             for (const attr of attributes) {
                 if (Node.isJsxAttribute(attr)) {
                     const propName = attr.getNameNode().getText();
-                    console.log(propName, 111)
                     // Handle event handlers (props starting with "on")
                     if (propName.startsWith('on') && propName.length > 2) {
                         // Add to emits list

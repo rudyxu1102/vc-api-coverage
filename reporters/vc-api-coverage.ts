@@ -1,5 +1,5 @@
 import type { Reporter } from 'vitest/reporters'
-import type { TestModule, Vitest } from 'vitest/node'
+import type { TestModule } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
@@ -24,7 +24,6 @@ export default class VcCoverageReporter implements Reporter {
   private unitData: Record<string, VcData> = {};
   private compData: Record<string, VcData> = {};
   private project: Project;
-  private ctx!: Vitest;
 
   constructor(options: VcCoverageOptions = {}) {
     this.options = {
@@ -44,18 +43,11 @@ export default class VcCoverageReporter implements Reporter {
     });
   }
 
-  onInit(ctx: Vitest) {
-    this.ctx = ctx;
-  }
-
   onTestModuleEnd(testModule: TestModule) {
-    const vitenode = testModule.project.vite
-    const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
-    const code = cache?.transformResult?.code || ''
-    const rootDir = this.ctx.config.root
-    const sourceFile = this.project.createSourceFile(testModule.moduleId, code, { overwrite: true })
 
-    const res = new TestUnitAnalyzer(sourceFile, this.project, rootDir).analyze()
+    const sourceFile = this.project.addSourceFileAtPath(testModule.moduleId)
+
+    const res = new TestUnitAnalyzer(sourceFile, this.project).analyze()
     for (const fullPath in res) {
       let info: VcData = {
         props: [],

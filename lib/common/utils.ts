@@ -1,5 +1,7 @@
 import chalk from 'chalk';
 import { VcCoverageData } from '../types';
+import path from 'path';
+import fs from 'fs';
 
 export function logDebug(moduleName: string, message: string, ...args: any[]) {
   if (process.env.DEBUG) {
@@ -92,4 +94,30 @@ export function getThrowableMessage(e: Error, split = '\n') {
   let message = e && e.message ? e.message : '';
 
   return split + 'name: ' + name + split + 'message: ' + message + split + 'stack: ' + stack + split;
+}
+
+ /**
+   * 获取文件路径
+   */
+ export function getAsbFilePath(moduleSpecifier: string, dirPath: string): string {
+  const ext = ['.ts', '.tsx', '.js', '.jsx', '.vue'];
+  const fileData = moduleSpecifier.split('/');
+  const fileName = fileData.pop() || '';
+  const hasExt = ext.some(e => fileName.endsWith(e));
+  if (hasExt) {
+    return path.resolve(dirPath, moduleSpecifier);
+  }
+  for (const e of ext) {
+    const filePath = path.resolve(dirPath, ...fileData, fileName + e);
+    if (fs.existsSync(filePath)) {
+      return filePath;
+    }
+  }
+  for (const e of ext) {
+    const filePath = path.resolve(dirPath, ...fileData, fileName, 'index' + e);
+    if (fs.existsSync(filePath)) {
+      return filePath;
+    }
+  }
+  return '';
 }
