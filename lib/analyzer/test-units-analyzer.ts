@@ -1,4 +1,4 @@
-import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression } from 'ts-morph';
+import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, ImportDeclaration } from 'ts-morph';
 import { getAsbFilePath, isComponentFile } from '../common/utils';
 import path from 'path';
 
@@ -35,57 +35,29 @@ class TestUnitAnalyzer {
 
         return this.result;
     }
-    
-    private resolveRealComponentPath(sourceValue: string): string | null {
+    // 处理index文件，如 ./components/input/index.ts
+    private resolveRealComponentPath(sourceValue: string, exportName: string = 'default'): string | null {
 
-        // 处理index文件，如 ./components/input/index.ts
-        if (!isComponentFile(sourceValue)) {
-            // 使用ts-morph解析代码，获取结构化信息
-            const sourceFile = this.project.addSourceFileAtPath(sourceValue);
-            // 查找默认导出
-            const defaultExport = sourceFile.getDefaultExportSymbol();
+        // 使用ts-morph解析代码，获取结构化信息
+        const sourceFile = this.project.addSourceFileAtPath(sourceValue);
+        // 查找默认导出
+        if (exportName === 'default') {
             let componentImportPath = null;
-            if (defaultExport) {
-                // 获取默认导出的声明
-                const declarations = defaultExport.getDeclarations();
-                for (const declaration of declarations) {
-                    // 如果是导出的表达式语句
-                    if (Node.isExportAssignment(declaration)) {
-                        const expression = declaration.getExpression();
-                        
-                        // 如果是函数调用(如 export default withInstall(Component))
-                        if (Node.isCallExpression(expression)) {
-                            const args = expression.getArguments();
-                            if (args.length > 0 && Node.isIdentifier(args[0])) {
-                                // 获取函数的第一个参数，通常是组件标识符
-                                const componentName = args[0].getText();
-                                // 查找这个标识符的导入
-                                const importDecls = sourceFile.getImportDeclarations();
-                                for (const importDecl of importDecls) {
-                                    // 检查默认导入
-                                    const defaultImport = importDecl.getDefaultImport();
-                                    if (defaultImport && defaultImport.getText() === componentName) {
-                                        const importResolved = importDecl.getModuleSpecifierSourceFile();
-                                        componentImportPath = importResolved!.getFilePath();
-                                        break;  
-                                    }
-                                    
-                                    // 检查命名导入
-                                    const namedImports = importDecl.getNamedImports();
-                                    for (const namedImport of namedImports) {
-                                        if (namedImport.getName() === componentName) {
-                                            const importResolved = importDecl.getModuleSpecifierSourceFile();
-                                            componentImportPath = importResolved!.getFilePath();
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // 如果是标识符(如 export default Component
-                        else if (Node.isIdentifier(expression)) {
-                            const componentName = expression.getText();
-                            
+            const defaultExport = sourceFile.getDefaultExportSymbol();
+            if (!defaultExport) return null;
+            // 获取默认导出的声明
+            const declarations = defaultExport.getDeclarations();
+            for (const declaration of declarations) {
+                // 如果是导出的表达式语句
+                if (Node.isExportAssignment(declaration)) {
+                    const expression = declaration.getExpression();
+                    
+                    // 如果是函数调用(如 export default withInstall(Component))
+                    if (Node.isCallExpression(expression)) {
+                        const args = expression.getArguments();
+                        if (args.length > 0 && Node.isIdentifier(args[0])) {
+                            // 获取函数的第一个参数，通常是组件标识符
+                            const componentName = args[0].getText();
                             // 查找这个标识符的导入
                             const importDecls = sourceFile.getImportDeclarations();
                             for (const importDecl of importDecls) {
@@ -94,7 +66,7 @@ class TestUnitAnalyzer {
                                 if (defaultImport && defaultImport.getText() === componentName) {
                                     const importResolved = importDecl.getModuleSpecifierSourceFile();
                                     componentImportPath = importResolved!.getFilePath();
-                                    break;
+                                    break;  
                                 }
                                 
                                 // 检查命名导入
@@ -109,14 +81,47 @@ class TestUnitAnalyzer {
                             }
                         }
                     }
+                    // 如果是标识符(如 export default Component
+                    else if (Node.isIdentifier(expression)) {
+                        const componentName = expression.getText();
+                        
+                        // 查找这个标识符的导入
+                        const importDecls = sourceFile.getImportDeclarations();
+                        for (const importDecl of importDecls) {
+                            // 检查默认导入
+                            const defaultImport = importDecl.getDefaultImport();
+                            if (defaultImport && defaultImport.getText() === componentName) {
+                                const importResolved = importDecl.getModuleSpecifierSourceFile();
+                                componentImportPath = importResolved!.getFilePath();
+                                break;
+                            }
+                            
+                            // 检查命名导入
+                            const namedImports = importDecl.getNamedImports();
+                            for (const namedImport of namedImports) {
+                                if (namedImport.getName() === componentName) {
+                                    const importResolved = importDecl.getModuleSpecifierSourceFile();
+                                    componentImportPath = importResolved!.getFilePath();
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
-                if (!componentImportPath) return null;
-                if (isComponentFile(componentImportPath)) return componentImportPath;
-                // 如果找不到，则递归查找
-                const componentSourceFile = this.project.addSourceFileAtPath(componentImportPath);
-                const res = this.searchComponentFilePath(componentSourceFile) as string | null;
-                if (res) return res;
             }
+            if (!componentImportPath) return null;
+            if (isComponentFile(componentImportPath)) return componentImportPath;
+            // 如果找不到，则递归查找
+            const componentSourceFile = this.project.addSourceFileAtPath(componentImportPath);
+            const res = this.searchComponentFilePath(componentSourceFile) as string | null;
+            if (res) return res;
+        } else {
+            const importDecl = this.getImportDecl(exportName, sourceFile);
+            const exportDecl = this.getExportDecl(exportName, sourceFile);
+            if (!importDecl && !exportDecl) return null;
+            const modulePath = exportDecl?.getModuleSpecifier()?.getLiteralValue()  || importDecl?.getModuleSpecifier().getLiteralValue() || '';
+            const componentFile = getAsbFilePath(modulePath, path.dirname(sourceFile.getFilePath()));
+            return componentFile;
         }
         
         return null;
@@ -138,6 +143,7 @@ class TestUnitAnalyzer {
                 return res;
             }
         }
+
         return null
     }
 
@@ -189,8 +195,8 @@ class TestUnitAnalyzer {
         }
     }
 
-    getImportDecl(componentName: string) {
-        const importDecls = this.sourceFile.getImportDeclarations();
+    getImportDecl(componentName: string, sourceFile: SourceFile) {
+        const importDecls = sourceFile.getImportDeclarations();
         for (const importDecl of importDecls) {
             // 检查默认导入
             const defaultImport = importDecl.getDefaultImport();
@@ -207,6 +213,25 @@ class TestUnitAnalyzer {
             }
         }
         return null;
+    }
+
+    getExportDecl(componentName: string, sourceFile: SourceFile) {
+        const exportDecls = sourceFile.getExportDeclarations();
+        if (exportDecls.length === 0) return null;
+        for (const exportDecl of exportDecls) {
+            const namedExports = exportDecl.getNamedExports();
+            for (const namedExport of namedExports) {
+                if (namedExport.getText() === componentName) {
+                    return exportDecl;
+                }
+            }
+        }
+        return null;
+    }
+
+    private isDefaultExport(importDecl: ImportDeclaration, componentName: string) {
+        const defaultImportIdentifier = importDecl.getDefaultImport();
+        return defaultImportIdentifier !== undefined && defaultImportIdentifier.getText() === componentName;
     }
     
     private processMountCall(mountCall: CallExpression) {
@@ -243,14 +268,14 @@ class TestUnitAnalyzer {
         }
         if (!componentName) return;
 
-        const importDecl = this.getImportDecl(componentName);
+        const importDecl = this.getImportDecl(componentName, this.sourceFile);
         if (!importDecl) return;
 
         const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
         let componentFile: string | null = getAsbFilePath(modulePath, this.dirname);
-
+        const isDefaultExport = this.isDefaultExport(importDecl, componentName);
         if (!isComponentFile(componentFile)) {
-            const realComponentPath = this.resolveRealComponentPath(componentFile);
+            const realComponentPath = this.resolveRealComponentPath(componentFile, isDefaultExport ? 'default' : componentName);
             if (realComponentPath) {
                 componentFile = realComponentPath;
             } else {
@@ -527,7 +552,7 @@ class TestUnitAnalyzer {
             const tagName = openingElement.getTagNameNode().getText();
             
             // Find the corresponding import declaration
-            const importDecl = this.getImportDecl(tagName);
+            const importDecl = this.getImportDecl(tagName, this.sourceFile);
             if (!importDecl) continue;
             
             const resolved = importDecl.getModuleSpecifierSourceFile();
@@ -538,7 +563,8 @@ class TestUnitAnalyzer {
             };
             // Check if we need to handle index.ts files
             if (!isComponentFile(filePath)) {
-                const realComponentPath = this.resolveRealComponentPath(filePath);
+                const isDefaultExport = this.isDefaultExport(importDecl, tagName);
+                const realComponentPath = this.resolveRealComponentPath(filePath, isDefaultExport ? 'default' : tagName);
                 if (realComponentPath) {
                     // Initialize component entry in result if not exists
                     if (!this.result[realComponentPath]) {
