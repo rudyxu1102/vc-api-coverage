@@ -27,7 +27,7 @@ export default defineConfig({
     }]], // 指向编译后的 JS 文件
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['json'],
       include: ['src/**'],
     },
     // 指定测试文件查找目录，避免扫描项目根目录的 node_modules

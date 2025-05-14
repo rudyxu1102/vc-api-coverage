@@ -1,6 +1,7 @@
 import { SyntaxKind, Node, Project, SourceFile } from 'ts-morph';
 import { logDebug } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
+import path from 'path';
 
 const moduleName = 'emits-analyzer-morph';
 
@@ -267,8 +268,7 @@ class EmitsAnalyzer extends BaseAnalyzer {
     try {
       logDebug(moduleName, `Resolving imported type from: ${moduleSpecifier}, name: ${typeName}`);
       
-      // 使用基类的方法解析导入文件并获取其源文件
-      const importedSourceFile = this.tryImportFile(moduleSpecifier);
+      const importedSourceFile = this.tryImportFile(moduleSpecifier, path.dirname(this.sourceFile.getFilePath()));
       if (!importedSourceFile) return;
       
       // 查找导出的类型别名

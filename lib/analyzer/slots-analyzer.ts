@@ -1,6 +1,7 @@
 import { SyntaxKind, Node, TypeLiteralNode, PropertySignature, SourceFile, Project } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
+import path from 'path';
 
 const moduleName = 'slots-analyzer-morph';
 
@@ -247,114 +248,50 @@ class SlotsAnalyzer extends BaseAnalyzer {
   protected resolveImportedType(moduleSpecifier: string, typeName: string): void {
     try {
       logDebug(moduleName, `Resolving imported type from: ${moduleSpecifier}, name: ${typeName}`);
-      
-      // 首先尝试使用BaseAnalyzer中的tryImportFile方法
-      const importSourceFile = this.tryImportFile(moduleSpecifier);
+      const importSourceFile = this.tryImportFile(moduleSpecifier, path.dirname(this.sourceFile.getFilePath()));
       if (!importSourceFile) return;
-      this.processImportedSourceFile(importSourceFile, typeName);
+
+      let processed = false;
+      const typeAlias = importSourceFile.getTypeAlias(typeName);
+      if (typeAlias) {
+        const typeNode = typeAlias.getTypeNode();
+        if (typeNode) {
+          this.processTypeNode(typeNode); // processTypeNode is expected to add to resultSet
+          processed = true;
+        }
+      }
+
+      if (!processed) {
+        const interfaceDecl = importSourceFile.getInterface(typeName);
+        if (interfaceDecl) {
+          // Simplified: iterate over members and add their names.
+          interfaceDecl.getMembers().forEach(member => {
+            if (Node.isPropertySignature(member) || Node.isMethodSignature(member)) {
+              this.resultSet.add(member.getName());
+            }
+          });
+          processed = true;
+        }
+      }
+
+      if (!processed) {
+        super.resolveImportedReference(moduleSpecifier, typeName, this.sourceFile);
+      }
     } catch (error) {
       logError(moduleName, `Error resolving imported type: ${error}`);
-    }
-  }
-  
-  /**
-   * 处理导入的源文件
-   */
-  private processImportedSourceFile(importSourceFile: SourceFile, typeName: string): void {
-    // 查找导出的类型别名
-    const typeAliases = importSourceFile.getDescendantsOfKind(SyntaxKind.TypeAliasDeclaration)
-      .filter(typeAlias => typeAlias.getName() === typeName);
-    
-    if (typeAliases.length > 0) {
-      const typeAlias = typeAliases[0];
-      const typeNode = typeAlias.getTypeNode();
-      if (typeNode) {
-        this.processTypeNode(typeNode);
-      }
-      return;
-    }
-    
-    // 查找导出的接口
-    const interfaces = importSourceFile.getDescendantsOfKind(SyntaxKind.InterfaceDeclaration)
-      .filter(iface => iface.getName() === typeName);
-    
-    if (interfaces.length > 0) {
-      const interfaceDecl = interfaces[0];
-      
-      // 处理接口属性
-      const properties = interfaceDecl.getMembers()
-        .filter(member => member.getKind() === SyntaxKind.PropertySignature)
-        .map(member => member.asKind(SyntaxKind.PropertySignature));
-      
-      for (const prop of properties) {
-        if (prop) {
-          this.resultSet.add(prop.getName());
-        }
-      }
-      
-      // 处理接口继承
-      const extendsTypes = interfaceDecl.getHeritageClauses()
-        .filter(clause => clause.getToken() === SyntaxKind.ExtendsKeyword)
-        .flatMap(clause => clause.getTypeNodes());
-      
-      for (const extendType of extendsTypes) {
-        const extendTypeName = extendType.getText();
-        // 递归处理继承的类型
-        this.resolveTypeReference(extendTypeName);
-      }
-      return;
-    }
-    
-    // 查找导出变量（对象形式的slots定义）
-    const exportedSymbols = importSourceFile.getExportSymbols();
-    
-    // 如果导出名称是typeName（如cardSlots），直接查找该导出
-    for (const symbol of exportedSymbols) {
-      if (symbol.getName() === typeName) {
-        const declarations = symbol.getDeclarations();
-        for (const decl of declarations) {
-          if (decl.getKind() === SyntaxKind.VariableDeclaration) {
-            const initializer = decl.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
-            if (initializer) {
-              if (initializer.getKind() === SyntaxKind.AsExpression) {
-                const asExpr = initializer.asKind(SyntaxKind.AsExpression);
-                if (asExpr) {
-                  const typeNode = asExpr.getTypeNode();
-                  if (typeNode && typeNode.getKind() === SyntaxKind.TypeReference) {
-                    this.analyzeSlotsTypeReference(typeNode);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    // 找不到指定导出名称，尝试直接提取所有SlotsType引用
-    // 这对于测试中使用的模拟内容很有用
-    const asExpressions = importSourceFile.getDescendantsOfKind(SyntaxKind.AsExpression);
-    for (const asExpr of asExpressions) {
-      const typeNode = asExpr.getTypeNode();
-      if (typeNode && typeNode.getKind() === SyntaxKind.TypeReference) {
-        const typeRef = typeNode.asKind(SyntaxKind.TypeReference);
-        if (typeRef && typeRef.getTypeName().getText() === 'SlotsType') {
-          this.analyzeSlotsTypeReference(typeNode);
-        }
-      }
     }
   }
 
   /**
    * 解析导入的引用，特别针对测试中的模拟导入处理
    */
-  protected resolveImportedReference(moduleSpecifier: string, importName: string): void {
+  protected resolveImportedReference(moduleSpecifier: string, importName: string, referencingSourceFile: SourceFile): void {
     try {
-      logDebug(moduleName, `Resolving imported reference from: ${moduleSpecifier}, name: ${importName}`);
+      logDebug(moduleName, `Resolving imported reference from: ${moduleSpecifier}, name: ${importName}, in file: ${referencingSourceFile.getFilePath()}`);
       
-      const importSourceFile = this.tryImportFile(moduleSpecifier);
+      const importSourceFile = this.tryImportFile(moduleSpecifier, path.dirname(referencingSourceFile.getFilePath()));
       if (importSourceFile) {
-        super.resolveImportedReference(moduleSpecifier, importName);
+        super.resolveImportedReference(moduleSpecifier, importName, referencingSourceFile);
         return;
       }
       

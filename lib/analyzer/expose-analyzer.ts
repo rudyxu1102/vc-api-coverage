@@ -1,6 +1,7 @@
 import { SyntaxKind, Node, ArrayLiteralExpression, TypeLiteralNode, PropertySignature, ObjectLiteralExpression, Project, SourceFile } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
+import path from 'path';
 
 const moduleName = 'expose-analyzer-morph';
 
@@ -408,7 +409,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
     try {
       logDebug(moduleName, `Resolving imported reference for options expose: ${moduleSpecifier}, ${importName}`);
       
-      const importSourceFile = this.tryImportFile(moduleSpecifier);
+      const importSourceFile = this.tryImportFile(moduleSpecifier, path.dirname(this.sourceFile.getFilePath()));
       if (!importSourceFile) return;
       
       // 查找导出的标识符
@@ -576,8 +577,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
     try {
       logDebug(moduleName, `Resolving imported type from: ${moduleSpecifier}, name: ${typeName}`);
       
-      // 导入源文件
-      const importSourceFile = this.tryImportFile(moduleSpecifier);
+      const importSourceFile = this.tryImportFile(moduleSpecifier, path.dirname(this.sourceFile.getFilePath()));
       if (!importSourceFile) return;
       
       // 查找导出的类型别名

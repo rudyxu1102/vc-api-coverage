@@ -1,3 +1,2 @@
-import { commonProps } from './test'
 
-export { commonProps }
+export { commonProps } from './test'

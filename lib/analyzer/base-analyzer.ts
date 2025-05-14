@@ -182,7 +182,7 @@ export abstract class BaseAnalyzer {
     const importedDecl = this.findImportDeclaration(identifierName, sourceFile);
     if (importedDecl) {
       const { moduleSpecifier, importName } = importedDecl;
-      this.resolveImportedReference(moduleSpecifier, importName);
+      this.resolveImportedReference(moduleSpecifier, importName, sourceFile);
     }
   }
 
@@ -233,8 +233,8 @@ export abstract class BaseAnalyzer {
    * 尝试导入文件并返回源文件
    * 共享缓存已导入的文件，提高性能
    */
-  protected tryImportFile(moduleSpecifier: string): SourceFile | null {
-    const filePath = getAsbFilePath(moduleSpecifier, this.dirPath);
+  protected tryImportFile(moduleSpecifier: string, baseDir: string): SourceFile | null {
+    const filePath = getAsbFilePath(moduleSpecifier, baseDir);
     const existSourceFile = this.project.getSourceFile(filePath)
     if (existSourceFile) return existSourceFile
     const sourceFile =  this.project.addSourceFileAtPath(filePath);
@@ -244,13 +244,17 @@ export abstract class BaseAnalyzer {
   /**
    * 解析导入的引用
    */
-  protected resolveImportedReference(moduleSpecifier: string, importName: string): void {
+  protected resolveImportedReference(moduleSpecifier: string, importName: string, referencingSourceFile: SourceFile): void {
     try {
-      logDebug(this.getModuleName(), `Resolving imported reference from: ${moduleSpecifier}, name: ${importName}`);
+      logDebug(this.getModuleName(), `Resolving imported reference from: ${moduleSpecifier}, name: ${importName}, in file: ${referencingSourceFile.getFilePath()}`);
       
+      const baseDirForImport = path.dirname(referencingSourceFile.getFilePath());
       // 使用tryImportFile方法获取源文件
-      const importSourceFile = this.tryImportFile(moduleSpecifier);
-      if (!importSourceFile) return;
+      const importSourceFile = this.tryImportFile(moduleSpecifier, baseDirForImport);
+      if (!importSourceFile) {
+        logError(this.getModuleName(), `Could not import file for module: ${moduleSpecifier} from base: ${baseDirForImport}`);
+        return;
+      }
       
       // 查找导出的标识符
       if (importName === 'default') {
@@ -341,7 +345,7 @@ export abstract class BaseAnalyzer {
       else if (Node.isExportSpecifier(node)) {
         const name = node.getName();
         if (name) {
-          this.resolveTypeReference(name);
+          this.resolveIdentifierReference(name, node.getSourceFile());
         }
       }
     } catch (error) {
