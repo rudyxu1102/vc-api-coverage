@@ -116,10 +116,18 @@ describe('test-units-analyzer', () => {
                     render(() => <Button>{{ header: () => 'Hello World' }}</Button>, {})
                     expect(1).toBe(1)
                 })
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Button><template #trigger>Hello World</template></Button>',
+                        components: {
+                            Button
+                        }
+                    })
+                })
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].slots).toEqual(['default', 'header'])
+        expect(res[`${rootDir}/Button.tsx`].slots!.sort()).toEqual(['default', 'trigger', 'header'].sort())
     })
 
 })

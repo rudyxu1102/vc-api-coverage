@@ -266,7 +266,7 @@ class TestUnitAnalyzer {
         // Process props, emits, slots from optionsNode or template
         if (optionsNode && Node.isObjectLiteralExpression(optionsNode)) {
             const options = optionsNode as ObjectLiteralExpression;
-            this.extractProps(options, this.result[componentFile]); // Standard props
+            this.extractProps(options, this.result[componentFile]);
             this.extractEmits(options, this.result[componentFile]);
             this.extractSlots(options, this.result[componentFile]);
 
@@ -277,7 +277,7 @@ class TestUnitAnalyzer {
                     const templateInitializer = templateProperty.getInitializer();
                     if (templateInitializer && (Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) {
                         const templateContent = templateInitializer.getLiteralText();
-                        // Extract props from template string for the identified componentName
+                        
                         this.extractPropsFromTemplate(templateContent, componentName, this.result[componentFile]);
                         this.extractEmitsFromTemplate(templateContent, componentName, this.result[componentFile]);
                     }
@@ -358,68 +358,69 @@ class TestUnitAnalyzer {
 
     private extractProps(options: ObjectLiteralExpression, component: TestUnit) {
         const propsProperty = options.getProperty('props');
-        
         if (propsProperty && Node.isPropertyAssignment(propsProperty)) {
             const initializer = propsProperty.getInitializer();
-            
             if (initializer && Node.isObjectLiteralExpression(initializer)) {
                 const props = initializer.getProperties()
-                    .filter(Node.isPropertyAssignment)
-                    .map(prop => {
-                        // 处理字符串属性名
-                        const propNameNode = prop.getNameNode();
-                        let propName: string;
-                        
-                        if (Node.isStringLiteral(propNameNode)) {
-                            // 对于字符串字面量属性名，使用其值
-                            propName = propNameNode.getLiteralValue();
-                        } else {
-                            propName = prop.getName();
+                    .map(propNode => {
+                        let propName: string | undefined;
+                        if (Node.isPropertyAssignment(propNode)) {
+                            const nameNode = propNode.getNameNode();
+                            if (Node.isStringLiteral(nameNode)) {
+                                propName = nameNode.getLiteralValue();
+                            } else {
+                                propName = propNode.getName();
+                            }
+                        } else if (Node.isShorthandPropertyAssignment(propNode)) {
+                            propName = propNode.getName();
                         }
-                        
-                        // 排除以on开头的事件处理器prop，它们应该被当作emit处理
-                        return propName.startsWith('on') && propName.length > 2 ? null : propName;
+
+                        // Exclude onXxx event handlers from props list
+                        if (propName && !(propName.startsWith('on') && propName.length > 2 && propName[2] === propName[2].toUpperCase())) {
+                            return propName;
+                        }
+                        return null;
                     })
-                    .filter(Boolean) as string[]; // 过滤掉null值
+                    .filter(Boolean) as string[];
                 
-                component.props = component.props || [];
-                component.props = [...new Set([...component.props, ...props])];
+                if (props.length > 0) {
+                    component.props = component.props || [];
+                    component.props = [...new Set([...component.props, ...props])];
+                }
             }
         }
     }
 
     private extractEmits(options: ObjectLiteralExpression, component: TestUnit) {
-        const propsProperty = options.getProperty('props');
-        
+        const propsProperty = options.getProperty('props'); // Emits are derived from onXxx props
         if (propsProperty && Node.isPropertyAssignment(propsProperty)) {
             const initializer = propsProperty.getInitializer();
-            
             if (initializer && Node.isObjectLiteralExpression(initializer)) {
-                const emitProps: string[] = [];
-                
-                // Get all properties including identifiers and shorthand properties
-                const properties = initializer.getProperties();
-                
-                for (const prop of properties) {
-                    let propName = '';
-                    if (Node.isPropertyAssignment(prop)) {
-                        const propNameNode = prop.getNameNode();
-                        if (Node.isStringLiteral(propNameNode)) {
-                            propName = propNameNode.getLiteralValue();
-                        } else {
-                            propName = prop.getName();
+                const emits = initializer.getProperties()
+                    .map(propNode => {
+                        let propName: string | undefined;
+                        if (Node.isPropertyAssignment(propNode)) {
+                            const nameNode = propNode.getNameNode();
+                            if (Node.isStringLiteral(nameNode)) {
+                                propName = nameNode.getLiteralValue();
+                            } else {
+                                propName = propNode.getName();
+                            }
+                        } else if (Node.isShorthandPropertyAssignment(propNode)) {
+                            propName = propNode.getName();
                         }
-                    } else if (Node.isShorthandPropertyAssignment(prop)) {
-                        propName = prop.getName();
-                    }
-                    if (propName.startsWith('on') && propName.length > 2) {
-                        emitProps.push(propName);
-                    }
-                }
-                
-                if (emitProps.length > 0) {
+
+                        // Emits are onXxx event handlers
+                        if (propName && propName.startsWith('on') && propName.length > 2 && propName[2] === propName[2].toUpperCase()) {
+                            return propName;
+                        }
+                        return null;
+                    })
+                    .filter(Boolean) as string[];
+
+                if (emits.length > 0) {
                     component.emits = component.emits || [];
-                    component.emits = [...new Set([...component.emits, ...emitProps])];
+                    component.emits = [...new Set([...component.emits, ...emits])];
                 }
             }
         }
