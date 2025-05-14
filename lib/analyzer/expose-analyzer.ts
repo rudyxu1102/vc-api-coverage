@@ -662,7 +662,7 @@ class ExposeAnalyzer extends BaseAnalyzer {
         }
       }
     } catch (error) {
-      logError(moduleName, `Error resolving imported type: ${error}, moduleSpecifier: ${moduleSpecifier}`);
+      logError(moduleName, `Error resolving imported type: ${error}, moduleSpecifier: ${moduleSpecifier}, filePath: ${this.sourceFile.getFilePath()}`);
     }
   }
 

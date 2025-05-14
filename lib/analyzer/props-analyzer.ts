@@ -1,5 +1,5 @@
 import { SyntaxKind, Node, TypeLiteralNode, PropertySignature, SourceFile, Project } from 'ts-morph';
-import { getThrowableMessage, logDebug, logError } from '../common/utils';
+import { logDebug, logError } from '../common/utils';
 import { BaseAnalyzer } from './base-analyzer';
 
 const moduleName = 'props-analyzer-morph';
@@ -318,7 +318,7 @@ class PropsAnalyzer extends BaseAnalyzer {
         }
       }
     } catch (error) {
-      logError(moduleName, `Error resolving imported type: ${error}, moduleSpecifier: ${moduleSpecifier}`);
+      logError(moduleName, `Error resolving imported type: ${error}, moduleSpecifier: ${moduleSpecifier}, filePath: ${this.sourceFile.getFilePath()}`);
     }
   }
 }

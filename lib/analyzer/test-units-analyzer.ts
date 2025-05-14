@@ -590,13 +590,14 @@ class TestUnitAnalyzer {
         if (Node.isJsxElement(element)) {
             // First, add the default slot if the element has children
             const children = element.getJsxChildren();
-            if (children.length > 0) {
-                component.slots = component.slots || [];
-                if (!component.slots.includes('default')) {
-                    component.slots.push('default');
-                }
+            for (const child of children) {
+                if (Node.isStringLiteral(child) || Node.isJsxElement(child.getParent())) {
+                    component.slots = component.slots || [];
+                    if (!component.slots.includes('default')) {
+                        component.slots.push('default');
+                    }
+                } 
             }
-            
             // Look for Vue-style named slots pattern: {{ slotName: content }}
             const objectLiteralExpressions = element.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression);
             for (const objLiteral of objectLiteralExpressions) {
