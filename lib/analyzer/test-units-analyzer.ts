@@ -183,6 +183,7 @@ class TestUnitAnalyzer {
                 });
             
             for (const mountCall of mountCalls) {
+                // 检查mount调用中是否存在模板字符串，且模板中包含trigger插槽
                 this.processMountCall(mountCall);
             }
         }
@@ -216,7 +217,6 @@ class TestUnitAnalyzer {
         let optionsNode: Node | undefined;
         let componentName: string | undefined;
         let mountOptionsObject: ObjectLiteralExpression | undefined;
-
         if (Node.isIdentifier(componentArgNode)) {
             // Existing logic: mount(Component, options) or render(Component, options)
             componentName = componentArgNode.getText();
@@ -241,7 +241,6 @@ class TestUnitAnalyzer {
                 }
             }
         }
-
         if (!componentName) return;
 
         const importDecl = this.getImportDecl(componentName);
@@ -262,14 +261,12 @@ class TestUnitAnalyzer {
         if (!this.result[componentFile]) {
             this.result[componentFile] = {};
         }
-
         // Process props, emits, slots from optionsNode or template
         if (optionsNode && Node.isObjectLiteralExpression(optionsNode)) {
             const options = optionsNode as ObjectLiteralExpression;
             this.extractProps(options, this.result[componentFile]);
             this.extractEmits(options, this.result[componentFile]);
             this.extractSlots(options, this.result[componentFile]);
-
             // If this was a mount({ template: '...' }) call, also try to extract props from template
             if (mountOptionsObject) {
                 const templateProperty = mountOptionsObject.getProperty('template');
@@ -277,9 +274,9 @@ class TestUnitAnalyzer {
                     const templateInitializer = templateProperty.getInitializer();
                     if (templateInitializer && (Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) {
                         const templateContent = templateInitializer.getLiteralText();
-                        
                         this.extractPropsFromTemplate(templateContent, componentName, this.result[componentFile]);
                         this.extractEmitsFromTemplate(templateContent, componentName, this.result[componentFile]);
+                        this.extractSlotsFromTemplate(templateContent, this.result[componentFile]);
                     }
                 }
             }
@@ -336,7 +333,7 @@ class TestUnitAnalyzer {
             if (!attrsString) continue;
 
             // Regex to find attribute names starting with @ or v-on:
-            const attrRegex = /([@a-zA-Z0-9_-]+)(?:=(?:\"[^\"]*\"|'[^']*'|[^\s>]*))?/g;
+            const attrRegex = /([@a-zA-Z0-9_:-]+)(?:=(?:\"[^\"]*\"|'[^']*'|[^\s>]*))?/g;
             let attrMatch;
             while ((attrMatch = attrRegex.exec(attrsString)) !== null) {
                 let emitName = attrMatch[1];
@@ -351,8 +348,58 @@ class TestUnitAnalyzer {
         }
 
         if (emitsFound.length > 0) {
+            const emits = emitsFound.map(item => 'on' + item.slice(0, 1).toUpperCase() + item.slice(1));
             componentTestUnit.emits = componentTestUnit.emits || [];
-            componentTestUnit.emits = [...new Set([...componentTestUnit.emits, ...emitsFound])];
+            componentTestUnit.emits = [...new Set([...componentTestUnit.emits, ...emits])];
+        }
+    }
+
+    private extractSlotsFromTemplate(template: string, componentTestUnit: TestUnit) {
+        // 查找Vue模板中的具名插槽，如 <template #trigger> 或 <template v-slot:trigger>
+        const slotsFound: string[] = [];
+        
+        // 寻找模板中任何组件内的 <template #slotName> 格式的插槽
+        // 这种格式是组件内部的具名插槽，任何组件名，不仅限于Button
+        const componentSlotRegex = /<[A-Za-z][A-Za-z0-9-]*[^>]*>.*?<template\s+#([a-zA-Z0-9_-]+)[^>]*>.*?<\/template>/gs;
+        let componentSlotMatch;
+        while ((componentSlotMatch = componentSlotRegex.exec(template)) !== null) {
+            const slotName = componentSlotMatch[1];
+            if (!slotsFound.includes(slotName)) {
+                slotsFound.push(slotName);
+            }
+        }
+        
+        // 寻找 <template #slotName> 格式的插槽（一般格式）
+        const hashSlotRegex = /<template\s+#([a-zA-Z0-9_-]+)[^>]*>/g;
+        let hashMatch;
+        while ((hashMatch = hashSlotRegex.exec(template)) !== null) {
+            const slotName = hashMatch[1];
+            if (!slotsFound.includes(slotName)) {
+                slotsFound.push(slotName);
+            }
+        }
+        
+        // 寻找 <template v-slot:slotName> 格式的插槽
+        const vSlotRegex = /<template\s+v-slot:([a-zA-Z0-9_-]+)[^>]*>/g;
+        let vSlotMatch;
+        while ((vSlotMatch = vSlotRegex.exec(template)) !== null) {
+            const slotName = vSlotMatch[1];
+            if (!slotsFound.includes(slotName)) {
+                slotsFound.push(slotName);
+            }
+        }
+        
+        // 如果有组件标签内有内容（不是自闭合标签），则认为使用了默认插槽
+        // 匹配任何组件标签，不仅限于Button
+        if (/<[A-Za-z][A-Za-z0-9-]*[^>]*>(?!<\/)/i.test(template)) {
+            if (!slotsFound.includes('default')) {
+                slotsFound.push('default');
+            }
+        }
+        
+        if (slotsFound.length > 0) {
+            componentTestUnit.slots = componentTestUnit.slots || [];
+            componentTestUnit.slots = [...new Set([...componentTestUnit.slots, ...slotsFound])];
         }
     }
 

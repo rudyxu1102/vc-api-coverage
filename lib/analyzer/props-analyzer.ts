@@ -318,7 +318,7 @@ class PropsAnalyzer extends BaseAnalyzer {
         }
       }
     } catch (error) {
-      logError(moduleName, `Error resolving imported type: ${getThrowableMessage(error as Error)}`);
+      logError(moduleName, `Error resolving imported type: ${error}, moduleSpecifier: ${moduleSpecifier}`);
     }
   }
 }

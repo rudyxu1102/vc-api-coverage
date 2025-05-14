@@ -278,7 +278,7 @@ class SlotsAnalyzer extends BaseAnalyzer {
         super.resolveImportedReference(moduleSpecifier, typeName, this.sourceFile);
       }
     } catch (error) {
-      logError(moduleName, `Error resolving imported type: ${error}`);
+      logError(moduleName, `Error resolving imported type: ${error}, moduleSpecifier: ${moduleSpecifier}`);
     }
   }
 

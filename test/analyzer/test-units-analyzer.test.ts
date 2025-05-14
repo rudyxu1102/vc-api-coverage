@@ -12,7 +12,7 @@ describe('test-units-analyzer', () => {
         const fakeTestFilePath = './prop-analyzer.test.tsx'
         const project = new Project()
         const sourceFile = project.createSourceFile(fakeTestFilePath, `
-            import Button from './Button.tsx';
+            import Button from './ButtonProps.tsx';
             import { describe, it, expect, test } from 'vitest';
             import { shallowMount } from '@vue/test-utils'
             import { render } from '@testing-library/vue'
@@ -50,13 +50,13 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].props!.sort()).toEqual(['type', 'block', 'size', 'shape'].sort())
+        expect(res[`${rootDir}/ButtonProps.tsx`].props!.sort()).toEqual(['type', 'block', 'size', 'shape'].sort())
     })
     it('should analyze emits in test units', () => {
         const fakeTestFilePath = './emits-analyzer.test.tsx'
         const project = new Project()
         const sourceFile = project.createSourceFile(fakeTestFilePath, `
-            import Button from './Button.tsx';
+            import Button from './ButtonEmit.tsx';
             import { describe, it, expect, test } from 'vitest';
             import { shallowMount } from '@vue/test-utils'
             import { render } from '@testing-library/vue'
@@ -81,7 +81,7 @@ describe('test-units-analyzer', () => {
                 })
                 it('should render correctly 2', () => {
                     mount({
-                        template: '<Button shape="circle" @change="test" />',
+                        template: '<Button shape="circle" @change="test" @update:value="test" />',
                         components: {
                             Button
                         }
@@ -91,14 +91,14 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].emits!.sort()).toEqual(['onClick', 'onFocus', 'onHover', 'change'].sort())
+        expect(res[`${rootDir}/ButtonEmit.tsx`].emits!.sort()).toEqual(['onClick', 'onFocus', 'onHover', 'onChange', 'onUpdate:value'].sort())
     })
 
     it('should analyze slots in test units', () => {
         const fakeTestFilePath = './slots-analyzer.test.tsx'
         const project = new Project()
         const sourceFile = project.createSourceFile(fakeTestFilePath, `
-            import Button from './Button.tsx';
+            import Button from './ButtonSlot.tsx';
             import { describe, it, expect, test } from 'vitest';
             import { shallowMount } from '@vue/test-utils'
             import { render } from '@testing-library/vue'
@@ -123,11 +123,12 @@ describe('test-units-analyzer', () => {
                             Button
                         }
                     })
+                    expect(1).toBe(1)
                 })
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].slots!.sort()).toEqual(['default', 'trigger', 'header'].sort())
+        expect(res[`${rootDir}/ButtonSlot.tsx`].slots!.sort()).toEqual(['default', 'trigger', 'header'].sort())
     })
 
 })
