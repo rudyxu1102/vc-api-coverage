@@ -41,7 +41,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].props).toEqual(['type', 'size', 'block'])
+        expect(res[`${rootDir}/Button.tsx`].props).toEqual(['type', 'block', 'size'])
     })
     it('should analyze emits in test units', () => {
         const fakeTestFilePath = './emits-analyzer.test.tsx'

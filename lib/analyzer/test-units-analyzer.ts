@@ -179,7 +179,7 @@ class TestUnitAnalyzer {
                 .filter(call => {
                     const expression = call.getExpression();
                     return Node.isIdentifier(expression) && 
-                           (expression.getText() === 'mount' || expression.getText() === 'shallowMount');
+                           (expression.getText() === 'mount' || expression.getText() === 'shallowMount' || expression.getText() === 'render');
                 });
             
             for (const mountCall of mountCalls) {
