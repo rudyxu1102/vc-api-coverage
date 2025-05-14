@@ -79,10 +79,19 @@ describe('test-units-analyzer', () => {
                     render(() => <Button onHover={onHover}></Button>, {});
                     expect(1).toBe(1)
                 })
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Button shape="circle" @change="test" />',
+                        components: {
+                            Button
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Button.tsx`].emits).toEqual(['onClick', 'onFocus', 'onHover'])
+        expect(res[`${rootDir}/Button.tsx`].emits!.sort()).toEqual(['onClick', 'onFocus', 'onHover', 'change'].sort())
     })
 
     it('should analyze slots in test units', () => {

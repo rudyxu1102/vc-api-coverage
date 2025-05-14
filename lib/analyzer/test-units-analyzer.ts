@@ -279,6 +279,7 @@ class TestUnitAnalyzer {
                         const templateContent = templateInitializer.getLiteralText();
                         // Extract props from template string for the identified componentName
                         this.extractPropsFromTemplate(templateContent, componentName, this.result[componentFile]);
+                        this.extractEmitsFromTemplate(templateContent, componentName, this.result[componentFile]);
                     }
                 }
             }
@@ -320,6 +321,38 @@ class TestUnitAnalyzer {
         if (propsFound.length > 0) {
             componentTestUnit.props = componentTestUnit.props || [];
             componentTestUnit.props = [...new Set([...componentTestUnit.props, ...propsFound])];
+        }
+    }
+
+    private extractEmitsFromTemplate(template: string, componentTagName: string, componentTestUnit: TestUnit) {
+        // Simple regex to find attributes for a given component tag.
+        // Example: <Button @click="handler" />
+        const tagRegex = new RegExp(`<${componentTagName}(\\s+[^>]*)?>`, 'ig');
+        let match;
+        const emitsFound: string[] = [];
+
+        while ((match = tagRegex.exec(template)) !== null) {
+            const attrsString = match[1]; // Group 1 captures the attributes string
+            if (!attrsString) continue;
+
+            // Regex to find attribute names starting with @ or v-on:
+            const attrRegex = /([@a-zA-Z0-9_-]+)(?:=(?:\"[^\"]*\"|'[^']*'|[^\s>]*))?/g;
+            let attrMatch;
+            while ((attrMatch = attrRegex.exec(attrsString)) !== null) {
+                let emitName = attrMatch[1];
+                if (emitName.startsWith('@')) {
+                    emitName = emitName.substring(1);
+                    emitsFound.push(emitName);
+                } else if (emitName.startsWith('v-on:')) {
+                    emitName = emitName.substring(5);
+                    emitsFound.push(emitName);
+                }
+            }
+        }
+
+        if (emitsFound.length > 0) {
+            componentTestUnit.emits = componentTestUnit.emits || [];
+            componentTestUnit.emits = [...new Set([...componentTestUnit.emits, ...emitsFound])];
         }
     }
 
