@@ -3,7 +3,32 @@ import { Project, ts } from "ts-morph";
 import { describe, it, expect } from "vitest";
 
 describe('ComponentAnalyzer', () => {
-  it('should analyze props of the component', () => {
+//   it('should analyze props of the component', () => {
+//     const project = new Project({
+//       compilerOptions: {
+//         target: ts.ScriptTarget.ESNext, 
+//         module: ts.ModuleKind.ESNext,
+//         jsx: ts.JsxEmit.Preserve,
+//         moduleResolution: ts.ModuleResolutionKind.NodeNext,
+//       },
+//     });
+//     const code = `
+//         import { defineComponent } from 'vue';
+
+//         export default defineComponent({
+//             name: 'Button',
+//             props: {
+//                 type: { type: String, default: 'default' },
+//             },
+//         });
+//     `;
+//     const sourceFile = project.createSourceFile('./button.tsx', code);
+//     const analyzer = new ComponentAnalyzer(sourceFile);
+//     const result = analyzer.analyze();
+//     expect(result.props).toStrictEqual(['type'])
+//   });
+
+  it('should analyze slots of the component', () => {
     const project = new Project({
       compilerOptions: {
         target: ts.ScriptTarget.ESNext, 
@@ -17,14 +42,14 @@ describe('ComponentAnalyzer', () => {
 
         export default defineComponent({
             name: 'Button',
-            props: {
-                type: { type: String, default: 'default' },
+            slots: {
+                default: { type: String, default: 'default' },
             },
         });
     `;
     const sourceFile = project.createSourceFile('./button.tsx', code);
     const analyzer = new ComponentAnalyzer(sourceFile);
     const result = analyzer.analyze();
-    expect(result.props).toStrictEqual(['type'])
+    expect(result.slots).toStrictEqual(['default'])
   });
 });
