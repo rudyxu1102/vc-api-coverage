@@ -69,48 +69,48 @@ describe('slots-analyzer', () => {
 
   
   // Skip this test for now until we can resolve the mocking issue
-  it.skip('should handle multiple slots imports', () => {
-    // 修改为两个单独的导入，不使用spread运算符
-    const mockPropsFileContent = `
-      import { SlotsType, VNode } from 'vue';
+  // it.skip('should handle multiple slots imports', () => {
+  //   // 修改为两个单独的导入，不使用spread运算符
+  //   const mockPropsFileContent = `
+  //     import { SlotsType, VNode } from 'vue';
       
-      export const cardSlots = Object as SlotsType<{
-        header?: () => VNode[];
-        footer?: () => VNode[];
-        default?: () => VNode[];
-      }>
-    `
+  //     export const cardSlots = Object as SlotsType<{
+  //       header?: () => VNode[];
+  //       footer?: () => VNode[];
+  //       default?: () => VNode[];
+  //     }>
+  //   `
     
-    // Set mock implementation for this specific test
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(mockPropsFileContent);
+  //   // Set mock implementation for this specific test
+  //   vi.mocked(fs.existsSync).mockReturnValue(true);
+  //   vi.mocked(fs.readFileSync).mockReturnValue(mockPropsFileContent);
     
-    const project = new Project();
-    const code = `
-      import { cardSlots } from './props'
+  //   const project = new Project();
+  //   const code = `
+  //     import { cardSlots } from './props'
       
-      export default defineComponent({
-        name: 'MyCard',
-        slots: cardSlots,
-        render() {
-          return h('div', [
-            this.$slots.header?.(),
-            this.$slots.default?.(),
-            this.$slots.footer?.()
-          ])
-        }
-      })
-    `
+  //     export default defineComponent({
+  //       name: 'MyCard',
+  //       slots: cardSlots,
+  //       render() {
+  //         return h('div', [
+  //           this.$slots.header?.(),
+  //           this.$slots.default?.(),
+  //           this.$slots.footer?.()
+  //         ])
+  //       }
+  //     })
+  //   `
     
-    const filePath = '/fake/component/Card.tsx'
-    const sourceFile = project.createSourceFile(filePath, code);
-    const slots = new SlotsAnalyzer(sourceFile, project).analyze()
+  //   const filePath = '/fake/component/Card.tsx'
+  //   const sourceFile = project.createSourceFile(filePath, code);
+  //   const slots = new SlotsAnalyzer(sourceFile, project).analyze()
     
-    // 需要验证结果包含所有插槽
-    expect(slots).toContain('header')
-    expect(slots).toContain('footer')
-    expect(slots).toContain('default')
-    expect(slots.length).toBe(3) // header, footer, default
-  })
+  //   // 需要验证结果包含所有插槽
+  //   expect(slots).toContain('header')
+  //   expect(slots).toContain('footer')
+  //   expect(slots).toContain('default')
+  //   expect(slots.length).toBe(3) // header, footer, default
+  // })
 
 }) 

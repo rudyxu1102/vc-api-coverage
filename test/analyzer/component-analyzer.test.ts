@@ -1,0 +1,30 @@
+import ComponentAnalyzer from "../../lib/analyzer/component-analyzer";
+import { Project, ts } from "ts-morph";
+import { describe, it, expect } from "vitest";
+
+describe('ComponentAnalyzer', () => {
+  it('should analyze props of the component', () => {
+    const project = new Project({
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext, 
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      },
+    });
+    const code = `
+        import { defineComponent } from 'vue';
+
+        export default defineComponent({
+            name: 'Button',
+            props: {
+                type: { type: String, default: 'default' },
+            },
+        });
+    `;
+    const sourceFile = project.createSourceFile('./button.tsx', code);
+    const analyzer = new ComponentAnalyzer(sourceFile);
+    const result = analyzer.analyze();
+    expect(result.props).toStrictEqual(['type'])
+  });
+});

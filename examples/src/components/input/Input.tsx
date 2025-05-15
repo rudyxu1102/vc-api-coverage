@@ -1,18 +1,17 @@
 import { defineComponent, ref, computed, SlotsType, VNode } from 'vue';
 import type { CSSProperties } from 'vue';
+import { pick } from 'lodash';
+import { allprops } from './props';
 
-export const props = {
-  modelValue: { type: String, default: '' },
-  placeholder: { type: String, default: '' },
-  disabled: { type: Boolean, default: false },
-  type: { type: String, default: 'text' },
-  size: { type: String, default: 'md' },
-  clearable: { type: Boolean, default: false },
-}
+export const props = pick(allprops, ['modelValue', 'placeholder', 'disabled', 'type', 'size', 'clearable']);
+
 export default defineComponent({
   name: 'MyInput',
 
-  props: props,
+  props: {
+    a: String,
+    ...props,
+  },
 
   slots: Object as SlotsType<{
     prefix?: () => VNode[];

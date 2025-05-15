@@ -1,4 +1,4 @@
-import { Project, SyntaxKind, Node, SourceFile, ArrayLiteralExpression } from 'ts-morph';
+import { Project, SyntaxKind, Node, SourceFile, ArrayLiteralExpression, CallExpression, ObjectLiteralExpression } from 'ts-morph';
 import { logDebug, logError } from '../common/utils';
 import { parseComponent } from '../common/shared-parser';
 import path from 'path';
@@ -386,4 +386,166 @@ export abstract class BaseAnalyzer {
    * 返回当前模块名称
    */
   protected abstract getModuleName(): string;
+
+  /**
+   * 新增: 分析通过变量声明导出的 props，特别是使用 pick 函数的场景
+   * This method is somewhat specific to 'props' name, but placed here for common logic access.
+   */
+  protected analyzeExportedPropsVariable(): void {
+    logDebug(this.getModuleName(), `Analyzing exported props variables in: ${this.sourceFile.getFilePath()}`);
+    const variableStatements = this.sourceFile.getDescendantsOfKind(SyntaxKind.VariableStatement);
+
+    for (const statement of variableStatements) {
+      const isExported = statement.getModifiers().some(mod => mod.getKind() === SyntaxKind.ExportKeyword);
+      if (!isExported) {
+        continue;
+      }
+
+      for (const declaration of statement.getDeclarations()) {
+        // This specifically looks for a variable named 'props'
+        if (declaration.getName() === 'props') { 
+          const initializer = declaration.getInitializer();
+          // 检查初始化表达式是否为函数调用，例如 pick(...)
+          if (initializer && Node.isCallExpression(initializer)) {
+            const callExpression = initializer;
+            const expression = callExpression.getExpression();
+            // 简单检查函数名是否为 pick
+            if (Node.isIdentifier(expression) && expression.getText() === 'pick') {
+              logDebug(this.getModuleName(), `Found \`pick\` call for 'props' variable: ${callExpression.getText()}`);
+              this.processPickCall(callExpression);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 新增: 处理 pick 函数调用
+   */
+  protected processPickCall(callExpression: CallExpression): void {
+    const args = callExpression.getArguments();
+    if (args.length < 2) {
+      logDebug(this.getModuleName(), `\`pick\` call with insufficient arguments: ${callExpression.getText()}`);
+      return;
+    }
+
+    const sourceObjectNode = args[0]; // pick 的第一个参数，应该是源对象的标识符
+    const keysArrayNode = args[1];    // pick 的第二个参数，应该是包含键的数组
+
+    if (!Node.isIdentifier(sourceObjectNode)) {
+      logDebug(this.getModuleName(), `First argument to \`pick\` is not an Identifier: ${sourceObjectNode.getText()}`);
+      return;
+    }
+
+    if (!Node.isArrayLiteralExpression(keysArrayNode)) {
+      logDebug(this.getModuleName(), `Second argument to \`pick\` is not an ArrayLiteralExpression: ${keysArrayNode.getText()}`);
+      return;
+    }
+
+    const sourceObjectName = sourceObjectNode.getText();
+    const selectedKeys = keysArrayNode.getElements().map(element => {
+      if (Node.isStringLiteral(element)) {
+        return element.getLiteralValue();
+      }
+      return null;
+    }).filter(key => key !== null) as string[];
+
+    if (selectedKeys.length === 0) {
+      logDebug(this.getModuleName(), `No string literal keys found in \`pick\` call's second argument: ${keysArrayNode.getText()}`);
+      return;
+    }
+
+    logDebug(this.getModuleName(), `\`pick\` call: sourceObject='${sourceObjectName}', selectedKeys='${selectedKeys.join(', ')}'`);
+
+    // 解析源对象标识符以获取其 ObjectLiteralExpression
+    const resolvedObjectLiteral = this.findObjectLiteralForIdentifier(sourceObjectName, this.sourceFile);
+
+    if (resolvedObjectLiteral) {
+      logDebug(this.getModuleName(), `Successfully resolved source object '${sourceObjectName}' for \`pick\`.`);
+      resolvedObjectLiteral.getProperties().forEach(prop => {
+        let propName: string | undefined;
+        if (Node.isPropertyAssignment(prop)) {
+          const nameNode = prop.getNameNode();
+          if (nameNode) propName = nameNode.getText();
+        } else if (Node.isShorthandPropertyAssignment(prop)) {
+          propName = prop.getName();
+        }
+
+        if (propName && selectedKeys.includes(propName)) {
+          this.resultSet.add(propName);
+          logDebug(this.getModuleName(), `Added prop from \`pick\`: ${propName}`);
+        }
+      });
+    } else {
+      logError(this.getModuleName(), `Could not resolve source object "${sourceObjectName}" for \`pick\` call in file ${this.sourceFile.getFilePath()}.`);
+    }
+  }
+
+  /**
+   * 新增: 查找标识符对应的 ObjectLiteralExpression 定义
+   */
+  protected findObjectLiteralForIdentifier(identifierName: string, currentSourceFile: SourceFile): ObjectLiteralExpression | undefined {
+    logDebug(this.getModuleName(), `Attempting to find ObjectLiteralExpression for identifier: ${identifierName} in ${currentSourceFile.getFilePath()}`);
+
+    // 1. 在当前文件中查找变量声明
+    const varDeclarations = currentSourceFile.getVariableDeclarations();
+    const targetVarDecl = varDeclarations.find(vd => vd.getName() === identifierName);
+
+    if (targetVarDecl) {
+      const initializer = targetVarDecl.getInitializer();
+      if (initializer) {
+        if (Node.isObjectLiteralExpression(initializer)) {
+          logDebug(this.getModuleName(), `Found local ObjectLiteralExpression for ${identifierName}`);
+          return initializer;
+        } else if (Node.isAsExpression(initializer) && Node.isObjectLiteralExpression(initializer.getExpression())) {
+          logDebug(this.getModuleName(), `Found local ObjectLiteralExpression (via AsExpression) for ${identifierName}`);
+          return initializer.getExpression() as ObjectLiteralExpression;
+        }
+      }
+    }
+    logDebug(this.getModuleName(), `Identifier ${identifierName} not found as a local variable with ObjectLiteralExpression in ${currentSourceFile.getFilePath()}. Checking imports if applicable.`);
+    
+    const importInfo = this.findImportDeclaration(identifierName, currentSourceFile);
+    if (importInfo) {
+        logDebug(this.getModuleName(), `Found import for ${identifierName}: module='${importInfo.moduleSpecifier}', name='${importInfo.importName}'`);
+        const importDeclarationNode = currentSourceFile.getImportDeclarations()
+            .find(decl => decl.getModuleSpecifierValue() === importInfo.moduleSpecifier);
+
+        if (importDeclarationNode) {
+            const importedSourceFile = importDeclarationNode.getModuleSpecifierSourceFile();
+            if (importedSourceFile) {
+                logDebug(this.getModuleName(), `Successfully resolved imported source file: ${importedSourceFile.getFilePath()}`);
+                const exportedVarSymbol = importedSourceFile.getExportSymbols().find(s => s.getName() === importInfo.importName);
+                if (exportedVarSymbol) {
+                    const declarations = exportedVarSymbol.getDeclarations();
+                    for (const decl of declarations) {
+                        if (Node.isVariableDeclaration(decl)) {
+                            const initializer = decl.getInitializer();
+                            if (initializer && Node.isObjectLiteralExpression(initializer)) {
+                                logDebug(this.getModuleName(), `Found ObjectLiteralExpression for imported var ${importInfo.importName} in ${importedSourceFile.getFilePath()}`);
+                                return initializer;
+                            } else if (initializer && Node.isAsExpression(initializer) && Node.isObjectLiteralExpression(initializer.getExpression())) {
+                               logDebug(this.getModuleName(), `Found ObjectLiteralExpression (AsExpression) for imported var ${importInfo.importName} in ${importedSourceFile.getFilePath()}`);
+                                return initializer.getExpression() as ObjectLiteralExpression;
+                            }
+                        }
+                    }
+                    logDebug(this.getModuleName(), `Exported symbol ${importInfo.importName} in ${importedSourceFile.getFilePath()} is not a VariableDeclaration with an ObjectLiteralExpression.`);
+                } else {
+                    logDebug(this.getModuleName(), `Could not find exported symbol ${importInfo.importName} in ${importedSourceFile.getFilePath()}`);
+                }
+            } else {
+                logError(this.getModuleName(), `Could not resolve source file for module specifier: ${importInfo.moduleSpecifier} when looking for ${identifierName}`);
+            }
+        } else {
+          logDebug(this.getModuleName(), `No import AST node found for module specifier ${importInfo.moduleSpecifier} for ${identifierName}`);
+        }
+    } else {
+        logDebug(this.getModuleName(), `No import declaration found for ${identifierName} in ${currentSourceFile.getFilePath()}`);
+    }
+
+    logError(this.getModuleName(), `Failed to find ObjectLiteralExpression for identifier: ${identifierName} in ${currentSourceFile.getFilePath()} or its direct imports.`);
+    return undefined;
+  }
 } 
