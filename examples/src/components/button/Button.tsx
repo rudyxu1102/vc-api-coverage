@@ -11,7 +11,7 @@ export default defineComponent({
   // 2. Emits 定义
   emits: buttonEmits,
 
-  expose: buttonExpose,
+  expose: ['focus'] as string[],
 
   methods: {
     handleClick(event: MouseEvent) {

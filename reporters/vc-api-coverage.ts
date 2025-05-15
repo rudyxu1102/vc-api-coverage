@@ -3,18 +3,14 @@ import type { TestModule } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
-import PropsAnalyzer from '../lib/analyzer/props-analyzer';
-import EmitsAnalyzer from '../lib/analyzer/emits-analyzer';
-import SlotsAnalyzer from '../lib/analyzer/slots-analyzer';
-import ExposeAnalyzer from '../lib/analyzer/expose-analyzer';
+import ComponentAnalyzer from '../lib/analyzer/component-analyzer';
 import { generateCliReport } from '../lib/reporter/cli-reporter';
 import { HTMLReporter } from '../lib/reporter/html-reporter';
 import { JSONReporter } from '../lib/reporter/json-reporter';
 import { VcCoverageOptions, ReportFormat } from '../lib/types';
 import type { VcCoverageData, VcData } from '../lib/types';
 import TestUnitAnalyzer from '../lib/analyzer/test-units-analyzer';
-import { toEventName } from '../lib/common/utils';
-import { Project } from 'ts-morph';
+import { Project, ts } from 'ts-morph';
 
 export default class VcCoverageReporter implements Reporter {
   private options: VcCoverageOptions;
@@ -37,8 +33,10 @@ export default class VcCoverageReporter implements Reporter {
     this.jsonReporter = new JSONReporter(this.options.outputDir);
     this.project = new Project({
       compilerOptions: {
-          jsx: 1, // Preserve JSX
-          target: 99, // ESNext
+        target: ts.ScriptTarget.ESNext, 
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
       },
     });
   }
@@ -78,15 +76,13 @@ export default class VcCoverageReporter implements Reporter {
         }
       }
       // 分析组件API
-      const props = new PropsAnalyzer(sourceFile, this.project).analyze();
-      const emits = new EmitsAnalyzer(sourceFile, this.project).analyze()
-      const slots = new SlotsAnalyzer(sourceFile, this.project).analyze();
-      const exposes = new ExposeAnalyzer(sourceFile, this.project).analyze()
+      const analyzer = new ComponentAnalyzer(sourceFile)
+      const { props, slots, exposes, emits } = analyzer.analyze()
       this.compData[path] = {
-        props,
-        emits: emits.map(e => toEventName(e)),
-        slots,
-        exposes
+        props: Array.from(props),
+        emits: Array.from(emits),
+        slots: Array.from(slots),
+        exposes: Array.from(exposes)
       }
     }
   }

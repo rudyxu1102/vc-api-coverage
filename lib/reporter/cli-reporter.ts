@@ -21,21 +21,15 @@ function formatCoverageValue(covered: number, total: number): string {
     return chalk.bold.green('0/0');
   }
   if (total === 0 && covered > 0) {
-    return chalk.bold.red(`${covered}/N`);
+    return chalk.bold.yellow(`${covered}/N`);
   }
   const ratio = covered / total;
   
   if (ratio === 1) {
     // 100% 覆盖率，绿色加粗
     return chalk.bold.green(`${covered}/${total}`);
-  } else if (ratio >= 0.8) {
-    // 80%+ 覆盖率，绿色
-    return chalk.green(`${covered}/${total}`);
-  } else if (ratio >= 0.5) {
-    // 50%+ 覆盖率，黄色
-    return chalk.bold.yellow(`${covered}/${total}`);
   } else {
-    // 低于 50%，红色
+    // 低于 100%，红色
     return chalk.bold.red(`${covered}/${total}`);
   }
 }

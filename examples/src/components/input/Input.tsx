@@ -63,9 +63,9 @@ export default defineComponent({
 
     // 暴露方法
     expose({
-      focus,
-      select,
-      clear,
+      focus: focus,
+      select: select,
+      clear: clear,
     });
 
     const wrapperStyle = {
