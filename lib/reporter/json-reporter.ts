@@ -36,10 +36,6 @@ export class JSONReporter {
       total: 0,
       covered: 0
     },
-    emits: {
-      total: 0,
-      covered: 0
-    },
     slots: {
       total: 0,
       covered: 0
@@ -69,8 +65,6 @@ export class JSONReporter {
         totalComponents: this.coverageData.length,
         totalProps: this.totalData.props.total,
         coveredProps: this.totalData.props.covered,
-        totalEmits: this.totalData.emits.total,
-        coveredEmits: this.totalData.emits.covered,
         totalSlots: this.totalData.slots.total,
         coveredSlots: this.totalData.slots.covered,
         totalExposes: this.totalData.exposes.total,
@@ -90,7 +84,6 @@ export class JSONReporter {
     if (this.coverageData.length === 0) {
       return {
         props: 0,
-        events: 0,
         slots: 0,
         methods: 0,
         total: 0
@@ -101,16 +94,13 @@ export class JSONReporter {
 
     const stats = {
       props: totalStats.props.total ? (totalStats.props.covered / totalStats.props.total) * 100 : 100,
-      events: totalStats.emits.total ? (totalStats.emits.covered / totalStats.emits.total) * 100 : 100,
       slots: totalStats.slots.total ? (totalStats.slots.covered / totalStats.slots.total) * 100 : 100,
       methods: totalStats.exposes.total ? (totalStats.exposes.covered / totalStats.exposes.total) * 100 : 100
     }
 
     // 计算总体覆盖率
-    const totalCovered = totalStats.props.covered + totalStats.emits.covered + 
-                        totalStats.slots.covered + totalStats.exposes.covered
-    const totalItems = totalStats.props.total + totalStats.emits.total + 
-                      totalStats.slots.total + totalStats.exposes.total
+    const totalCovered = totalStats.props.covered + totalStats.slots.covered + totalStats.exposes.covered
+    const totalItems = totalStats.props.total + totalStats.slots.total + totalStats.exposes.total
 
     return {
       ...stats,

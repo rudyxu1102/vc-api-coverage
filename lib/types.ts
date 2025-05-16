@@ -17,17 +17,12 @@ export type ReportFormat = 'cli' | 'html' | 'json'
 
 export interface VcData {
   props: string[],
-  emits:  string[],
   slots: string[],
   exposes: string[],
 }
 
 export interface VcTotalData {
   props: {
-    total: number,
-    covered: number
-  },
-  emits: {
     total: number,
     covered: number
   },

@@ -151,4 +151,31 @@ describe('ComponentAnalyzer', () => {
     expect(result.emits).toStrictEqual([])
   });
   
+  it('should analyze enum emits of the component', () => {
+    const project = new Project({
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      },
+    });
+    const code = `
+        import { defineComponent } from 'vue';
+        enum ButtonEvent {
+            InfoClick = 'testInfoClick',
+        }
+        export default defineComponent({
+            name: 'Button',
+            emits: {
+                [ButtonEvent.InfoClick]: (event: MouseEvent) => true,
+            },
+        });
+    `;
+    const sourceFile = project.createSourceFile('./button.tsx', code);
+    const analyzer = new ComponentAnalyzer(sourceFile);
+    const result = analyzer.analyze();
+    expect(result.emits).toStrictEqual(['onTestInfoClick'])
+  });
+
 });

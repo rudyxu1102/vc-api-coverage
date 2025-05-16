@@ -1,12 +1,10 @@
 import { SourceFile, Node, Type, Expression, ObjectLiteralExpression, SyntaxKind } from "ts-morph";
-import { toEventName } from '../common/utils';
 
 class ComponentAnalyzer {
     private sourceFile: SourceFile;
     private props = new Set<string>();
     private slots = new Set<string>();
     private exposes = new Set<string>();
-    private emits = new Set<string>();
     private code: string;
 
     constructor(sourceFile: SourceFile) {
@@ -20,22 +18,19 @@ class ComponentAnalyzer {
             props: Array.from(this.props),
             slots: Array.from(this.slots),
             exposes: Array.from(this.exposes),
-            emits: Array.from(this.emits)
         }
     }
 
-    analyzeProps(instanceType: Type, exportedExpression: Expression) {
+    analyzePropsAndEmits(instanceType: Type, exportedExpression: Expression) {
         const internalProps = ['key', 'ref', 'ref_for', 'ref_key', 'onVnodeBeforeMount', 'onVnodeMounted', 'onVnodeBeforeUpdate', 'onVnodeUpdated', 'onVnodeBeforeUnmount', 'onVnodeUnmounted', 'class', 'style'];
         const dollarPropsSymbol = instanceType.getProperty('$props');
         if (!dollarPropsSymbol) return
         const dollarPropsType = dollarPropsSymbol.getTypeAtLocation(exportedExpression);
         dollarPropsType.getProperties().forEach(propSymbol => {
             const propName = propSymbol.getName();
-            // const propType = propSymbol.getTypeAtLocation(exportedExpression);
             if (internalProps.includes(propName)) {
                 return;
             }
-
             this.props.add(propName);
         });
     }
@@ -117,37 +112,6 @@ class ComponentAnalyzer {
     }
 
 
-    analyzeEmits(instanceType: Type, exportedExpression: Expression, componentOptions?: ObjectLiteralExpression) {
-        const emitsProperty = componentOptions?.getProperty('emits');
-        if (!emitsProperty) return
-        const dollarPropsSymbol = instanceType.getProperty('$emit');
-        if (!dollarPropsSymbol) return
-        const dollarPropsType = dollarPropsSymbol.getTypeAtLocation(exportedExpression);
-        const callSignatures = dollarPropsType.getCallSignatures();
-        if (callSignatures.length === 0) return
-        callSignatures.forEach((signature) => {
-            const parameters = signature.getParameters();
-            if (parameters.length > 0) {
-                // 第一个参数通常是事件名称
-                const eventParam = parameters[0];
-                const eventParamType = eventParam.getTypeAtLocation(exportedExpression);
-                const emitName = eventParamType.getText().replace(/'|"/g, '');
-                if (emitName.includes('|')) {
-                    const eventNames = emitName.split('|').map(name => toEventName(name.trim()));
-                    eventNames.forEach(name => this.emits.add(name));
-                } else {
-                    const eventName = toEventName(emitName);
-                    this.emits.add(eventName);
-                }
-            }
-        });
-        for (const emit of this.emits) {
-            if (this.props.has(emit)) {
-                this.props.delete(emit)
-            }
-        }
-    }
-
     isComponentFile(type: Type) {
         const constructSignatures = type.getConstructSignatures();
         if (constructSignatures.length === 0) return false;
@@ -208,14 +172,13 @@ class ComponentAnalyzer {
     analyzerComponentType() {
         const exportedExpression = this.getExportedExpression();
         if (!exportedExpression) return;
-        const componentOptions = this.getComponentOptions(exportedExpression);
+        // const componentOptions = this.getComponentOptions(exportedExpression);
         const componentType = exportedExpression.getType();
         const constructSignatures = componentType.getConstructSignatures();
         if (constructSignatures.length === 0) return
         const instanceType = constructSignatures[0].getReturnType();
-        this.analyzeProps(instanceType, exportedExpression);
+        this.analyzePropsAndEmits(instanceType, exportedExpression);
         this.analyzeSlots(instanceType, exportedExpression);
-        this.analyzeEmits(instanceType, exportedExpression, componentOptions);
         this.analyzerExpose();
     }
 }

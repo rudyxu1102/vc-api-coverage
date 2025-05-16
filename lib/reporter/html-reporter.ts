@@ -36,10 +36,6 @@ export class HTMLReporter {
       total: 0,
       covered: 0
     },
-    emits: {
-      total: 0,
-      covered: 0
-    },
     slots: {
       total: 0,
       covered: 0
@@ -192,7 +188,6 @@ export class HTMLReporter {
     if (this.coverageData.length === 0) {
       return {
         props: 100,
-        emits: 100,
         slots: 100,
         exposes: 100
       }
@@ -202,27 +197,18 @@ export class HTMLReporter {
 
     return {
       props: totalStats.props.total ? (totalStats.props.covered / totalStats.props.total) * 100 : 100,
-      emits: totalStats.emits.total ? (totalStats.emits.covered / totalStats.emits.total) * 100 : 100,
       slots: totalStats.slots.total ? (totalStats.slots.covered / totalStats.slots.total) * 100 : 100,
       exposes: totalStats.exposes.total ? (totalStats.exposes.covered / totalStats.exposes.total) * 100 : 100
     }
   }
 
-  private generateOverallStats(stats: { props: number; emits: number; slots: number; exposes: number }): string {
+  private generateOverallStats(stats: { props: number; slots: number; exposes: number }): string {
     return `
       <div class="stat-card">
         <h3 class="text-sm font-medium text-gray-500">Props Coverage</h3>
         <p class="mt-1">
           <span class="coverage-badge ${this.getCoverageBadgeClass(stats.props)}">
             Props Coverage: ${stats.props.toFixed(0)}%
-          </span>
-        </p>
-      </div>
-      <div class="stat-card">
-        <h3 class="text-sm font-medium text-gray-500">Events Coverage</h3>
-        <p class="mt-1">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(stats.emits)}">
-            Emits Coverage: ${stats.emits.toFixed(0)}%
           </span>
         </p>
       </div>

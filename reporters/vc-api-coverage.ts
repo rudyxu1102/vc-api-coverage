@@ -49,7 +49,6 @@ export default class VcCoverageReporter implements Reporter {
     for (const fullPath in res) {
       let info: VcData = {
         props: [],
-        emits: [],
         slots: [],
         exposes: [],
       }
@@ -70,40 +69,13 @@ export default class VcCoverageReporter implements Reporter {
       let sourceFile = this.project.addSourceFileAtPath(path)
       // 分析组件API
       const analyzer = new ComponentAnalyzer(sourceFile)
-      const { props, slots, exposes, emits } = analyzer.analyze()
+      const { props, slots, exposes } = analyzer.analyze()
       this.compData[path] = {
         props: Array.from(props),
-        emits: Array.from(emits),
         slots: Array.from(slots),
         exposes: Array.from(exposes),
       }
     }
-  }
-
-  // 有一些prop命名为onXxx，但是需要从emits中移除
-  dealPropsEmits(compData: VcData, unitData: VcData) {
-    const propsDetails = []
-    const emitsDetails = []
-    // 处理测试中的emits
-    for (const emit of unitData.emits) {
-      if (compData.props.includes(emit)) {
-        // 如果emit名在组件prop定义中存在，则视为prop使用
-        propsDetails.push(emit)
-      } else if (compData.emits.includes(emit)) {
-        // 否则如果在组件emit定义中存在，则视为emit使用
-        emitsDetails.push(emit)
-      }
-    }
-    
-    // 处理测试中的props
-    for (const prop of unitData.props) {
-      // 防止重复添加，只有当prop不是emit且是组件中定义的prop时才添加
-      if (!propsDetails.includes(prop) && compData.props.includes(prop)) {
-        propsDetails.push(prop)
-      }
-    }
-
-    return { propsDetails, emitsDetails }
   }
 
   mergeData(unitData: Record<string, VcData>, compData: Record<string, VcData>): VcCoverageData[] {
@@ -146,18 +118,13 @@ export default class VcCoverageReporter implements Reporter {
       info.name = path.split('/').slice(-2).join('/') || ''
       info.file = path
       
-      const { propsDetails, emitsDetails } = this.dealPropsEmits(comp, unit)
-      
       info.props.total += comp.props.length
-      info.props.covered += propsDetails.length
-      info.emits.total += comp.emits.length
-      info.emits.covered += emitsDetails.length
+      info.props.covered += unit.props.length
       info.slots.total += comp.slots.length
       info.slots.covered += unit.slots.length
       info.exposes.total += comp.exposes.length
       info.exposes.covered += unit.exposes.filter(e => comp.exposes.includes(e)).length
-      info.props.details = comp.props.map(p => ({ name: p, covered: propsDetails.includes(p) }))
-      info.emits.details = comp.emits.map(e => ({ name: e, covered: emitsDetails.includes(e) }))
+      info.props.details = comp.props.map(p => ({ name: p, covered: unit.props.includes(p) }))
       info.slots.details = comp.slots.map(s => ({ name: s, covered: unit.slots.includes(s) }))
       info.exposes.details = comp.exposes.map(e => ({ name: e, covered: unit.exposes.includes(e) }))
       res.push(info)

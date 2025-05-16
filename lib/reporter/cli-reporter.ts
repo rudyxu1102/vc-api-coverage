@@ -7,7 +7,6 @@ import { colorizePercentage, getTotalData, roundPercentage } from '../common/uti
 function getUncoveredAPIs(coverageData: VcCoverageData): string {
   const uncoveredAPIs = [
     ...coverageData.props.details.filter(p => !p.covered).map(p => p.name),
-    ...coverageData.emits.details.filter(e => !e.covered).map(e => e.name),
     ...coverageData.slots.details.filter(s => !s.covered).map(s => s.name),
     ...coverageData.exposes.details.filter(ex => !ex.covered).map(ex => ex.name)
   ];
@@ -52,7 +51,6 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
   // 检查是否有任何未覆盖的API
   const hasUncoveredApis = allCoverageData.some(data => {
     return data.props.details.some(p => !p.covered) ||
-           data.emits.details.some(e => !e.covered) ||
            data.slots.details.some(s => !s.covered) ||
            data.exposes.details.some(ex => !ex.covered);
   });
@@ -60,7 +58,6 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
   // 检查是否有空组件（没有任何API的组件）
   const hasEmptyComponent = allCoverageData.some(data => 
     data.props.details.length === 0 && 
-    data.emits.details.length === 0 && 
     data.slots.details.length === 0 && 
     data.exposes.details.length === 0
   );
@@ -71,8 +68,7 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
   // 表头和列宽设置
   const tableHeaders = [
     chalk.bold('Components'),
-    chalk.bold('Props'),
-    chalk.bold('Emits'),
+    chalk.bold('Props/Events'),
     chalk.bold('Slots'),
     chalk.bold('Exposes'),
     chalk.bold('Uncovered APIs')
@@ -92,32 +88,30 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
       head: [],  // 保持标题颜色，不应用额外样式
       border: [], // 保持边框颜色
     },
-    colWidths: [35, null, null, null, null, 35],
+    colWidths: [null, null, null, null, null, 35],
     // 启用文本自动换行
     wordWrap: true,
     // 启用文本自动换行
-    wrapOnWordBoundary: true
+    wrapOnWordBoundary: true,
+    colAligns: ['left', 'right', 'right', 'right', 'left']
   });
   
   // 计算总体覆盖率
   const propsCoverage = roundPercentage(totalData.props.covered, totalData.props.total);
-  
-  const emitsCoverage = roundPercentage(totalData.emits.covered, totalData.emits.total);
-  
+    
   const slotsCoverage = roundPercentage(totalData.slots.covered, totalData.slots.total);
   
   const exposesCoverage = roundPercentage(totalData.exposes.covered, totalData.exposes.total);
   
   const totalPercentage = roundPercentage(
-    totalData.props.covered + totalData.emits.covered + totalData.slots.covered + totalData.exposes.covered,
-    totalData.props.total + totalData.emits.total + totalData.slots.total + totalData.exposes.total
+    totalData.props.covered + totalData.slots.covered + totalData.exposes.covered,
+    totalData.props.total + totalData.slots.total + totalData.exposes.total
   );
   
   // 添加汇总行
   const summaryRow = [
     formatComponentName('All', totalPercentage),
     colorizePercentage(propsCoverage),
-    colorizePercentage(emitsCoverage),
     colorizePercentage(slotsCoverage),
     colorizePercentage(exposesCoverage)
   ];
@@ -132,19 +126,18 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
   // 添加每个组件的行
   allCoverageData.forEach(data => {
     const propsStats = data.props;
-    const emitsStats = data.emits;
     const slotsStats = data.slots;
     const exposeStats = data.exposes;
     const uncoveredAPIs = getUncoveredAPIs(data);
     
     const totalPercentage = roundPercentage(
-      propsStats.covered + emitsStats.covered + slotsStats.covered + exposeStats.covered,
-      propsStats.total + emitsStats.total + slotsStats.total + exposeStats.total
+      propsStats.covered + slotsStats.covered + exposeStats.covered,
+      propsStats.total + slotsStats.total + exposeStats.total
     );
     
     // 检查组件是否有任何API
-    if (data.props.details.length === 0 && data.emits.details.length === 0 && 
-        data.slots.details.length === 0 && data.exposes.details.length === 0) {
+    if (data.props.details.length === 0 && data.slots.details.length === 0 && 
+        data.exposes.details.length === 0) {
       // 对于没有API的组件，使用特殊标记
       const row = [
         formatComponentName(data.name, totalPercentage),
@@ -164,7 +157,6 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
       const row = [
         formatComponentName(data.name, totalPercentage),
         formatCoverageValue(propsStats.covered, propsStats.total),
-        formatCoverageValue(emitsStats.covered, emitsStats.total),
         formatCoverageValue(slotsStats.covered, slotsStats.total),
         formatCoverageValue(exposeStats.covered, exposeStats.total)
       ];
