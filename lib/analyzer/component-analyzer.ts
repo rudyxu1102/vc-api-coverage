@@ -1,4 +1,4 @@
-import { SourceFile, Node, Type, Expression } from "ts-morph";
+import { SourceFile, Node, Type, Expression, ObjectLiteralExpression, SyntaxKind } from "ts-morph";
 import { toEventName } from '../common/utils';
 
 class ComponentAnalyzer {
@@ -117,7 +117,9 @@ class ComponentAnalyzer {
     }
 
 
-    analyzeEmits(instanceType: Type, exportedExpression: Expression) {
+    analyzeEmits(instanceType: Type, exportedExpression: Expression, componentOptions?: ObjectLiteralExpression) {
+        const emitsProperty = componentOptions?.getProperty('emits');
+        if (!emitsProperty) return
         const dollarPropsSymbol = instanceType.getProperty('$emit');
         if (!dollarPropsSymbol) return
         const dollarPropsType = dollarPropsSymbol.getTypeAtLocation(exportedExpression);
@@ -192,16 +194,28 @@ class ComponentAnalyzer {
         return exportedExpression;
     }
 
+    getComponentOptions(exportedExpression: Expression) {
+        let componentOptions: ObjectLiteralExpression | undefined = undefined;
+        if (Node.isCallExpression(exportedExpression) && exportedExpression.getExpression().isKind(SyntaxKind.Identifier) && exportedExpression.getExpression().getText() === 'defineComponent') {
+            const arg = exportedExpression.getArguments()[0];
+            if (arg && Node.isObjectLiteralExpression(arg)) {
+                componentOptions = arg;
+            }
+        }
+        return componentOptions;
+    }
+
     analyzerComponentType() {
         const exportedExpression = this.getExportedExpression();
         if (!exportedExpression) return;
+        const componentOptions = this.getComponentOptions(exportedExpression);
         const componentType = exportedExpression.getType();
         const constructSignatures = componentType.getConstructSignatures();
         if (constructSignatures.length === 0) return
         const instanceType = constructSignatures[0].getReturnType();
         this.analyzeProps(instanceType, exportedExpression);
         this.analyzeSlots(instanceType, exportedExpression);
-        this.analyzeEmits(instanceType, exportedExpression);
+        this.analyzeEmits(instanceType, exportedExpression, componentOptions);
         this.analyzerExpose();
     }
 }

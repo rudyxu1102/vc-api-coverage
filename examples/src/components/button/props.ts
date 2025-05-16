@@ -16,3 +16,7 @@ export const buttonSlots = Object as SlotsType<{
     default?: () => VNode[];
     icon?: () => VNode[];
   }>
+
+export enum ButtonEvent {
+    InfoClick = 'infoclick',
+}
