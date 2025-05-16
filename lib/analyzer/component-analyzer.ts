@@ -8,21 +8,19 @@ class ComponentAnalyzer {
     private exposes = new Set<string>();
     private emits = new Set<string>();
     private code: string;
-    private exportName: string;
 
-    constructor(sourceFile: SourceFile, exportName: string = 'default') {
+    constructor(sourceFile: SourceFile) {
         this.sourceFile = sourceFile;
         this.code = sourceFile.getFullText();
-        this.exportName = exportName;
     }
 
     analyze() {
         this.analyzerComponentType();
         return {
-            props: this.props,
-            slots: this.slots,
-            exposes: this.exposes,
-            emits: this.emits
+            props: Array.from(this.props),
+            slots: Array.from(this.slots),
+            exposes: Array.from(this.exposes),
+            emits: Array.from(this.emits)
         }
     }
 
@@ -143,28 +141,55 @@ class ComponentAnalyzer {
         }
     }
 
-    analyzerComponentType() {
-        let exportedExpression: Expression;
-        if (this.exportName === 'default') {
-            const defaultExport = this.sourceFile.getDefaultExportSymbol();
-            if (!defaultExport) return
+    isComponentFile(type: Type) {
+        const constructSignatures = type.getConstructSignatures();
+        if (constructSignatures.length === 0) return false;
+        return true
+    }
+
+    getExportedExpression() {
+        let exportedExpression: Expression | null = null;
+        const defaultExport = this.sourceFile.getDefaultExportSymbol();
+        if (defaultExport) {
             const exportAssignmentDeclaration = defaultExport.getDeclarations()[0];
-            if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return
-            exportedExpression = exportAssignmentDeclaration.getExpression();
-            if (!exportedExpression) return
-        } else {
-            const namedExport = this.sourceFile.getExportSymbols().find(symbol => {
-                const declarations = symbol.getDeclarations();
-                if (declarations.length === 0) return false;
-                const exportAssignmentDeclaration = declarations[0];
-                if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return false;
-                return exportAssignmentDeclaration.getExpression().getText() === this.exportName;
-            });
-            if (!namedExport) return
-            const exportAssignmentDeclaration = namedExport.getDeclarations()[0];
-            if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return
-            exportedExpression = exportAssignmentDeclaration.getExpression();
+            if (exportAssignmentDeclaration && Node.isExportAssignment(exportAssignmentDeclaration)) {
+                exportedExpression = exportAssignmentDeclaration.getExpression();
+                const varType = exportedExpression.getType();
+                if (this.isComponentFile(varType)) return exportedExpression;
+            }
         }
+        // 获取具名导出
+        const namedExport = this.sourceFile.getExportSymbols().find(symbol => {
+            const valueDeclaration = symbol.getValueDeclaration();
+            if (!valueDeclaration) return false;
+            const varType = valueDeclaration.getType();
+            return this.isComponentFile(varType)
+        });
+        if (!namedExport) return;
+        const declarations = namedExport.getDeclarations();
+        if (declarations.length === 0) return;
+        const declaration = declarations[0];
+        if (Node.isExportAssignment(declaration)) {
+            exportedExpression = declaration.getExpression();
+        } else if (Node.isVariableDeclaration(declaration)) {
+            exportedExpression = declaration.getInitializer()!;
+        } else if (Node.isExportSpecifier(declaration)) {
+            const localTargetSymbol = declaration.getLocalTargetSymbol();
+            if (!localTargetSymbol) return;
+            const localDeclarations = localTargetSymbol.getDeclarations();
+            if (localDeclarations.length === 0) return;
+            
+            const localDeclaration = localDeclarations[0];
+            if (Node.isVariableDeclaration(localDeclaration)) {
+                exportedExpression = localDeclaration.getInitializer()!;
+            }
+        }
+        return exportedExpression;
+    }
+
+    analyzerComponentType() {
+        const exportedExpression = this.getExportedExpression();
+        if (!exportedExpression) return;
         const componentType = exportedExpression.getType();
         const constructSignatures = componentType.getConstructSignatures();
         if (constructSignatures.length === 0) return

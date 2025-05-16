@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
-import Button from '../Button';
+import { Button } from '../Button';
 
 describe('Button.tsx', () => {
   it('renders size and slot', async () => {

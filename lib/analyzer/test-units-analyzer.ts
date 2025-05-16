@@ -6,7 +6,6 @@ interface TestUnit {
     props?: string[];
     emits?: string[];
     slots?: string[];
-    exportName: string;
 }
 
 interface TestUnitsResult {
@@ -38,7 +37,6 @@ class TestUnitAnalyzer {
     }
     // 处理index文件，如 ./components/input/index.ts
     private resolveRealComponentPath(sourceValue: string, exportName: string = 'default'): string | null {
-
         // 使用ts-morph解析代码，获取结构化信息
         const sourceFile = this.project.addSourceFileAtPath(sourceValue);
         // 查找默认导出
@@ -285,9 +283,7 @@ class TestUnitAnalyzer {
         }
 
         if (!this.result[componentFile]) {
-            this.result[componentFile] = {
-                exportName,
-            };
+            this.result[componentFile] = {};
         }
         // Process props, emits, slots from optionsNode or template
         if (optionsNode && Node.isObjectLiteralExpression(optionsNode)) {
@@ -566,15 +562,13 @@ class TestUnitAnalyzer {
             };
             const isDefaultExport = this.isDefaultExport(importDecl, tagName);
             const exportName = isDefaultExport ? 'default' : tagName;
-            const realComponentPath = this.resolveRealComponentPath(filePath, exportName);
             // Check if we need to handle index.ts files
             if (!isComponentFile(filePath)) {
+                const realComponentPath = this.resolveRealComponentPath(filePath, exportName);
                 if (realComponentPath) {
                     // Initialize component entry in result if not exists
                     if (!this.result[realComponentPath]) {
-                        this.result[realComponentPath] = {
-                            exportName,
-                        };
+                        this.result[realComponentPath] = {};
                     }
                     
                     // Extract props from JSX attributes
@@ -588,9 +582,7 @@ class TestUnitAnalyzer {
             } else {
                 // Initialize component entry in result if not exists
                 if (!this.result[filePath]) {
-                    this.result[filePath] = {
-                        exportName,
-                    };
+                    this.result[filePath] = {};
                 }
                 
                 // Extract props from JSX attributes

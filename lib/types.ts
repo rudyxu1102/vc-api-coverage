@@ -20,7 +20,6 @@ export interface VcData {
   emits:  string[],
   slots: string[],
   exposes: string[],
-  exportName: string
 }
 
 export interface VcTotalData {

@@ -52,7 +52,6 @@ export default class VcCoverageReporter implements Reporter {
         emits: [],
         slots: [],
         exposes: [],
-        exportName: res[fullPath].exportName
       }
       if (this.unitData[fullPath]) {
         info = this.unitData[fullPath]
@@ -68,17 +67,15 @@ export default class VcCoverageReporter implements Reporter {
 
   analyzerComponent() {
     for (const path in this.unitData) {
-      const { exportName } = this.unitData[path]
       let sourceFile = this.project.addSourceFileAtPath(path)
       // 分析组件API
-      const analyzer = new ComponentAnalyzer(sourceFile, exportName)
+      const analyzer = new ComponentAnalyzer(sourceFile)
       const { props, slots, exposes, emits } = analyzer.analyze()
       this.compData[path] = {
         props: Array.from(props),
         emits: Array.from(emits),
         slots: Array.from(slots),
         exposes: Array.from(exposes),
-        exportName
       }
     }
   }
