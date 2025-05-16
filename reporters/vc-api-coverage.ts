@@ -97,11 +97,6 @@ export default class VcCoverageReporter implements Reporter {
           covered: 0,
           details: []
         },
-        emits: {
-          total: 0,
-          covered: 0,
-          details: []
-        },
         slots: {
           total: 0,
           covered: 0,

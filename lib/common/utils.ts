@@ -42,10 +42,6 @@ export function getTotalData(allCoverageData: VcCoverageData[]) {
       total: 0,
       covered: 0,
     },
-    emits: {
-      total: 0,
-      covered: 0
-    },
     slots: {
       total: 0,
       covered: 0
@@ -59,10 +55,6 @@ export function getTotalData(allCoverageData: VcCoverageData[]) {
     if (item.props.total > 0) {
       data.props.total += item.props.total
       data.props.covered += item.props.covered
-    }
-    if (item.emits.total > 0) {
-      data.emits.total += item.emits.total
-      data.emits.covered += item.emits.covered
     }
     if (item.slots.total > 0) {
       data.slots.total += item.slots.total

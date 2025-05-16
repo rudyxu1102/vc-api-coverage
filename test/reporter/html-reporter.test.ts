@@ -29,14 +29,7 @@ describe('html-reporter', () => {
           { name: 'count', covered: true }
         ]
       },
-      emits: {
-        total: 2,
-        covered: 1,
-        details: [
-          { name: 'change', covered: true },
-          { name: 'submit', covered: false }
-        ]
-      },
+
       slots: {
         total: 1,
         covered: 1,
@@ -61,7 +54,6 @@ describe('html-reporter', () => {
     expect(htmlContent).toContain('MyComponent')
     expect(htmlContent).toContain('src/components/MyComponent.vue')
     expect(htmlContent).toContain('Props Coverage: 100%')
-    expect(htmlContent).toContain('Emits Coverage: 50%')
     expect(htmlContent).toContain('Slots Coverage: 100%')
   })
 
@@ -70,11 +62,6 @@ describe('html-reporter', () => {
       name: 'EmptyComponent',
       file: 'src/components/EmptyComponent.vue',
       props: {
-        total: 0,
-        covered: 0,
-        details: []
-      },
-      emits: {
         total: 0,
         covered: 0,
         details: []
@@ -114,7 +101,6 @@ describe('html-reporter', () => {
             { name: 'propB', covered: true }
           ]
         },
-        emits: { total: 0, covered: 0, details: [] },
         slots: { total: 0, covered: 0, details: [] },
         exposes: { total: 0, covered: 0, details: [] }
       },
@@ -122,14 +108,6 @@ describe('html-reporter', () => {
         name: 'ComponentB',
         file: 'src/components/ComponentB.vue',
         props: { total: 0, covered: 0, details: [] },
-        emits: {
-          total: 2,
-          covered: 1,
-          details: [
-            { name: 'eventA', covered: true },
-            { name: 'eventB', covered: false }
-          ]
-        },
         slots: { total: 0, covered: 0, details: [] },
         exposes: { total: 0, covered: 0, details: [] }
       }
@@ -144,6 +122,5 @@ describe('html-reporter', () => {
     expect(htmlContent).toContain('ComponentA')
     expect(htmlContent).toContain('ComponentB')
     expect(htmlContent).toContain('Props Coverage: 100%')
-    expect(htmlContent).toContain('Emits Coverage: 50%')
   })
 }) 

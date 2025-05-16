@@ -15,14 +15,6 @@ describe('cli-reporter', () => {
           { name: 'count', covered: true }
         ]
       },
-      emits: {
-        total: 2,
-        covered: 2,
-        details: [
-          { name: 'change', covered: true },
-          { name: 'submit', covered: true }
-        ]
-      },
       slots: {
         total: 2,
         covered: 2,
@@ -58,14 +50,6 @@ describe('cli-reporter', () => {
           { name: 'count', covered: false }
         ]
       },
-      emits: {
-        total: 2,
-        covered: 1,
-        details: [
-          { name: 'change', covered: true },
-          { name: 'submit', covered: false }
-        ]
-      },
       slots: {
         total: 2,
         covered: 1,
@@ -88,9 +72,7 @@ describe('cli-reporter', () => {
     expect(report).toContain('MyComponent.vue')
     expect(report).toContain('1/2')
     expect(report).toContain('count')
-    expect(report).toContain('submit')
     expect(report).toContain('header')
-    expect(report).toContain('validate')
   })
 
   it('should generate CLI report with no coverage component', () => {
@@ -103,14 +85,6 @@ describe('cli-reporter', () => {
         details: [
           { name: 'title', covered: false },
           { name: 'count', covered: false }
-        ]
-      },
-      emits: {
-        total: 2,
-        covered: 0,
-        details: [
-          { name: 'change', covered: false },
-          { name: 'submit', covered: false }
         ]
       },
       slots: {
@@ -130,8 +104,6 @@ describe('cli-reporter', () => {
     expect(report).toContain('0/2')
     expect(report).toContain('title')
     expect(report).toContain('count')
-    expect(report).toContain('change')
-    expect(report).toContain('submit')
   })
 
   it('should handle empty component', () => {
@@ -139,11 +111,6 @@ describe('cli-reporter', () => {
       name: 'EmptyComponent.vue',
       file: 'src/components/EmptyComponent.vue',
       props: {
-        total: 0,
-        covered: 0,
-        details: []
-      },
-      emits: {
         total: 0,
         covered: 0,
         details: []
@@ -178,14 +145,6 @@ describe('cli-reporter', () => {
           { name: 'prop2', covered: true }
         ]
       },
-      emits: {
-        total: 2,
-        covered: 2,
-        details: [
-          { name: 'emit1', covered: true },
-          { name: 'emit2', covered: true }
-        ]
-      },
       slots: {
         total: 1,
         covered: 1,
@@ -212,13 +171,6 @@ describe('cli-reporter', () => {
           { name: 'propC', covered: false }
         ]
       },
-      emits: {
-        total: 1,
-        covered: 0,
-        details: [
-          { name: 'emitA', covered: false }
-        ]
-      },
       slots: {
         total: 0,
         covered: 0,
@@ -237,8 +189,7 @@ describe('cli-reporter', () => {
     const report = generateCliReport([component1, component2])
     
     expect(report).toContain('Components')
-    expect(report).toContain('Props')
-    expect(report).toContain('Emits')
+    expect(report).toContain('Props/Events')
     expect(report).toContain('Slots')
     expect(report).toContain('Exposes')
     expect(report).toContain('Component1.vue')
@@ -246,7 +197,6 @@ describe('cli-reporter', () => {
     expect(report).toContain('All')
     expect(report).toContain('propB')
     expect(report).toContain('propC')
-    expect(report).toContain('emitA')
     expect(report).toContain('methodB')
   })
 }) 

@@ -11,11 +11,6 @@ interface ComponentCoverage {
     covered: number
     details: Array<{ name: string; covered: boolean }>
   }
-  emits: {
-    total: number
-    covered: number
-    details: Array<{ name: string; covered: boolean }>
-  }
   slots: {
     total: number
     covered: number

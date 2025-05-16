@@ -11,11 +11,6 @@ interface ComponentCoverage {
     covered: number
     details: Array<{ name: string; covered: boolean }>
   }
-  emits: {
-    total: number
-    covered: number
-    details: Array<{ name: string; covered: boolean }>
-  }
   slots: {
     total: number
     covered: number
@@ -140,7 +135,6 @@ export class HTMLReporter {
                         <tr class="bg-gray-50">
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Props</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Events</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slots</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Methods</th>
                         </tr>
@@ -244,12 +238,10 @@ export class HTMLReporter {
 
     return this.coverageData.map(component => {
       const propsCoverage = component.props.total ? (component.props.covered / component.props.total * 100) : 100
-      const emitsCoverage = component.emits.total ? (component.emits.covered / component.emits.total * 100) : 100
       const slotsCoverage = component.slots.total ? (component.slots.covered / component.slots.total * 100) : 100
       const exposesCoverage = component.exposes.total ? (component.exposes.covered / component.exposes.total * 100) : 100
 
-      const hasNoApi = component.props.total === 0 && component.emits.total === 0 && 
-                      component.slots.total === 0 && component.exposes.total === 0
+      const hasNoApi = component.props.total === 0 && component.slots.total === 0 && component.exposes.total === 0
 
       if (hasNoApi) {
         return `
@@ -278,12 +270,6 @@ export class HTMLReporter {
             </span>
           </td>
           <td class="px-6 py-4 whitespace-nowrap">
-            <span class="coverage-badge ${this.getCoverageBadgeClass(emitsCoverage)}">
-              ${component.emits.covered}/${component.emits.total}
-              <span class="ml-1">(${emitsCoverage.toFixed(0)}%)</span>
-            </span>
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap">
             <span class="coverage-badge ${this.getCoverageBadgeClass(slotsCoverage)}">
               ${component.slots.covered}/${component.slots.total}
               <span class="ml-1">(${slotsCoverage.toFixed(0)}%)</span>
@@ -307,11 +293,6 @@ export class HTMLReporter {
         label: 'Props',
         data: this.coverageData.map(c => c.props.total ? (c.props.covered / c.props.total * 100) : 100),
         backgroundColor: 'rgba(59, 130, 246, 0.5)'
-      },
-      {
-        label: 'Events',
-        data: this.coverageData.map(c => c.emits.total ? (c.emits.covered / c.emits.total * 100) : 100),
-        backgroundColor: 'rgba(16, 185, 129, 0.5)'
       },
       {
         label: 'Slots',
