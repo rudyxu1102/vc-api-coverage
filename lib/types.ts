@@ -19,7 +19,8 @@ export interface VcData {
   props: string[],
   emits:  string[],
   slots: string[],
-  exposes: string[]
+  exposes: string[],
+  exportName: string
 }
 
 export interface VcTotalData {

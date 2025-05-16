@@ -8,9 +8,12 @@ class ComponentAnalyzer {
     private exposes = new Set<string>();
     private emits = new Set<string>();
     private code: string;
-    constructor(sourceFile: SourceFile) {
+    private exportName: string;
+
+    constructor(sourceFile: SourceFile, exportName: string = 'default') {
         this.sourceFile = sourceFile;
         this.code = sourceFile.getFullText();
+        this.exportName = exportName;
     }
 
     analyze() {
@@ -141,12 +144,27 @@ class ComponentAnalyzer {
     }
 
     analyzerComponentType() {
-        const defaultExport = this.sourceFile.getDefaultExportSymbol();
-        if (!defaultExport) return
-        const exportAssignmentDeclaration = defaultExport.getDeclarations()[0];
-        if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return
-        const exportedExpression = exportAssignmentDeclaration.getExpression();
-        if (!exportedExpression) return
+        let exportedExpression: Expression;
+        if (this.exportName === 'default') {
+            const defaultExport = this.sourceFile.getDefaultExportSymbol();
+            if (!defaultExport) return
+            const exportAssignmentDeclaration = defaultExport.getDeclarations()[0];
+            if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return
+            exportedExpression = exportAssignmentDeclaration.getExpression();
+            if (!exportedExpression) return
+        } else {
+            const namedExport = this.sourceFile.getExportSymbols().find(symbol => {
+                const declarations = symbol.getDeclarations();
+                if (declarations.length === 0) return false;
+                const exportAssignmentDeclaration = declarations[0];
+                if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return false;
+                return exportAssignmentDeclaration.getExpression().getText() === this.exportName;
+            });
+            if (!namedExport) return
+            const exportAssignmentDeclaration = namedExport.getDeclarations()[0];
+            if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return
+            exportedExpression = exportAssignmentDeclaration.getExpression();
+        }
         const componentType = exportedExpression.getType();
         const constructSignatures = componentType.getConstructSignatures();
         if (constructSignatures.length === 0) return

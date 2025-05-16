@@ -6,6 +6,7 @@ interface TestUnit {
     props?: string[];
     emits?: string[];
     slots?: string[];
+    exportName: string;
 }
 
 interface TestUnitsResult {
@@ -270,12 +271,12 @@ class TestUnitAnalyzer {
 
         const importDecl = this.getImportDecl(componentName, this.sourceFile);
         if (!importDecl) return;
-
         const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
         let componentFile: string | null = getAsbFilePath(modulePath, this.dirname);
         const isDefaultExport = this.isDefaultExport(importDecl, componentName);
+        const exportName = isDefaultExport ? 'default' : componentName
         if (!isComponentFile(componentFile)) {
-            const realComponentPath = this.resolveRealComponentPath(componentFile, isDefaultExport ? 'default' : componentName);
+            const realComponentPath = this.resolveRealComponentPath(componentFile, exportName);
             if (realComponentPath) {
                 componentFile = realComponentPath;
             } else {
@@ -284,7 +285,9 @@ class TestUnitAnalyzer {
         }
 
         if (!this.result[componentFile]) {
-            this.result[componentFile] = {};
+            this.result[componentFile] = {
+                exportName,
+            };
         }
         // Process props, emits, slots from optionsNode or template
         if (optionsNode && Node.isObjectLiteralExpression(optionsNode)) {
@@ -561,14 +564,17 @@ class TestUnitAnalyzer {
             if (resolved) {
                 filePath = resolved.getFilePath();
             };
+            const isDefaultExport = this.isDefaultExport(importDecl, tagName);
+            const exportName = isDefaultExport ? 'default' : tagName;
+            const realComponentPath = this.resolveRealComponentPath(filePath, exportName);
             // Check if we need to handle index.ts files
             if (!isComponentFile(filePath)) {
-                const isDefaultExport = this.isDefaultExport(importDecl, tagName);
-                const realComponentPath = this.resolveRealComponentPath(filePath, isDefaultExport ? 'default' : tagName);
                 if (realComponentPath) {
                     // Initialize component entry in result if not exists
                     if (!this.result[realComponentPath]) {
-                        this.result[realComponentPath] = {};
+                        this.result[realComponentPath] = {
+                            exportName,
+                        };
                     }
                     
                     // Extract props from JSX attributes
@@ -582,7 +588,9 @@ class TestUnitAnalyzer {
             } else {
                 // Initialize component entry in result if not exists
                 if (!this.result[filePath]) {
-                    this.result[filePath] = {};
+                    this.result[filePath] = {
+                        exportName,
+                    };
                 }
                 
                 // Extract props from JSX attributes
