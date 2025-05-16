@@ -129,9 +129,14 @@ class ComponentAnalyzer {
                 // 第一个参数通常是事件名称
                 const eventParam = parameters[0];
                 const eventParamType = eventParam.getTypeAtLocation(exportedExpression);
-                const emitName = eventParamType.getText()
-                const eventName = toEventName(emitName.replace(/'|"/g, ''))
-                this.emits.add(eventName)
+                const emitName = eventParamType.getText().replace(/'|"/g, '');
+                if (emitName.includes('|')) {
+                    const eventNames = emitName.split('|').map(name => toEventName(name.trim()));
+                    eventNames.forEach(name => this.emits.add(name));
+                } else {
+                    const eventName = toEventName(emitName);
+                    this.emits.add(eventName);
+                }
             }
         });
         for (const emit of this.emits) {

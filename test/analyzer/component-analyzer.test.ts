@@ -75,5 +75,80 @@ describe('ComponentAnalyzer', () => {
     const result = analyzer.analyze();
     expect(result.exposes).toStrictEqual(['name', 'age'])
   });
+
+  it('should analyze array emits of the component', () => {
+    const project = new Project({
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      },
+    });
+    const code = `
+        import { defineComponent } from 'vue';
+
+        export default defineComponent({
+            name: 'Button',
+            emits: ['click', 'change'],
+        });
+    `;
+    const sourceFile = project.createSourceFile('./button.tsx', code);
+    const analyzer = new ComponentAnalyzer(sourceFile);
+    const result = analyzer.analyze();
+    expect(result.emits).toStrictEqual(['onClick', 'onChange'])
+  });
+
+  it('should analyze object emits of the component', () => {
+    const project = new Project({
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      },
+    });
+    const code = `
+        import { defineComponent } from 'vue';
+
+        export default defineComponent({
+            name: 'Button',
+            emits: {
+                click: (value: string) => true,
+                change: (value: string) => true,
+            },
+        });
+    `;
+    const sourceFile = project.createSourceFile('./button.tsx', code);
+    const analyzer = new ComponentAnalyzer(sourceFile);
+    const result = analyzer.analyze();
+    expect(result.emits).toStrictEqual(['onClick', 'onChange'])
+  });
+
+  it('should analyze empty emits of the component', () => {
+    const project = new Project({
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      },
+    });
+    const code = `
+        import { defineComponent } from 'vue';
+
+        export default defineComponent({
+            name: 'Button',
+            props: {
+                type: { type: String, default: 'default' },
+            },
+        });
+    `;
+    const sourceFile = project.createSourceFile('./button.tsx', code);
+    const analyzer = new ComponentAnalyzer(sourceFile);
+    const result = analyzer.analyze();
+    expect(result.props).toStrictEqual(['type'])
+    expect(result.emits).toStrictEqual([])
+  });
   
 });
