@@ -234,4 +234,36 @@ describe('test-units-analyzer', () => {
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
         expect(res[`${rootDir}/ButtonModel.tsx`].props!.sort()).toEqual(['value', 'visible', 'onUpdate:value', 'onUpdate:visible'].sort())
     })
+
+    it('should analyze in test units with muti components', () => {
+        const fakeTestFilePath = './multi-components.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Menu from './Menu.tsx';
+            import MenuItem from './MenuItem.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 1', () => {
+                    render(() => <Menu type="vertical"><MenuItem size="large"/></Menu>, {})
+                    expect(1).toBe(1)
+                })
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Menu shape="round"><MenuItem label="test"/></Menu>',
+                        components: {
+                            MenuItem
+                            Menu,
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`${rootDir}/Menu.tsx`].props!.sort()).toEqual(['shape', 'type'].sort())
+        expect(res[`${rootDir}/MenuItem.tsx`].props!.sort()).toEqual(['label', 'size'].sort())
+    })
 })

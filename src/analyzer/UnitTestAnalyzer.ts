@@ -242,40 +242,11 @@ class TestUnitAnalyzer {
         const defaultImportIdentifier = importDecl.getDefaultImport();
         return defaultImportIdentifier !== undefined && defaultImportIdentifier.getText() === componentName;
     }
-    
-    private processMountCall(mountCall: CallExpression) {
-        const args = mountCall.getArguments();
-        if (args.length === 0) return;
 
-        let componentArgNode: Node | undefined = args[0];
-        let optionsNode: Node | undefined;
-        let componentName: string | undefined;
-        let mountOptionsObject: ObjectLiteralExpression | undefined;
-        if (Node.isIdentifier(componentArgNode)) {
-            // Existing logic: mount(Component, options) or render(Component, options)
-            componentName = componentArgNode.getText();
-            if (args.length > 1 && Node.isObjectLiteralExpression(args[1])) {
-                optionsNode = args[1];
-            }
-        } else if (Node.isObjectLiteralExpression(componentArgNode)) {
-            // New logic: mount({ template: '...', components: { ... } })
-            mountOptionsObject = componentArgNode as ObjectLiteralExpression;
-            optionsNode = mountOptionsObject; // The entire object is effectively the options
-
-            const componentsProperty = mountOptionsObject.getProperty('components');
-            if (componentsProperty && Node.isPropertyAssignment(componentsProperty)) {
-                const componentsInitializer = componentsProperty.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
-                if (componentsInitializer) {
-                    // Take the first component found in the 'components' object
-                    // This is a simplification. A more robust solution might parse the template.
-                    const firstComponentProp = componentsInitializer.getProperties()[0];
-                    if (firstComponentProp && (Node.isPropertyAssignment(firstComponentProp) || Node.isShorthandPropertyAssignment(firstComponentProp))) {
-                        componentName = firstComponentProp.getName();
-                    }
-                }
-            }
-        }
-        if (!componentName) return;
+    // 处理mount(Component, options)或render(Component, options)
+    processMountComponent(componentArgNode: Node, optionsNode?: ObjectLiteralExpression) {
+        if (!optionsNode) return
+        const componentName = componentArgNode.getText();
 
         const importDecl = this.getImportDecl(componentName, this.sourceFile);
         if (!importDecl) return;
@@ -295,26 +266,68 @@ class TestUnitAnalyzer {
         if (!this.result[componentFile]) {
             this.result[componentFile] = {};
         }
-        // Process props, emits, slots from optionsNode or template
-        if (optionsNode && Node.isObjectLiteralExpression(optionsNode)) {
-            const options = optionsNode as ObjectLiteralExpression;
-            this.extractProps(options, this.result[componentFile]);
-            this.extractEmits(options, this.result[componentFile]);
-            this.extractSlots(options, this.result[componentFile]);
-            // If this was a mount({ template: '...' }) call, also try to extract props from template
-            if (mountOptionsObject) {
-                const templateProperty = mountOptionsObject.getProperty('template');
-                if (templateProperty && Node.isPropertyAssignment(templateProperty)) {
-                    const templateInitializer = templateProperty.getInitializer();
-                    if (templateInitializer && (Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) {
-                        const templateContent = templateInitializer.getLiteralText();
-                        this.extractPropsFromTemplate(templateContent, componentName, this.result[componentFile]);
-                        this.extractEmitsFromTemplate(templateContent, componentName, this.result[componentFile]);
-                        this.extractSlotsFromTemplate(templateContent, this.result[componentFile]);
+        this.extractProps(optionsNode, this.result[componentFile]);
+        this.extractEmits(optionsNode, this.result[componentFile]);
+        this.extractSlots(optionsNode, this.result[componentFile]);
+    }
+
+    // 处理mount({ template: '...', components: { ... } })
+    processMountOptions(optionsNode: ObjectLiteralExpression) {
+        const templateProperty = optionsNode.getProperty('template');
+        if (templateProperty && Node.isPropertyAssignment(templateProperty)) {
+            const templateInitializer = templateProperty.getInitializer();
+            if (templateInitializer && (Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) {
+                const templateContent = templateInitializer.getLiteralText();
+                
+                const componentsProperty = optionsNode.getProperty('components');
+                if (componentsProperty && Node.isPropertyAssignment(componentsProperty)) {
+                    const componentsInitializer = componentsProperty.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+                    if (componentsInitializer) {
+                        for (const componentProp of componentsInitializer.getProperties()) {
+                            if (Node.isPropertyAssignment(componentProp) || Node.isShorthandPropertyAssignment(componentProp)) {
+                                const localComponentName = componentProp.getName();
+                                const importDecl = this.getImportDecl(localComponentName, this.sourceFile);
+                                if (importDecl) {
+                                    const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
+                                    let resolvedComponentFile = getAsbFilePath(modulePath, this.dirname);
+                                    const isDefault = this.isDefaultExport(importDecl, localComponentName);
+                                    const exportNameForResolve = isDefault ? 'default' : localComponentName;
+
+                                    if (!isComponentFile(resolvedComponentFile)) {
+                                        const realComponentPath = this.resolveRealComponentPath(resolvedComponentFile, exportNameForResolve);
+                                        if (realComponentPath) {
+                                            resolvedComponentFile = realComponentPath;
+                                        } else {
+                                            continue; 
+                                        }
+                                    }
+
+                                    if (!this.result[resolvedComponentFile]) {
+                                        this.result[resolvedComponentFile] = {};
+                                    }
+                                    this.extractPropsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
+                                    this.extractEmitsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
+                                    this.extractSlotsFromTemplate(templateContent, this.result[resolvedComponentFile]);
+                                }
+                            }
+                        }
                     }
-                }
+                } 
             }
         }
+    }
+    
+    private processMountCall(mountCall: CallExpression) {
+        const args = mountCall.getArguments();
+        if (args.length === 0) return;
+
+        let componentArgNode: Node | undefined = args[0];
+        if (Node.isIdentifier(componentArgNode)) {
+            this.processMountComponent(componentArgNode, args[1] as ObjectLiteralExpression);
+        } else if (Node.isObjectLiteralExpression(componentArgNode)) {
+            this.processMountOptions(componentArgNode as ObjectLiteralExpression);
+        }
+     
     }
 
     private extractPropsFromTemplate(template: string, componentTagName: string, componentTestUnit: TestUnit) {
@@ -322,7 +335,7 @@ class TestUnitAnalyzer {
         // This is a basic implementation and might need to be made more robust.
         // Example: <Button prop1="value1" prop2 />
         // It won't handle complex bindings like :prop or v-bind well.
-        const tagRegex = new RegExp(`<${componentTagName}(\\s+[^>]*)?>`, 'ig'); // Case-insensitive, global
+        const tagRegex = new RegExp(`<${componentTagName}(\\s+[^>]*?)?>`, 'ig'); // Case-insensitive, global. Made the attribute matching non-greedy.
         let match;
         const propsFound: string[] = [];
 
