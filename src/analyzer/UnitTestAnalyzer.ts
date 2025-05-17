@@ -2,7 +2,7 @@ import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExp
 import { getAsbFilePath, isComponentFile } from '../common/utils';
 import path from 'path';
 
-interface TestUnit {    
+interface TestUnit {
     props?: string[];
     emits?: string[];
     slots?: string[];
@@ -17,7 +17,7 @@ class TestUnitAnalyzer {
     private result: TestUnitsResult = {};
     private project: Project;
     private dirname: string;
-    
+
     constructor(sourceFile: SourceFile, project: Project) {
         this.project = project;
         this.sourceFile = sourceFile;
@@ -27,14 +27,14 @@ class TestUnitAnalyzer {
 
     isValidTestCall(testCall: CallExpression) {
         let hasExpect = false;
-        
+
         // Find all expect calls in this test block
         const expectCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
             .filter(call => {
                 const expression = call.getExpression();
                 return Node.isIdentifier(expression) && expression.getText() === 'expect';
             });
-        
+
         if (expectCalls.length > 0) {
             hasExpect = true;
         }
@@ -56,11 +56,11 @@ class TestUnitAnalyzer {
             if (!this.isValidTestCall(testCall)) continue;
             // Analyze traditional mount method calls
             this.analyzeTraditionalMountCalls(testCall);
-              
+
             // Analyze JSX elements in the file
             this.analyzeJSXElements(testCall);
         }
-      
+
 
         const data = this.transformResult(this.result);
         return data;
@@ -92,7 +92,7 @@ class TestUnitAnalyzer {
                 // 如果是导出的表达式语句
                 if (Node.isExportAssignment(declaration)) {
                     const expression = declaration.getExpression();
-                    
+
                     // 如果是函数调用(如 export default withInstall(Component))
                     if (Node.isCallExpression(expression)) {
                         const args = expression.getArguments();
@@ -107,9 +107,9 @@ class TestUnitAnalyzer {
                                 if (defaultImport && defaultImport.getText() === componentName) {
                                     const importResolved = importDecl.getModuleSpecifierSourceFile();
                                     componentImportPath = importResolved!.getFilePath();
-                                    break;  
+                                    break;
                                 }
-                                
+
                                 // 检查命名导入
                                 const namedImports = importDecl.getNamedImports();
                                 for (const namedImport of namedImports) {
@@ -125,7 +125,7 @@ class TestUnitAnalyzer {
                     // 如果是标识符(如 export default Component
                     else if (Node.isIdentifier(expression)) {
                         const componentName = expression.getText();
-                        
+
                         // 查找这个标识符的导入
                         const importDecls = sourceFile.getImportDeclarations();
                         for (const importDecl of importDecls) {
@@ -136,7 +136,7 @@ class TestUnitAnalyzer {
                                 componentImportPath = importResolved!.getFilePath();
                                 break;
                             }
-                            
+
                             // 检查命名导入
                             const namedImports = importDecl.getNamedImports();
                             for (const namedImport of namedImports) {
@@ -160,14 +160,14 @@ class TestUnitAnalyzer {
             const importDecl = this.getImportDecl(exportName, sourceFile);
             const exportDecl = this.getExportDecl(exportName, sourceFile);
             if (!importDecl && !exportDecl) return null;
-            const modulePath = exportDecl?.getModuleSpecifier()?.getLiteralValue()  || importDecl?.getModuleSpecifier().getLiteralValue() || '';
+            const modulePath = exportDecl?.getModuleSpecifier()?.getLiteralValue() || importDecl?.getModuleSpecifier().getLiteralValue() || '';
             const componentFile = getAsbFilePath(modulePath, path.dirname(sourceFile.getFilePath()));
             return componentFile;
         }
-        
+
         return null;
     }
-    
+
     // 递归层序遍历文件引用，文件后缀为tsx或者vue
     private searchComponentFilePath(sourceFile: SourceFile) {
         const importDeclarations = sourceFile.getImportDeclarations();
@@ -194,10 +194,10 @@ class TestUnitAnalyzer {
         const mountCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
             .filter(call => {
                 const expression = call.getExpression();
-                return Node.isIdentifier(expression) && 
-                        (expression.getText() === 'mount' || expression.getText() === 'shallowMount' || expression.getText() === 'render');
+                return Node.isIdentifier(expression) &&
+                    (expression.getText() === 'mount' || expression.getText() === 'shallowMount' || expression.getText() === 'render');
             });
-        
+
         for (const mountCall of mountCalls) {
             // 检查mount调用中是否存在模板字符串，且模板中包含trigger插槽
             this.processMountCall(mountCall);
@@ -212,7 +212,7 @@ class TestUnitAnalyzer {
             if (defaultImport && defaultImport.getText() === componentName) {
                 return importDecl;
             }
-            
+
             // 检查命名导入
             const namedImports = importDecl.getNamedImports();
             for (const namedImport of namedImports) {
@@ -278,7 +278,7 @@ class TestUnitAnalyzer {
             const templateInitializer = templateProperty.getInitializer();
             if (templateInitializer && (Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) {
                 const templateContent = templateInitializer.getLiteralText();
-                
+
                 const componentsProperty = optionsNode.getProperty('components');
                 if (componentsProperty && Node.isPropertyAssignment(componentsProperty)) {
                     const componentsInitializer = componentsProperty.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
@@ -298,7 +298,7 @@ class TestUnitAnalyzer {
                                         if (realComponentPath) {
                                             resolvedComponentFile = realComponentPath;
                                         } else {
-                                            continue; 
+                                            continue;
                                         }
                                     }
 
@@ -312,11 +312,11 @@ class TestUnitAnalyzer {
                             }
                         }
                     }
-                } 
+                }
             }
         }
     }
-    
+
     private processMountCall(mountCall: CallExpression) {
         const args = mountCall.getArguments();
         if (args.length === 0) return;
@@ -327,7 +327,7 @@ class TestUnitAnalyzer {
         } else if (Node.isObjectLiteralExpression(componentArgNode)) {
             this.processMountOptions(componentArgNode as ObjectLiteralExpression);
         }
-     
+
     }
 
     private extractPropsFromTemplate(template: string, componentTagName: string, componentTestUnit: TestUnit) {
@@ -417,7 +417,7 @@ class TestUnitAnalyzer {
 
     private extractSlotsFromTemplate(template: string, componentTestUnit: TestUnit) {
         const slotsFound: string[] = [];
-        
+
         // 1. Find all explicitly named slots first
         const componentSlotRegex = /<[A-Za-z][A-Za-z0-9-]*[^>]*>.*?<template\s+#([a-zA-Z0-9_-]+)[^>]*>.*?<\/template>/gs;
         let componentSlotMatch;
@@ -427,7 +427,7 @@ class TestUnitAnalyzer {
                 slotsFound.push(slotName);
             }
         }
-        
+
         const hashSlotRegex = /<template\s+#([a-zA-Z0-9_-]+)[^>]*>/g;
         let hashMatch;
         while ((hashMatch = hashSlotRegex.exec(template)) !== null) {
@@ -436,7 +436,7 @@ class TestUnitAnalyzer {
                 slotsFound.push(slotName);
             }
         }
-        
+
         const vSlotRegex = /<template\s+v-slot:([a-zA-Z0-9_-]+)[^>]*>/g;
         let vSlotMatch;
         while ((vSlotMatch = vSlotRegex.exec(template)) !== null) {
@@ -467,13 +467,13 @@ class TestUnitAnalyzer {
                 hasActualDefaultContent = true;
             }
         }
-        
+
         if (hasActualDefaultContent) {
             if (!slotsFound.includes('default')) {
                 slotsFound.push('default');
             }
         }
-        
+
         // 4. Add all found slots to the componentTestUnit
         if (slotsFound.length > 0) {
             componentTestUnit.slots = componentTestUnit.slots || [];
@@ -508,7 +508,7 @@ class TestUnitAnalyzer {
                         return null;
                     })
                     .filter(Boolean) as string[];
-                
+
                 if (props.length > 0) {
                     component.props = component.props || [];
                     component.props = [...new Set([...component.props, ...props])];
@@ -554,15 +554,15 @@ class TestUnitAnalyzer {
 
     private extractSlots(options: ObjectLiteralExpression, component: TestUnit) {
         const slotsProperty = options.getProperty('slots');
-        
+
         if (slotsProperty && Node.isPropertyAssignment(slotsProperty)) {
             const initializer = slotsProperty.getInitializer();
-            
+
             if (initializer && Node.isObjectLiteralExpression(initializer)) {
                 const slots = initializer.getProperties()
                     .filter(Node.isPropertyAssignment)
                     .map(prop => prop.getName());
-                
+
                 if (slots.length > 0) {
                     component.slots = component.slots || [];
                     component.slots = [...new Set([...component.slots, ...slots])];
@@ -573,21 +573,21 @@ class TestUnitAnalyzer {
 
     findJsxInCallExpression(callExpression: CallExpression): (JsxElement | JsxSelfClosingElement)[] {
         const jsxNodes: (JsxElement | JsxSelfClosingElement)[] = [];
-      
+
         const args = callExpression.getArguments();
-      
+
         args.forEach(arg => {
-          // 遍历每个参数节点及其所有子孙节点
-          arg.forEachDescendant((node) => {
-            // 检查节点类型是否是 JSX 元素或片段
-            if (Node.isJsxElement(node) || Node.isJsxSelfClosingElement(node)) {
-              jsxNodes.push(node);
-            }
-          });
+            // 遍历每个参数节点及其所有子孙节点
+            arg.forEachDescendant((node) => {
+                // 检查节点类型是否是 JSX 元素或片段
+                if (Node.isJsxElement(node) || Node.isJsxSelfClosingElement(node)) {
+                    jsxNodes.push(node);
+                }
+            });
         });
-      
+
         return jsxNodes;
-      }
+    }
 
     // Analyze JSX elements in the source file
     private analyzeJSXElements(callExpression: CallExpression) {
@@ -595,17 +595,17 @@ class TestUnitAnalyzer {
         const jsxElements = this.findJsxInCallExpression(callExpression);
         for (const jsxElement of jsxElements) {
             // Get the opening element (or the self-closing element itself)
-            const openingElement = Node.isJsxElement(jsxElement) 
+            const openingElement = Node.isJsxElement(jsxElement)
                 ? jsxElement.getOpeningElement()
                 : jsxElement;
-            
+
             // Get component name
             const tagName = openingElement.getTagNameNode().getText();
-            
+
             // Find the corresponding import declaration
             const importDecl = this.getImportDecl(tagName, this.sourceFile);
             if (!importDecl) continue;
-            
+
             const resolved = importDecl.getModuleSpecifierSourceFile();
             const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
             let filePath: string | null = getAsbFilePath(modulePath, this.dirname);
@@ -622,24 +622,24 @@ class TestUnitAnalyzer {
                     if (!this.result[realComponentPath]) {
                         this.result[realComponentPath] = {};
                     }
-                    
+
                     // Extract props from JSX attributes
                     this.extractJSXAttrs(openingElement, this.result[realComponentPath]);
-                    
+
                     // Extract slots from JSX children if it's a JSX element (not self-closing)
                     if (Node.isJsxElement(jsxElement)) {
                         this.extractJSXSlots(jsxElement, this.result[realComponentPath]);
                     }
-                } 
+                }
             } else {
                 // Initialize component entry in result if not exists
                 if (!this.result[filePath]) {
                     this.result[filePath] = {};
                 }
-                
+
                 // Extract props from JSX attributes
                 this.extractJSXAttrs(openingElement, this.result[filePath]);
-                
+
                 // Extract slots from JSX children if it's a JSX element (not self-closing)
                 if (Node.isJsxElement(jsxElement)) {
                     this.extractJSXSlots(jsxElement, this.result[filePath]);
@@ -647,12 +647,12 @@ class TestUnitAnalyzer {
             }
         }
     }
-    
+
     // Helper method to extract attributes from JSX elements
     private extractJSXAttrs(element: Node, component: TestUnit) {
         if (Node.isJsxOpeningElement(element) || Node.isJsxSelfClosingElement(element)) {
             const attributes = element.getAttributes();
-            
+
             for (const attr of attributes) {
                 if (Node.isJsxAttribute(attr)) {
                     let propName = attr.getNameNode().getText();
@@ -664,7 +664,7 @@ class TestUnitAnalyzer {
                         if (!component.emits) {
                             component.emits = [];
                         }
-                        
+
                         if (!component.emits.includes(propName)) {
                             component.emits.push(propName);
                         }
@@ -695,7 +695,7 @@ class TestUnitAnalyzer {
                             let emitName = '';
                             if (originalPropName === 'v-model') {
                                 emitName = 'onUpdate:value'; // or onUpdate:modelValue
-                            } else if (originalPropName.startsWith('v-model:')){
+                            } else if (originalPropName.startsWith('v-model:')) {
                                 emitName = `onUpdate:${originalPropName.substring(8)}`;
                             }
                             if (emitName && !component.emits.includes(emitName)) {
