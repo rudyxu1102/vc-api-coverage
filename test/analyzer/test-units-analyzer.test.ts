@@ -232,7 +232,6 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonModel.tsx`].props!.sort()).toEqual(['value', 'visible'].sort())
-        expect(res[`${rootDir}/ButtonModel.tsx`].emits!.sort()).toEqual(['onUpdate:value', 'onUpdate:visible'].sort())
+        expect(res[`${rootDir}/ButtonModel.tsx`].props!.sort()).toEqual(['value', 'visible', 'onUpdate:value', 'onUpdate:visible'].sort())
     })
 })

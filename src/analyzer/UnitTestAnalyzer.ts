@@ -70,9 +70,9 @@ class TestUnitAnalyzer {
     transformResult(result: TestUnitsResult) {
         for (const componentName in result) {
             const testUnit = result[componentName];
-            // if (testUnit.props && testUnit.emits) {  //-- This logic is removed
-            //     testUnit.props = [...new Set([...testUnit.props, ...testUnit.emits])]
-            // }
+            if (testUnit.props && testUnit.emits) {
+                testUnit.props = [...new Set([...testUnit.props, ...testUnit.emits])]
+            }
         }
         return result;
     }
