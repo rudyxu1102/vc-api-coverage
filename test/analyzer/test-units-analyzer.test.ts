@@ -168,4 +168,45 @@ describe('test-units-analyzer', () => {
         expect(res[`${rootDir}/ButtonSlot.tsx`].slots!.sort()).toEqual(['footer', 'header', 'trigger'].sort())
     })
 
+    it('should not analyze props in `mount` test units without expect', () => {
+        const fakeTestFilePath = './prop-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonProps.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                test('should render correctly 1', () => {
+                    const wrapper = shallowMount(Button, {
+                        props: {
+                            type: 'primary'
+                        },
+                    })
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`${rootDir}/ButtonProps.tsx`]).toEqual(undefined)
+    })
+
+    it('should not analyze props in `jsx` test units without expect', () => {
+        const fakeTestFilePath = './prop-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonProps.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 1', () => {
+                    render(() => <Button size="large"></Button>, {})
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`${rootDir}/ButtonProps.tsx`]).toEqual(undefined)
+    })
 })

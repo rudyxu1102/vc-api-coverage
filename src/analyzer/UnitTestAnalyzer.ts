@@ -1,4 +1,4 @@
-import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, ImportDeclaration } from 'ts-morph';
+import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, ImportDeclaration, JsxSelfClosingElement, JsxElement } from 'ts-morph';
 import { getAsbFilePath, isComponentFile } from '../common/utils';
 import path from 'path';
 
@@ -25,12 +25,42 @@ class TestUnitAnalyzer {
         this.dirname = path.dirname(filePath);
     }
 
-    public analyze(): TestUnitsResult {
-        // Analyze traditional mount method calls
-        this.analyzeTraditionalMountCalls();
+    isValidTestCall(testCall: CallExpression) {
+        let hasExpect = false;
         
-        // Analyze JSX elements in the file
-        this.analyzeJSXElements();
+        // Find all expect calls in this test block
+        const expectCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
+            .filter(call => {
+                const expression = call.getExpression();
+                return Node.isIdentifier(expression) && expression.getText() === 'expect';
+            });
+        
+        if (expectCalls.length > 0) {
+            hasExpect = true;
+        }
+
+        return hasExpect;
+    }
+
+    public analyze(): TestUnitsResult {
+        const testCalls = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).filter(call => {
+            const expression = call.getExpression();
+            if (Node.isIdentifier(expression)) {
+                const name = expression.getText();
+                return name === 'it' || name === 'test';
+            }
+            return false;
+        });
+
+        for (const testCall of testCalls) {
+            if (!this.isValidTestCall(testCall)) continue;
+            // Analyze traditional mount method calls
+            this.analyzeTraditionalMountCalls(testCall);
+              
+            // Analyze JSX elements in the file
+            this.analyzeJSXElements(testCall);
+        }
+      
 
         const data = this.transformResult(this.result);
         return data;
@@ -159,50 +189,18 @@ class TestUnitAnalyzer {
     }
 
     // 分析传统挂载mount/shallowMount方法调用
-    private analyzeTraditionalMountCalls() {
-        // Find all test or it blocks
-        const testCalls = this.sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
+    private analyzeTraditionalMountCalls(testCall: CallExpression) {
+        // Find all mount or shallowMount calls
+        const mountCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
             .filter(call => {
                 const expression = call.getExpression();
-                if (Node.isIdentifier(expression)) {
-                    const name = expression.getText();
-                    return name === 'it' || name === 'test';
-                }
-                return false;
+                return Node.isIdentifier(expression) && 
+                        (expression.getText() === 'mount' || expression.getText() === 'shallowMount' || expression.getText() === 'render');
             });
         
-        for (const testCall of testCalls) {
-            // Check if the test block has an expect assertion
-            let hasExpect = false;
-            
-            // Find all expect calls in this test block
-            const expectCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
-                .filter(call => {
-                    const expression = call.getExpression();
-                    return Node.isIdentifier(expression) && expression.getText() === 'expect';
-                });
-            
-            if (expectCalls.length > 0) {
-                hasExpect = true;
-            }
-            
-            // If there are no expect assertions, skip this test block
-            if (!hasExpect) {
-                continue;
-            }
-            
-            // Find all mount or shallowMount calls
-            const mountCalls = testCall.getDescendantsOfKind(SyntaxKind.CallExpression)
-                .filter(call => {
-                    const expression = call.getExpression();
-                    return Node.isIdentifier(expression) && 
-                           (expression.getText() === 'mount' || expression.getText() === 'shallowMount' || expression.getText() === 'render');
-                });
-            
-            for (const mountCall of mountCalls) {
-                // 检查mount调用中是否存在模板字符串，且模板中包含trigger插槽
-                this.processMountCall(mountCall);
-            }
+        for (const mountCall of mountCalls) {
+            // 检查mount调用中是否存在模板字符串，且模板中包含trigger插槽
+            this.processMountCall(mountCall);
         }
     }
 
@@ -546,13 +544,28 @@ class TestUnitAnalyzer {
         }
     }
 
+    findJsxInCallExpression(callExpression: CallExpression): (JsxElement | JsxSelfClosingElement)[] {
+        const jsxNodes: (JsxElement | JsxSelfClosingElement)[] = [];
+      
+        const args = callExpression.getArguments();
+      
+        args.forEach(arg => {
+          // 遍历每个参数节点及其所有子孙节点
+          arg.forEachDescendant((node) => {
+            // 检查节点类型是否是 JSX 元素或片段
+            if (Node.isJsxElement(node) || Node.isJsxSelfClosingElement(node)) {
+              jsxNodes.push(node);
+            }
+          });
+        });
+      
+        return jsxNodes;
+      }
+
     // Analyze JSX elements in the source file
-    private analyzeJSXElements() {
+    private analyzeJSXElements(callExpression: CallExpression) {
         // Find all JSX elements and self-closing elements
-        const jsxElements = [
-            ...this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxElement),
-            ...this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement)
-        ];
+        const jsxElements = this.findJsxInCallExpression(callExpression);
         for (const jsxElement of jsxElements) {
             // Get the opening element (or the self-closing element itself)
             const openingElement = Node.isJsxElement(jsxElement) 
