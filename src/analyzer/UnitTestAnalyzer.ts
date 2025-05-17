@@ -70,9 +70,9 @@ class TestUnitAnalyzer {
     transformResult(result: TestUnitsResult) {
         for (const componentName in result) {
             const testUnit = result[componentName];
-            if (testUnit.props && testUnit.emits) {
-                testUnit.props = [...new Set([...testUnit.props, ...testUnit.emits])]
-            }
+            // if (testUnit.props && testUnit.emits) {  //-- This logic is removed
+            //     testUnit.props = [...new Set([...testUnit.props, ...testUnit.emits])]
+            // }
         }
         return result;
     }
@@ -341,6 +341,10 @@ class TestUnitAnalyzer {
                     propName = propName.substring(1);
                 } else if (propName.startsWith('v-bind:')) {
                     propName = propName.substring(7);
+                } else if (propName.startsWith('v-model:')) {
+                    propName = propName.substring(8);
+                } else if (propName === 'v-model') {
+                    propName = 'value'; // Or 'modelValue' depending on Vue 3 convention
                 }
                 // Exclude event handlers (onXxx or @xxx) as they are handled by emits
                 if (!((propName.startsWith('on') && propName.length > 2 && propName[2] === propName[2].toUpperCase()) || propName.startsWith('@'))) {
@@ -371,20 +375,30 @@ class TestUnitAnalyzer {
             let attrMatch;
             while ((attrMatch = attrRegex.exec(attrsString)) !== null) {
                 let emitName = attrMatch[1];
-                if (emitName.startsWith('@')) {
-                    emitName = emitName.substring(1);
+                let isVModel = false;
+                if (emitName.startsWith('v-model:')) {
+                    emitName = `onUpdate:${emitName.substring(8)}`;
+                    isVModel = true;
+                } else if (emitName === 'v-model') {
+                    emitName = 'onUpdate:value'; // Or onUpdate:modelValue
+                    isVModel = true;
+                }
+
+                if (isVModel) {
                     emitsFound.push(emitName);
+                } else if (emitName.startsWith('@')) {
+                    emitName = emitName.substring(1);
+                    emitsFound.push('on' + emitName.charAt(0).toUpperCase() + emitName.slice(1));
                 } else if (emitName.startsWith('v-on:')) {
                     emitName = emitName.substring(5);
-                    emitsFound.push(emitName);
+                    emitsFound.push('on' + emitName.charAt(0).toUpperCase() + emitName.slice(1));
                 }
             }
         }
 
         if (emitsFound.length > 0) {
-            const emits = emitsFound.map(item => 'on' + item.slice(0, 1).toUpperCase() + item.slice(1));
             componentTestUnit.emits = componentTestUnit.emits || [];
-            componentTestUnit.emits = [...new Set([...componentTestUnit.emits, ...emits])];
+            componentTestUnit.emits = [...new Set([...componentTestUnit.emits, ...emitsFound])];
         }
     }
 
@@ -628,7 +642,9 @@ class TestUnitAnalyzer {
             
             for (const attr of attributes) {
                 if (Node.isJsxAttribute(attr)) {
-                    const propName = attr.getNameNode().getText();
+                    let propName = attr.getNameNode().getText();
+                    let originalPropName = propName; // Keep original for emit generation
+
                     // Handle event handlers (props starting with "on")
                     if (propName.startsWith('on') && propName.length > 2) {
                         // Add to emits list
@@ -640,13 +656,38 @@ class TestUnitAnalyzer {
                             component.emits.push(propName);
                         }
                     } else {
+                        let isVModel = false;
+                        // Handle v-model transformation for props
+                        if (propName.startsWith('v-model:')) {
+                            propName = propName.substring(8);
+                            isVModel = true;
+                        } else if (propName === 'v-model') {
+                            propName = 'value'; // Or 'modelValue' depending on Vue 3 convention
+                            isVModel = true;
+                        }
+
                         // Add regular prop to the result
                         if (!component.props) {
                             component.props = [];
                         }
-                        
                         if (!component.props.includes(propName)) {
                             component.props.push(propName);
+                        }
+
+                        // If it was a v-model, also add the corresponding emit
+                        if (isVModel) {
+                            if (!component.emits) {
+                                component.emits = [];
+                            }
+                            let emitName = '';
+                            if (originalPropName === 'v-model') {
+                                emitName = 'onUpdate:value'; // or onUpdate:modelValue
+                            } else if (originalPropName.startsWith('v-model:')){
+                                emitName = `onUpdate:${originalPropName.substring(8)}`;
+                            }
+                            if (emitName && !component.emits.includes(emitName)) {
+                                component.emits.push(emitName);
+                            }
                         }
                     }
                 }
