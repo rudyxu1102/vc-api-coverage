@@ -1,6 +1,4 @@
-import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, ImportDeclaration, JsxSelfClosingElement, JsxElement } from 'ts-morph';
-import { getAsbFilePath, isComponentFile } from '../common/utils';
-import path from 'path';
+import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier } from 'ts-morph';
 
 interface TestUnit {
     props?: string[];
@@ -16,13 +14,10 @@ class TestUnitAnalyzer {
     private sourceFile: SourceFile;
     private result: TestUnitsResult = {};
     private project: Project;
-    private dirname: string;
 
     constructor(sourceFile: SourceFile, project: Project) {
         this.project = project;
         this.sourceFile = sourceFile;
-        const filePath = sourceFile.getFilePath();
-        this.dirname = path.dirname(filePath);
     }
 
     isValidTestCall(testCall: CallExpression) {
@@ -77,116 +72,26 @@ class TestUnitAnalyzer {
         return result;
     }
 
-    // 处理index文件，如 ./components/input/index.ts
-    private resolveRealComponentPath(sourceValue: string, exportName: string = 'default'): string | null {
-        // 使用ts-morph解析代码，获取结构化信息
-        const sourceFile = this.project.addSourceFileAtPath(sourceValue);
-        // 查找默认导出
-        if (exportName === 'default') {
-            let componentImportPath = null;
-            const defaultExport = sourceFile.getDefaultExportSymbol();
-            if (!defaultExport) return null;
-            // 获取默认导出的声明
-            const declarations = defaultExport.getDeclarations();
-            for (const declaration of declarations) {
-                // 如果是导出的表达式语句
-                if (Node.isExportAssignment(declaration)) {
-                    const expression = declaration.getExpression();
-
-                    // 如果是函数调用(如 export default withInstall(Component))
-                    if (Node.isCallExpression(expression)) {
-                        const args = expression.getArguments();
-                        if (args.length > 0 && Node.isIdentifier(args[0])) {
-                            // 获取函数的第一个参数，通常是组件标识符
-                            const componentName = args[0].getText();
-                            // 查找这个标识符的导入
-                            const importDecls = sourceFile.getImportDeclarations();
-                            for (const importDecl of importDecls) {
-                                // 检查默认导入
-                                const defaultImport = importDecl.getDefaultImport();
-                                if (defaultImport && defaultImport.getText() === componentName) {
-                                    const importResolved = importDecl.getModuleSpecifierSourceFile();
-                                    componentImportPath = importResolved!.getFilePath();
-                                    break;
-                                }
-
-                                // 检查命名导入
-                                const namedImports = importDecl.getNamedImports();
-                                for (const namedImport of namedImports) {
-                                    if (namedImport.getName() === componentName) {
-                                        const importResolved = importDecl.getModuleSpecifierSourceFile();
-                                        componentImportPath = importResolved!.getFilePath();
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // 如果是标识符(如 export default Component
-                    else if (Node.isIdentifier(expression)) {
-                        const componentName = expression.getText();
-
-                        // 查找这个标识符的导入
-                        const importDecls = sourceFile.getImportDeclarations();
-                        for (const importDecl of importDecls) {
-                            // 检查默认导入
-                            const defaultImport = importDecl.getDefaultImport();
-                            if (defaultImport && defaultImport.getText() === componentName) {
-                                const importResolved = importDecl.getModuleSpecifierSourceFile();
-                                componentImportPath = importResolved!.getFilePath();
-                                break;
-                            }
-
-                            // 检查命名导入
-                            const namedImports = importDecl.getNamedImports();
-                            for (const namedImport of namedImports) {
-                                if (namedImport.getName() === componentName) {
-                                    const importResolved = importDecl.getModuleSpecifierSourceFile();
-                                    componentImportPath = importResolved!.getFilePath();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+    private resolveComponentPath(identifier: Identifier) {
+        try {
+            const typeChecker = this.project.getTypeChecker();
+            const initialSymbol = typeChecker.getSymbolAtLocation(identifier);
+            let originalSymbol = initialSymbol;
+            while (originalSymbol?.getAliasedSymbol()) {
+                originalSymbol = originalSymbol.getAliasedSymbol();
             }
-            if (!componentImportPath) return null;
-            if (isComponentFile(componentImportPath)) return componentImportPath;
-            // 如果找不到，则递归查找
-            const componentSourceFile = this.project.addSourceFileAtPath(componentImportPath);
-            const res = this.searchComponentFilePath(componentSourceFile) as string | null;
-            if (res) return res;
-        } else {
-            const importDecl = this.getImportDecl(exportName, sourceFile);
-            const exportDecl = this.getExportDecl(exportName, sourceFile);
-            if (!importDecl && !exportDecl) return null;
-            const modulePath = exportDecl?.getModuleSpecifier()?.getLiteralValue() || importDecl?.getModuleSpecifier().getLiteralValue() || '';
-            const componentFile = getAsbFilePath(modulePath, path.dirname(sourceFile.getFilePath()));
-            return componentFile;
+            if (!originalSymbol) return null;
+            const declarations = originalSymbol.getDeclarations();
+            const declarationNode = declarations[0];
+            if (!declarationNode) return null;
+            const declarationSourceFile = declarationNode.getSourceFile();
+            const originalPath = declarationSourceFile.getFilePath();
+            return originalPath;
+        } catch (error) {
+            return null;
         }
-
-        return null;
     }
 
-    // 递归层序遍历文件引用，文件后缀为tsx或者vue
-    private searchComponentFilePath(sourceFile: SourceFile) {
-        const importDeclarations = sourceFile.getImportDeclarations();
-        for (const importDecl of importDeclarations) {
-            const resolved = importDecl.getModuleSpecifierSourceFile();
-            const absolutePath = resolved?.getFilePath();
-            if (absolutePath && isComponentFile(absolutePath)) {
-                return absolutePath;
-            }
-        }
-        for (const importDecl of importDeclarations) {
-            const res = this.searchComponentFilePath(importDecl.getSourceFile()) as string | null;
-            if (res) {
-                return res;
-            }
-        }
-
-        return null
-    }
 
     // 分析传统挂载mount/shallowMount方法调用
     private analyzeTraditionalMountCalls(testCall: CallExpression) {
@@ -238,10 +143,6 @@ class TestUnitAnalyzer {
         return null;
     }
 
-    private isDefaultExport(importDecl: ImportDeclaration, componentName: string) {
-        const defaultImportIdentifier = importDecl.getDefaultImport();
-        return defaultImportIdentifier !== undefined && defaultImportIdentifier.getText() === componentName;
-    }
 
     // 处理mount(Component, options)或render(Component, options)
     processMountComponent(componentArgNode: Node, optionsNode?: ObjectLiteralExpression) {
@@ -251,18 +152,8 @@ class TestUnitAnalyzer {
         const importDecl = this.getImportDecl(componentName, this.sourceFile);
         if (!importDecl) return;
         const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-        let componentFile: string | null = getAsbFilePath(modulePath, this.dirname);
-        const isDefaultExport = this.isDefaultExport(importDecl, componentName);
-        const exportName = isDefaultExport ? 'default' : componentName
-        if (!isComponentFile(componentFile)) {
-            const realComponentPath = this.resolveRealComponentPath(componentFile, exportName);
-            if (realComponentPath) {
-                componentFile = realComponentPath;
-            } else {
-                return; // Skip if we can't resolve the component path
-            }
-        }
-
+        const componentFile = this.resolveComponentPath(componentArgNode as Identifier) || modulePath;
+        if (!componentFile) return;
         if (!this.result[componentFile]) {
             this.result[componentFile] = {};
         }
@@ -287,21 +178,11 @@ class TestUnitAnalyzer {
                             if (Node.isPropertyAssignment(componentProp) || Node.isShorthandPropertyAssignment(componentProp)) {
                                 const localComponentName = componentProp.getName();
                                 const importDecl = this.getImportDecl(localComponentName, this.sourceFile);
+                                const componentArgNode = componentProp.getInitializerIfKind(SyntaxKind.Identifier);
                                 if (importDecl) {
                                     const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-                                    let resolvedComponentFile = getAsbFilePath(modulePath, this.dirname);
-                                    const isDefault = this.isDefaultExport(importDecl, localComponentName);
-                                    const exportNameForResolve = isDefault ? 'default' : localComponentName;
-
-                                    if (!isComponentFile(resolvedComponentFile)) {
-                                        const realComponentPath = this.resolveRealComponentPath(resolvedComponentFile, exportNameForResolve);
-                                        if (realComponentPath) {
-                                            resolvedComponentFile = realComponentPath;
-                                        } else {
-                                            continue;
-                                        }
-                                    }
-
+                                    const resolvedComponentFile = this.resolveComponentPath(componentArgNode as Identifier) || modulePath;
+                                    if (!resolvedComponentFile) continue;
                                     if (!this.result[resolvedComponentFile]) {
                                         this.result[resolvedComponentFile] = {};
                                     }
@@ -605,45 +486,21 @@ class TestUnitAnalyzer {
             // Find the corresponding import declaration
             const importDecl = this.getImportDecl(tagName, this.sourceFile);
             if (!importDecl) continue;
-
-            const resolved = importDecl.getModuleSpecifierSourceFile();
             const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-            let filePath: string | null = getAsbFilePath(modulePath, this.dirname);
-            if (resolved) {
-                filePath = resolved.getFilePath();
-            };
-            const isDefaultExport = this.isDefaultExport(importDecl, tagName);
-            const exportName = isDefaultExport ? 'default' : tagName;
-            // Check if we need to handle index.ts files
-            if (!isComponentFile(filePath)) {
-                const realComponentPath = this.resolveRealComponentPath(filePath, exportName);
-                if (realComponentPath) {
-                    // Initialize component entry in result if not exists
-                    if (!this.result[realComponentPath]) {
-                        this.result[realComponentPath] = {};
-                    }
+            const filePath = this.resolveComponentPath(openingElement.getTagNameNode() as Identifier) || modulePath;
+            if (!filePath) continue;
 
-                    // Extract props from JSX attributes
-                    this.extractJSXAttrs(openingElement, this.result[realComponentPath]);
+            // Initialize component entry in result if not exists
+            if (!this.result[filePath]) {
+                this.result[filePath] = {};
+            }
 
-                    // Extract slots from JSX children if it's a JSX element (not self-closing)
-                    if (Node.isJsxElement(jsxElement)) {
-                        this.extractJSXSlots(jsxElement, this.result[realComponentPath]);
-                    }
-                }
-            } else {
-                // Initialize component entry in result if not exists
-                if (!this.result[filePath]) {
-                    this.result[filePath] = {};
-                }
+            // Extract props from JSX attributes
+            this.extractJSXAttrs(openingElement, this.result[filePath]);
 
-                // Extract props from JSX attributes
-                this.extractJSXAttrs(openingElement, this.result[filePath]);
-
-                // Extract slots from JSX children if it's a JSX element (not self-closing)
-                if (Node.isJsxElement(jsxElement)) {
-                    this.extractJSXSlots(jsxElement, this.result[filePath]);
-                }
+            // Extract slots from JSX children if it's a JSX element (not self-closing)
+            if (Node.isJsxElement(jsxElement)) {
+                this.extractJSXSlots(jsxElement, this.result[filePath]);
             }
         }
     }

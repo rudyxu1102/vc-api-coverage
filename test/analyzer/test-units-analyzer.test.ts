@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import TestUnitAnalyzer from '../../src/analyzer/UnitTestAnalyzer'
 import { Project } from 'ts-morph'
-import path from 'path'
 
-const rootDir = path.resolve(__dirname, '../..')
 describe('test-units-analyzer', () => {
     beforeEach(() => {
       vi.clearAllMocks()
@@ -50,7 +48,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonProps.tsx`].props!.sort()).toEqual(['type', 'block', 'size', 'shape'].sort())
+        expect(res[`./ButtonProps.tsx`].props!.sort()).toEqual(['type', 'block', 'size', 'shape'].sort())
     })
     it('should analyze emits in test units', () => {
         const fakeTestFilePath = './emits-analyzer.test.tsx'
@@ -91,7 +89,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonEmit.tsx`].emits!.sort()).toEqual(['onClick', 'onFocus', 'onHover', 'onChange', 'onUpdate:value'].sort())
+        expect(res[`./ButtonEmit.tsx`].emits!.sort()).toEqual(['onClick', 'onFocus', 'onHover', 'onChange', 'onUpdate:value'].sort())
     })
 
     it('should analyze slots in test units', () => {
@@ -128,7 +126,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonSlot.tsx`].slots!.sort()).toEqual(['default', 'trigger', 'header'].sort())
+        expect(res[`./ButtonSlot.tsx`].slots!.sort()).toEqual(['default', 'trigger', 'header'].sort())
     })
 
     it('should analyze slots in test units without default slot', () => {
@@ -165,7 +163,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonSlot.tsx`].slots!.sort()).toEqual(['footer', 'header', 'trigger'].sort())
+        expect(res[`./ButtonSlot.tsx`].slots!.sort()).toEqual(['footer', 'header', 'trigger'].sort())
     })
 
     it('should not analyze props in `mount` test units without expect', () => {
@@ -188,7 +186,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonProps.tsx`]).toEqual(undefined)
+        expect(res[`./ButtonProps.tsx`]).toEqual(undefined)
     })
 
     it('should not analyze props in `jsx` test units without expect', () => {
@@ -207,7 +205,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonProps.tsx`]).toEqual(undefined)
+        expect(res[`./ButtonProps.tsx`]).toEqual(undefined)
     })
 
     it('should analyze v-model in test units', () => {
@@ -232,7 +230,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/ButtonModel.tsx`].props!.sort()).toEqual(['value', 'visible', 'onUpdate:value', 'onUpdate:visible'].sort())
+        expect(res[`./ButtonModel.tsx`].props!.sort()).toEqual(['value', 'visible', 'onUpdate:value', 'onUpdate:visible'].sort())
     })
 
     it('should analyze in test units with muti components', () => {
@@ -263,7 +261,7 @@ describe('test-units-analyzer', () => {
             })
         `)
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
-        expect(res[`${rootDir}/Menu.tsx`].props!.sort()).toEqual(['shape', 'type'].sort())
-        expect(res[`${rootDir}/MenuItem.tsx`].props!.sort()).toEqual(['label', 'size'].sort())
+        expect(res[`./Menu.tsx`].props!.sort()).toEqual(['shape', 'type'].sort())
+        expect(res[`./MenuItem.tsx`].props!.sort()).toEqual(['label', 'size'].sort())
     })
 })
