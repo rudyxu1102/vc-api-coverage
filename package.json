@@ -6,7 +6,6 @@
   "types": "lib/types/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "clean": "tsc --clean",
     "example": "npm run build && cd examples && npm run test && cd ..",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -17,14 +16,10 @@
     "cli-table3": "^0.6.5",
     "lodash": "^4.5.0",
     "open": "^10.1.1",
-    "vue": "^3.3.0",
     "ts-morph": "^22.0.0"
   },
   "devDependencies": {
-    "@babel/parser": "^7.23.0",
-    "@babel/traverse": "^7.23.0",
-    "@babel/types": "^7.23.0",
-    "@types/babel__traverse": "^7.20.7",
+    "vue": "^3.3.0",
     "@types/lodash": "^4.6.9",
     "@types/node": "^22.14.1",
     "@typescript-eslint/types": "^8.31.1",
