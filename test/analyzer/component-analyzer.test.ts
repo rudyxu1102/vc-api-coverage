@@ -1,4 +1,4 @@
-import ComponentAnalyzer from "../../lib/analyzer/component-analyzer";
+import ComponentAnalyzer from "../../src/analyzer/ComponentAnalyzer";
 import { Project, ts } from "ts-morph";
 import { describe, it, expect } from "vitest";
 

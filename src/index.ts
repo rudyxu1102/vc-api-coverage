@@ -1,5 +1,5 @@
-import VcCoverageReporter from './reporters/vc-api-coverage';
-import type { VcCoverageOptions } from './lib/types';
+import VcCoverageReporter from './CoverageReporter';
+import type { VcCoverageOptions } from './types';
 
 // 导出默认函数
 export default function vcApiCoverage(options: VcCoverageOptions = {}) {

@@ -38,8 +38,6 @@ function formatComponentName(name: string, percentage: number): string {
   if (percentage === 100) {
     return chalk.bold.green(name);
   } else if (percentage >= 80) {
-    return chalk.green(name);
-  } else if (percentage >= 50) {
     return chalk.yellow(name);
   } else {
     return chalk.red(name);

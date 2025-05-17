@@ -4,3 +4,4 @@ test
 tsconfig.json
 coverage
 .vscode
+.DS_Store

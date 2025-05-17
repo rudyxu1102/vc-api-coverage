@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import TestUnitAnalyzer from '../../lib/analyzer/test-units-analyzer'
+import TestUnitAnalyzer from '../../src/analyzer/UnitTestAnalyzer'
 import { Project } from 'ts-morph'
 import path from 'path'
 

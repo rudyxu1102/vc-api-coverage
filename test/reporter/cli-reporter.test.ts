@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { generateCliReport } from '../../lib/reporter/cli-reporter'
-import type { VcCoverageData } from '../../lib/types'
+import { generateCliReport } from '../../src/reporter/CliReporter'
+import type { VcCoverageData } from '../../src/types'
 
 describe('cli-reporter', () => {
   it('should generate CLI report with full coverage component', () => {
     const vcCoverage: VcCoverageData = {
       name: 'MyComponent.vue',
       file: 'src/components/MyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 2,
         covered: 2,
@@ -42,6 +44,8 @@ describe('cli-reporter', () => {
     const vcCoverage: VcCoverageData = {
       name: 'MyComponent.vue',
       file: 'src/components/MyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 2,
         covered: 1,
@@ -79,6 +83,8 @@ describe('cli-reporter', () => {
     const vcCoverage: VcCoverageData = {
       name: 'MyComponent.vue',
       file: 'src/components/MyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 2,
         covered: 0,
@@ -110,6 +116,8 @@ describe('cli-reporter', () => {
     const vcCoverage: VcCoverageData = {
       name: 'EmptyComponent.vue',
       file: 'src/components/EmptyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 0,
         covered: 0,
@@ -137,6 +145,8 @@ describe('cli-reporter', () => {
     const component1: VcCoverageData = {
       name: 'Component1.vue',
       file: 'src/components/Component1.vue',
+      total: 3,
+      covered: 3,
       props: {
         total: 2,
         covered: 2,
@@ -162,6 +172,8 @@ describe('cli-reporter', () => {
     const component2: VcCoverageData = {
       name: 'Component2.vue',
       file: 'src/components/Component2.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 3,
         covered: 1,

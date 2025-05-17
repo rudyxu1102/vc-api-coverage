@@ -9,7 +9,6 @@ export default defineComponent({
   name: 'MyInput',
 
   props: {
-    a: String,
     ...props,
   },
 

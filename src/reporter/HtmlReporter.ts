@@ -1,31 +1,11 @@
 import fs from 'fs'
 import path from 'path'
-import { VcTotalData } from '../types'
+import { VcCoverageData, VcTotalData } from '../types'
 import { getTotalData } from '../common/utils'
-
-interface ComponentCoverage {
-  name: string
-  file: string
-  props: {
-    total: number
-    covered: number
-    details: Array<{ name: string; covered: boolean }>
-  }
-  slots: {
-    total: number
-    covered: number
-    details: Array<{ name: string; covered: boolean }>
-  }
-  exposes: {
-    total: number
-    covered: number
-    details: Array<{ name: string; covered: boolean }>
-  }
-}
 
 export class HTMLReporter {
   private outputDir: string
-  private coverageData: ComponentCoverage[] = []
+  private coverageData: VcCoverageData[] = []
   private totalData: VcTotalData = {
     props: {
       total: 0,
@@ -45,7 +25,7 @@ export class HTMLReporter {
     this.outputDir = outputDir
   }
 
-  public setCoverageData(data: ComponentCoverage[]) {
+  public setCoverageData(data: VcCoverageData[]) {
     this.coverageData = data
     this.totalData =  getTotalData(data)
 

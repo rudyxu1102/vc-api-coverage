@@ -20,10 +20,7 @@ export function colorizePercentage(percentage: number): string {
     // 100% 覆盖率，绿色加粗
     colorText = chalk.bold.green(`${percentage}%`);
   } else if (percentage >= 80) {
-    // 80%+ 覆盖率，绿色
-    colorText = chalk.green(`${percentage}%`);
-  } else if (percentage >= 50) {
-    // 50%+ 覆盖率，黄色
+    // 80%+ 覆盖率，黄色
     colorText = chalk.bold.yellow(`${percentage}%`);
   } else {
     // 低于 50%，红色

@@ -21,7 +21,6 @@ class TestUnitAnalyzer {
     constructor(sourceFile: SourceFile, project: Project) {
         this.project = project;
         this.sourceFile = sourceFile;
-        this.result = {};
         const filePath = sourceFile.getFilePath();
         this.dirname = path.dirname(filePath);
     }
@@ -33,8 +32,21 @@ class TestUnitAnalyzer {
         // Analyze JSX elements in the file
         this.analyzeJSXElements();
 
-        return this.result;
+        const data = this.transformResult(this.result);
+        return data;
     }
+
+
+    transformResult(result: TestUnitsResult) {
+        for (const componentName in result) {
+            const testUnit = result[componentName];
+            if (testUnit.props && testUnit.emits) {
+                testUnit.props = [...new Set([...testUnit.props, ...testUnit.emits])]
+            }
+        }
+        return result;
+    }
+
     // 处理index文件，如 ./components/input/index.ts
     private resolveRealComponentPath(sourceValue: string, exportName: string = 'default'): string | null {
         // 使用ts-morph解析代码，获取结构化信息

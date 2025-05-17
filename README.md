@@ -59,14 +59,25 @@ export default defineConfig({
       include: ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'],
       
       // Output directory for the coverage report
-      outputDir: 'coverage',
+      outputDir: 'coverage-api',
       
       // Report formats: 'cli', 'html', 'json'
       // You can specify multiple formats: ['cli', 'html']
       format: ['cli', 'html', 'json'],
       
       // Whether to open browser after generating HTML report
-      openBrowser: false
+      openBrowser: false,
+
+      // Callback function executed when coverage report is completed
+      // Receives coverage data array where each item contains component coverage details
+      // Can be used for custom processing, CI integration, or enforcing coverage thresholds
+      onFinished: (data) => {
+        for (const item of data) {
+          if (item.total > item.covered) {
+            throw new Error(`${item.name} API Coverage is not 100%`)
+          }
+        }
+      }
     }]]
   }
 })
@@ -76,16 +87,15 @@ export default defineConfig({
 
 ### 1. CLI Format
 ```
-╔═══════════════╤═══════════╤════════════╤═══════════╤════════════╤═══════════════════════╗
-║ Components    │ Props     │ Emits      │ Slots     │ Exposes    │ Uncovered APIs        ║
-╟───────────────┼───────────┼────────────┼───────────┼────────────┼───────────────────────╢
-║ All           │ 80%       │ 83%        │ 100%      │ 0%         │                       ║
-╟───────────────┼───────────┼────────────┼───────────┼────────────┼───────────────────────╢
-║ Button.tsx    │ 2/4       │ 1/2        │ 2/2       │ 0/1        │ loading, disabled,    ║
-║               │           │            │           │            │ hover, focus          ║
-╟───────────────┼───────────┼────────────┼───────────┼────────────┼───────────────────────╢
-║ Input.tsx     │ 6/6       │ 4/4        │ 3/3       │ 0/3        │ focus, select, clear  ║
-╚═══════════════╧═══════════╧════════════╧═══════════╧════════════╧═══════════════════════╝
+╔═══════════════════╤══════════════╤═══════╤═════════╤════════════════════════════════════════╗
+║ Components        │ Props/Events │ Slots │ Exposes │ Uncovered APIs                         ║
+╟───────────────────┼──────────────┼───────┼─────────┼────────────────────────────────────────╢
+║ All               │          87% │  100% │     75% │                                        ║
+╟───────────────────┼──────────────┼───────┼─────────┼────────────────────────────────────────╢
+║ button/Button.tsx │          3/5 │   2/2 │     0/1 │ disabled, loading, onInfoclick, focus  ║
+╟───────────────────┼──────────────┼───────┼─────────┼────────────────────────────────────────╢
+║ input/Input.tsx   │        10/10 │   3/3 │     3/3 │ ✔                                      ║
+╚═══════════════════╧══════════════╧═══════╧═════════╧════════════════════════════════════════╝
 ```
 
 ### 2. HTML Format

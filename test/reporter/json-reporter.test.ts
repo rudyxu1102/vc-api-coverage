@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { JSONReporter } from '../../lib/reporter/json-reporter'
+import { JSONReporter } from '../../src/reporter/JsonReporter'
 import { promises as fs } from 'fs'
 import path from 'path'
 
@@ -23,6 +23,8 @@ describe('json-reporter', () => {
     const coverageData = [{
       name: 'MyComponent',
       file: 'src/components/MyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 2,
         covered: 2,
@@ -83,6 +85,8 @@ describe('json-reporter', () => {
     const coverageData = [{
       name: 'EmptyComponent',
       file: 'src/components/EmptyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 0,
         covered: 0,
@@ -131,6 +135,8 @@ describe('json-reporter', () => {
       {
         name: 'ComponentA',
         file: 'src/components/ComponentA.vue',
+        total: 0,
+        covered: 0,
         props: {
           total: 2,
           covered: 2,
@@ -145,6 +151,8 @@ describe('json-reporter', () => {
       {
         name: 'ComponentB',
         file: 'src/components/ComponentB.vue',
+        total: 0,
+        covered: 0,
         props: { total: 0, covered: 0, details: [] },
         slots: { total: 0, covered: 0, details: [] },
         exposes: { total: 0, covered: 0, details: [] }
