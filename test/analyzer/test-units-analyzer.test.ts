@@ -209,4 +209,30 @@ describe('test-units-analyzer', () => {
         const res = new TestUnitAnalyzer(sourceFile, project).analyze()
         expect(res[`${rootDir}/ButtonProps.tsx`]).toEqual(undefined)
     })
+
+    it('should analyze v-model in test units', () => {
+        const fakeTestFilePath = './model-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonModel.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 1', () => {
+                    render(() => <Button v-model={value} />, {})
+                    expect(1).toBe(1)
+                })
+
+                it('should render correctly 1', () => {
+                    render(() => <Button v-model:visible={value} />, {})
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`${rootDir}/ButtonModel.tsx`].props!.sort()).toEqual(['value', 'visible'].sort())
+        expect(res[`${rootDir}/ButtonModel.tsx`].emits!.sort()).toEqual(['onUpdate:value', 'onUpdate:visible'].sort())
+    })
 })

@@ -1,33 +1,17 @@
 import fs from 'fs'
 import path from 'path'
-import { VcCoverageData, VcTotalData } from '../types'
-import { getTotalData } from '../common/utils'
+import { VcCoverageData } from '../types'
 
 export class HTMLReporter {
   private outputDir: string
   private coverageData: VcCoverageData[] = []
-  private totalData: VcTotalData = {
-    props: {
-      total: 0,
-      covered: 0
-    },
-    slots: {
-      total: 0,
-      covered: 0
-    },
-    exposes: {
-      total: 0,
-      covered: 0
-    }
-  }
-
+ 
   constructor(outputDir = 'coverage') {
     this.outputDir = outputDir
   }
 
   public setCoverageData(data: VcCoverageData[]) {
     this.coverageData = data
-    this.totalData =  getTotalData(data)
 
   }
 
@@ -51,7 +35,6 @@ export class HTMLReporter {
   }
 
   private generateHTML(): string {
-    const overallStats = this.calculateOverallStats()
     const componentRows = this.generateComponentRows()
     const chartData = this.prepareChartData()
 
@@ -65,7 +48,6 @@ export class HTMLReporter {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vue Component API Coverage Report</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .coverage-badge {
             display: inline-block;
@@ -88,23 +70,6 @@ export class HTMLReporter {
             </div>
         </div>
         
-        <!-- Summary Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <!-- Stats Cards -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-semibold mb-4">Overall Coverage</h2>
-                <div class="grid grid-cols-2 gap-4">
-                    ${this.generateOverallStats(overallStats)}
-                </div>
-            </div>
-            
-            <!-- Chart -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h2 class="text-xl font-semibold mb-4">Coverage Distribution</h2>
-                <canvas id="coverageChart"></canvas>
-            </div>
-        </div>
-
         <!-- Components Table -->
         <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-semibold mb-4">Component Details</h2>
@@ -114,9 +79,10 @@ export class HTMLReporter {
                     <thead>
                         <tr class="bg-gray-50">
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Props</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Props/Events</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slots</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Methods</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uncovered APIs</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -158,51 +124,12 @@ export class HTMLReporter {
 </html>`
   }
 
-  private calculateOverallStats() {
-    if (this.coverageData.length === 0) {
-      return {
-        props: 100,
-        slots: 100,
-        exposes: 100
-      }
-    }
-
-    const totalStats = this.totalData
-
-    return {
-      props: totalStats.props.total ? (totalStats.props.covered / totalStats.props.total) * 100 : 100,
-      slots: totalStats.slots.total ? (totalStats.slots.covered / totalStats.slots.total) * 100 : 100,
-      exposes: totalStats.exposes.total ? (totalStats.exposes.covered / totalStats.exposes.total) * 100 : 100
-    }
-  }
-
-  private generateOverallStats(stats: { props: number; slots: number; exposes: number }): string {
-    return `
-      <div class="stat-card">
-        <h3 class="text-sm font-medium text-gray-500">Props Coverage</h3>
-        <p class="mt-1">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(stats.props)}">
-            Props Coverage: ${stats.props.toFixed(0)}%
-          </span>
-        </p>
-      </div>
-      <div class="stat-card">
-        <h3 class="text-sm font-medium text-gray-500">Slots Coverage</h3>
-        <p class="mt-1">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(stats.slots)}">
-            Slots Coverage: ${stats.slots.toFixed(0)}%
-          </span>
-        </p>
-      </div>
-      <div class="stat-card">
-        <h3 class="text-sm font-medium text-gray-500">Methods Coverage</h3>
-        <p class="mt-1">
-          <span class="coverage-badge ${this.getCoverageBadgeClass(stats.exposes)}">
-            Methods Coverage: ${stats.exposes.toFixed(0)}%
-          </span>
-        </p>
-      </div>
-    `
+  getUncoveredApi(info: VcCoverageData) {
+    const res = []
+    res.push(...info.props.details.filter(detail => detail.covered === false))
+    res.push(...info.slots.details.filter(detail => detail.covered === false))
+    res.push(...info.exposes.details.filter(detail => detail.covered === false))
+    return res
   }
 
   private generateComponentRows(): string {
@@ -222,7 +149,7 @@ export class HTMLReporter {
       const exposesCoverage = component.exposes.total ? (component.exposes.covered / component.exposes.total * 100) : 100
 
       const hasNoApi = component.props.total === 0 && component.slots.total === 0 && component.exposes.total === 0
-
+      const uncoveredProps = this.getUncoveredApi(component)
       if (hasNoApi) {
         return `
           <tr>
@@ -241,7 +168,6 @@ export class HTMLReporter {
         <tr>
           <td class="px-6 py-4 whitespace-nowrap">
             <div class="text-sm font-medium text-gray-900">${component.name}</div>
-            <div class="text-sm text-gray-500">${component.file}</div>
           </td>
           <td class="px-6 py-4 whitespace-nowrap">
             <span class="coverage-badge ${this.getCoverageBadgeClass(propsCoverage)}">
@@ -260,6 +186,14 @@ export class HTMLReporter {
               ${component.exposes.covered}/${component.exposes.total}
               <span class="ml-1">(${exposesCoverage.toFixed(0)}%)</span>
             </span>
+          </td>
+          <td class="px-6 py-4">
+            ${uncoveredProps.map(detail => {
+                return `
+                  <span class="inline-block text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-md my-1">${detail.name}</span>
+                `
+              }).join('')}
+              ${uncoveredProps.length === 0 ? '<span class="text-green-500">✓</span>' : ''}
           </td>
         </tr>
       `

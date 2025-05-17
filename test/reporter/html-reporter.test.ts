@@ -54,9 +54,6 @@ describe('html-reporter', () => {
 
     // 验证HTML报告包含必要的内容
     expect(htmlContent).toContain('MyComponent')
-    expect(htmlContent).toContain('src/components/MyComponent.vue')
-    expect(htmlContent).toContain('Props Coverage: 100%')
-    expect(htmlContent).toContain('Slots Coverage: 100%')
   })
 
   it('should generate HTML report with empty coverage data', async () => {
@@ -129,6 +126,5 @@ describe('html-reporter', () => {
 
     expect(htmlContent).toContain('ComponentA')
     expect(htmlContent).toContain('ComponentB')
-    expect(htmlContent).toContain('Props Coverage: 100%')
   })
 }) 
