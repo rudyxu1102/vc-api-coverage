@@ -77,11 +77,11 @@ export class HTMLReporter {
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead>
                         <tr class="bg-gray-50">
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Props/Events</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slots</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Methods</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uncovered APIs</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Components</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Props/Events</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Slots</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Exposes</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-500 tracking-wider">Uncovered APIs</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -213,7 +213,7 @@ export class HTMLReporter {
         backgroundColor: 'rgba(139, 92, 246, 0.5)'
       },
       {
-        label: 'Methods',
+        label: 'Exposes',
         data: this.coverageData.map(c => c.exposes.total ? (c.exposes.covered / c.exposes.total * 100) : 100),
         backgroundColor: 'rgba(245, 158, 11, 0.5)'
       }
