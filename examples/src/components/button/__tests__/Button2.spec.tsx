@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
-import { Button } from '../Button';
+import { Button } from '../index';
 
 describe('Button.tsx', () => {
   it('renders size and slot', async () => {
@@ -22,9 +22,15 @@ describe('Button.tsx', () => {
 
   it('renders emits click', async () => {
     const fn = vi.fn()
-    const wrapper = mount(Button, {
-      props: {
-        onClick: fn
+    const wrapper = mount({
+      components: {
+        Button
+      },
+      template: '<Button @click="fn" />',
+      data() {
+        return {
+          fn
+        }
       }
     })
     wrapper.trigger('click')

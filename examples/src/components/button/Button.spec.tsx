@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
-import { Button } from './Button'
+import { Button } from './index'
 
 describe('Button.tsx', () => {
   it('renders label when no slot', () => {

@@ -1,5 +1,5 @@
-import { Button } from './Button'
+import MooButton from './Button'
 
-export default Button
+export default MooButton
 
-export { Button }
+export { MooButton as Button }
