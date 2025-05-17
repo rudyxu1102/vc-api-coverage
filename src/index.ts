@@ -1,4 +1,4 @@
-import VcCoverageReporter from './CoverageReporter';
+import VcCoverageReporter from './ApiReporter';
 import type { VcCoverageOptions } from './types';
 
 // 导出默认函数

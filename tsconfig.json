@@ -31,11 +31,7 @@
     "types": ["vite/client", "vitest/globals", "@vue/runtime-core/dist/runtime-core.d.ts"]
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "src/**/*.ts",
-    "reporters/**/*.ts",
-    "src/index.ts"
+    "src/**/*",
   ],
   "exclude": [
     "node_modules", // 排除 node_modules
