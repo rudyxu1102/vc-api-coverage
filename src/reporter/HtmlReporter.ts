@@ -63,15 +63,13 @@ export class HTMLReporter {
 </head>
 <body class="bg-gray-50">
     <div class="container mx-auto px-4 py-8">
-        <div class="flex items-center justify-between mb-8">
-            <h1 class="text-3xl font-bold">Vue Component API Coverage Report</h1>
-            <div class="text-sm text-gray-500">
-                Generated on ${new Date().toLocaleString()}
-            </div>
-        </div>
-        
-        <!-- Components Table -->
         <div class="bg-white rounded-lg shadow-lg p-6">
+          <div class="flex items-center justify-between mb-8">
+              <h1 class="text-2xl font-bold">Vue Component API Coverage</h1>
+              <div class="text-sm text-gray-500">
+                  Generated on ${new Date().toLocaleString()}
+              </div>
+          </div>
             ${noApiMessage}
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
