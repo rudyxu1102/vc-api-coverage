@@ -49,9 +49,9 @@ class ComponentAnalyzer {
      * 分析 expose 的上下文调用和数组选项
      * 由于vue组件类型无法分析出暴露的属性，所以需要通过代码分析
      */
-    analyzerExpose() {
+    analyzerExpose(exportedExpression: Expression) {
         this.analyzeExposeContextCalls();
-        this.analyzeExposeArrayOption();
+        this.analyzeExposeArrayOption(exportedExpression);
     }
 
     analyzeExposeContextCalls() {
@@ -80,37 +80,21 @@ class ComponentAnalyzer {
         }
     }
 
-    analyzeExposeArrayOption() {
-        const exposeArrayMatch = this.code.match(/expose\s*:\s*(?:\[\s*(['"][\w\s]+['"]|[\w\s]+),?\s*(['"][\w\s]+['"]|[\w\s]+)?\s*\]|(\w+))/g);
-        if (!exposeArrayMatch) return;
-        
-        for (const match of exposeArrayMatch) {
-          if (match.includes('[')) {
-            const cleanMatch = match.replace(/expose\s*:\s*\[\s*/, '').replace(/\s*\]/, '');
-            const exposeItems = cleanMatch.split(',').map(item => item.trim().replace(/['"]/g, ''));
-            
-            for (const item of exposeItems) {
-              if (item && !this.exposes.has(item)) {
-                this.exposes.add(item);
-              }
+    analyzeExposeArrayOption(exportedExpression: Expression) {
+        const componentOptions = this.getComponentOptions(exportedExpression);
+        if (!componentOptions) return;
+        const exposeArrayOption = componentOptions.getProperty('expose');
+        if (!exposeArrayOption || !Node.isPropertyAssignment(exposeArrayOption)) return;
+        const exposeArray = exposeArrayOption.getInitializerIfKind(SyntaxKind.ArrayLiteralExpression);
+        if (!exposeArray) return;
+        const exposeItems = exposeArray.getElements();
+        for (const item of exposeItems) {
+            const itemName = item.getText().replace(/[\'\"\`]/g, '');
+            if (itemName && !this.exposes.has(itemName)) {
+                this.exposes.add(itemName);
             }
-          } else {
-            // 处理变量引用
-            const variableName = match.replace(/expose\s*:\s*/, '');
-            const variableMatch = this.code.match(new RegExp(`const\\s+${variableName}\\s*=\\s*\\[([^\\]]+)\\]`));
-            
-            if (variableMatch) {
-              const exposeItems = variableMatch[1].split(',').map(item => item.trim().replace(/['"]/g, ''));
-              for (const item of exposeItems) {
-                if (item && !this.exposes.has(item)) {
-                  this.exposes.add(item);
-                }
-              }
-            }
-          }
         }
     }
-
 
     isComponentFile(type: Type) {
         const constructSignatures = type.getConstructSignatures();
@@ -172,14 +156,13 @@ class ComponentAnalyzer {
     analyzerComponentType() {
         const exportedExpression = this.getExportedExpression();
         if (!exportedExpression) return;
-        // const componentOptions = this.getComponentOptions(exportedExpression);
         const componentType = exportedExpression.getType();
         const constructSignatures = componentType.getConstructSignatures();
         if (constructSignatures.length === 0) return
         const instanceType = constructSignatures[0].getReturnType();
         this.analyzePropsAndEmits(instanceType, exportedExpression);
         this.analyzeSlots(instanceType, exportedExpression);
-        this.analyzerExpose();
+        this.analyzerExpose(exportedExpression);
     }
 }
 
