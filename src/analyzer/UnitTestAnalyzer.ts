@@ -165,35 +165,31 @@ class TestUnitAnalyzer {
     // 处理mount({ template: '...', components: { ... } })
     processMountOptions(optionsNode: ObjectLiteralExpression) {
         const templateProperty = optionsNode.getProperty('template');
-        if (templateProperty && Node.isPropertyAssignment(templateProperty)) {
-            const templateInitializer = templateProperty.getInitializer();
-            if (templateInitializer && (Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) {
-                const templateContent = templateInitializer.getLiteralText();
+        if (!templateProperty || !Node.isPropertyAssignment(templateProperty)) return;
+    
+        const templateInitializer = templateProperty.getInitializer();
+        if (!templateInitializer || !(Node.isStringLiteral(templateInitializer) || Node.isNoSubstitutionTemplateLiteral(templateInitializer))) return;
+        const templateContent = templateInitializer.getLiteralText();
 
-                const componentsProperty = optionsNode.getProperty('components');
-                if (componentsProperty && Node.isPropertyAssignment(componentsProperty)) {
-                    const componentsInitializer = componentsProperty.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
-                    if (componentsInitializer) {
-                        for (const componentProp of componentsInitializer.getProperties()) {
-                            if (Node.isPropertyAssignment(componentProp) || Node.isShorthandPropertyAssignment(componentProp)) {
-                                const localComponentName = componentProp.getName();
-                                const importDecl = this.getImportDecl(localComponentName, this.sourceFile);
-                                const componentArgNode = componentProp.getInitializerIfKind(SyntaxKind.Identifier);
-                                if (importDecl) {
-                                    const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-                                    const resolvedComponentFile = this.resolveComponentPath(componentArgNode as Identifier) || modulePath;
-                                    if (!resolvedComponentFile) continue;
-                                    if (!this.result[resolvedComponentFile]) {
-                                        this.result[resolvedComponentFile] = {};
-                                    }
-                                    this.extractPropsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
-                                    this.extractEmitsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
-                                    this.extractSlotsFromTemplate(templateContent, this.result[resolvedComponentFile]);
-                                }
-                            }
-                        }
-                    }
+        const componentsProperty = optionsNode.getProperty('components');
+        if (!componentsProperty || !Node.isPropertyAssignment(componentsProperty)) return;
+        const componentsInitializer = componentsProperty.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+        if (!componentsInitializer) return;
+        for (const componentProp of componentsInitializer.getProperties()) {
+            if (Node.isPropertyAssignment(componentProp) || Node.isShorthandPropertyAssignment(componentProp)) {
+                const localComponentName = componentProp.getName();
+                const importDecl = this.getImportDecl(localComponentName, this.sourceFile);
+                const componentArgNode = componentProp.getInitializerIfKind(SyntaxKind.Identifier);
+                if (!importDecl) continue;
+                const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
+                const resolvedComponentFile = this.resolveComponentPath(componentArgNode as Identifier) || modulePath;
+                if (!resolvedComponentFile) continue;
+                if (!this.result[resolvedComponentFile]) {
+                    this.result[resolvedComponentFile] = {};
                 }
+                this.extractPropsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
+                this.extractEmitsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
+                this.extractSlotsFromTemplate(templateContent, this.result[resolvedComponentFile]);
             }
         }
     }
