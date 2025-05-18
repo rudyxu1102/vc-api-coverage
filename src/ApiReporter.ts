@@ -51,6 +51,10 @@ export default class VcCoverageReporter implements Reporter {
     const sourceFile = this.project.addSourceFileAtPath(testModule.moduleId)
 
     const res = new TestUnitAnalyzer(sourceFile, this.project).analyze()
+    if (!res) {
+      console.warn(`[vc-api-coverage] Warning: No test unit data found for ${testModule.moduleId}`);
+      return;
+    }
     for (const fullPath in res) {
       let info: VcData = {
         props: [],

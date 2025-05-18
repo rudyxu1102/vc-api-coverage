@@ -67,7 +67,7 @@ describe('ComponentAnalyzer', () => {
 
         export default defineComponent({
             name: 'Button',
-            expose: ['name', 'age'],
+            expose: ['name', 'age'] as string[],
         });
     `;
     const sourceFile = project.createSourceFile('./button.tsx', code);

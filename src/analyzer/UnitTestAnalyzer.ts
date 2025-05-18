@@ -1,4 +1,4 @@
-import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier } from 'ts-morph';
+import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier, Symbol } from 'ts-morph';
 
 interface TestUnit {
     props?: string[];
@@ -65,18 +65,21 @@ class TestUnitAnalyzer {
     transformResult(result: TestUnitsResult) {
         for (const componentName in result) {
             const testUnit = result[componentName];
-            if (testUnit.props && testUnit.emits) {
-                testUnit.props = [...new Set([...testUnit.props, ...testUnit.emits])]
+            if (testUnit.emits) {
+                testUnit.props = [...new Set([...(testUnit.props || []), ...testUnit.emits])]
             }
         }
         return result;
-    }
+    }  
 
-    private resolveComponentPath(identifier: Identifier) {
+    private resolveComponentPath(identifier: Identifier, importSymbol?: Symbol) {
         try {
-            const typeChecker = this.project.getTypeChecker();
-            const initialSymbol = typeChecker.getSymbolAtLocation(identifier);
-            let originalSymbol = initialSymbol;
+            let originalSymbol: Symbol | undefined = importSymbol;
+            if (identifier) {
+                const typeChecker = this.project.getTypeChecker();
+                originalSymbol = typeChecker.getSymbolAtLocation(identifier);
+            }
+            if (!originalSymbol) return null;
             while (originalSymbol?.getAliasedSymbol()) {
                 originalSymbol = originalSymbol.getAliasedSymbol();
             }
@@ -180,18 +183,39 @@ class TestUnitAnalyzer {
                 const localComponentName = componentProp.getName();
                 const importDecl = this.getImportDecl(localComponentName, this.sourceFile);
                 const componentArgNode = componentProp.getInitializerIfKind(SyntaxKind.Identifier);
+                const importSymbol = this.getResolvedDeclarationSymbol(componentProp.getNameNode() as Identifier);
                 if (!importDecl) continue;
                 const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-                const resolvedComponentFile = this.resolveComponentPath(componentArgNode as Identifier) || modulePath;
+                const resolvedComponentFile = this.resolveComponentPath(componentArgNode as Identifier, importSymbol) || modulePath;
                 if (!resolvedComponentFile) continue;
                 if (!this.result[resolvedComponentFile]) {
-                    this.result[resolvedComponentFile] = {};
+                    this.result[resolvedComponentFile] = {};    
                 }
                 this.extractPropsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
                 this.extractEmitsFromTemplate(templateContent, localComponentName, this.result[resolvedComponentFile]);
                 this.extractSlotsFromTemplate(templateContent, this.result[resolvedComponentFile]);
             }
         }
+    }
+
+    getResolvedDeclarationSymbol(identifier: Identifier) {
+        const definitions = identifier.getDefinitions();
+        let resolvedDeclarationSymbol;
+        
+        for (const definition of definitions) {
+            const declarationNode = definition.getDeclarationNode();
+            if (declarationNode && Node.isImportSpecifier(declarationNode)) {
+                resolvedDeclarationSymbol = declarationNode.getSymbol();
+                if (resolvedDeclarationSymbol) {
+                    break; 
+                }
+            }
+        }
+        
+        if (!resolvedDeclarationSymbol) {
+            resolvedDeclarationSymbol = identifier.getSymbolOrThrow(); 
+        }
+        return resolvedDeclarationSymbol;
     }
 
     private processMountCall(mountCall: CallExpression) {

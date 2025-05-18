@@ -8,7 +8,9 @@ describe('test-units-analyzer', () => {
     })
     it('should analyze props in test units', () => {
         const fakeTestFilePath = './prop-analyzer.test.tsx'
-        const project = new Project()
+        const project = new Project({
+            useInMemoryFileSystem: true
+        })
         const sourceFile = project.createSourceFile(fakeTestFilePath, `
             import Button from './ButtonProps.tsx';
             import { describe, it, expect, test } from 'vitest';
@@ -40,7 +42,7 @@ describe('test-units-analyzer', () => {
                     mount({
                         template: '<Button shape="circle" />',
                         components: {
-                            Button
+                            Button: Button
                         }
                     })
                     expect(1).toBe(1)
@@ -81,7 +83,7 @@ describe('test-units-analyzer', () => {
                     mount({
                         template: '<Button shape="circle" @change="test" @update:value="test" />',
                         components: {
-                            Button
+                            Button: Button
                         }
                     })
                     expect(1).toBe(1)
@@ -118,7 +120,7 @@ describe('test-units-analyzer', () => {
                     mount({
                         template: '<Button><template #trigger>Hello World</template></Button>',
                         components: {
-                            Button
+                            Button: Button
                         }
                     })
                     expect(1).toBe(1)
@@ -155,7 +157,7 @@ describe('test-units-analyzer', () => {
                     mount({
                         template: '<Button><template #trigger>Hello World</template></Button>',
                         components: {
-                            Button
+                            Button: Button
                         }
                     })
                     expect(1).toBe(1)
@@ -252,8 +254,8 @@ describe('test-units-analyzer', () => {
                     mount({
                         template: '<Menu shape="round"><MenuItem label="test"/></Menu>',
                         components: {
-                            MenuItem
-                            Menu,
+                            MenuItem: MenuItem,
+                            Menu: Menu,
                         }
                     })
                     expect(1).toBe(1)

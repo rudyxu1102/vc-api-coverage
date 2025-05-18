@@ -10,6 +10,7 @@ export default defineComponent({
 
   // 2. Emits 定义
   emits: {
+    click: (event: MouseEvent) => true,
     [ButtonEvent.InfoClick]: (event: MouseEvent) => true,
   },
 
