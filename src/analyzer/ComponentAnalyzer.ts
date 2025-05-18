@@ -112,21 +112,56 @@ class ComponentAnalyzer {
                              // Fallback for non-string enum values or if value is undefined
                             itemName = item.getText().replace(/[\'\"\`]/g, '');
                         }
-                    } else {
-                        // Fallback if it's not an enum member (e.g. a const)
-                        // Attempt to get the initializer's text if it's a string literal
-                        const initializer = symbol.getValueDeclaration()?.getSymbol()?.getDeclarations()[0]?.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
-                        if (initializer && Node.isStringLiteral(initializer)) {
-                            itemName = initializer.getLiteralValue();
-                        } else {
-                            itemName = item.getText().replace(/[\'\"\`]/g, '');
-                        }
                     }
                 } else {
                      itemName = item.getText().replace(/[\'\"\`]/g, '');
                 }
             } else if (Node.isStringLiteral(item)) {
                 itemName = item.getLiteralValue();
+            } else if (Node.isIdentifier(item)) {
+                const symbol = item.getSymbol();
+                if (symbol) {
+                    const declarations = symbol.getDeclarations();
+                    if (declarations.length > 0) {
+                        // Attempt to find a VariableDeclaration with a StringLiteral initializer
+                        let resolved = false;
+                        for (const declaration of declarations) {
+                            if (Node.isVariableDeclaration(declaration)) {
+                                const initializer = declaration.getInitializer();
+                                if (initializer && Node.isStringLiteral(initializer)) {
+                                    itemName = initializer.getLiteralValue();
+                                    resolved = true;
+                                    break;
+                                }
+                            }
+                            // Handle imported identifiers
+                            else if (Node.isImportSpecifier(declaration)) {
+                                const importedSymbol = declaration.getNameNode().getSymbol();
+                                if (importedSymbol) {
+                                   const importedDeclarations = importedSymbol.getAliasedSymbol()?.getDeclarations() ?? importedSymbol.getDeclarations();
+                                   for(const impDecl of importedDeclarations) {
+                                       if(Node.isVariableDeclaration(impDecl)){
+                                           const initializer = impDecl.getInitializer();
+                                           if (initializer && Node.isStringLiteral(initializer)) {
+                                               itemName = initializer.getLiteralValue();
+                                               resolved = true;
+                                               break;
+                                           }
+                                       }
+                                   }
+                                }
+                                if (resolved) break;
+                            }
+                        }
+                        if (!resolved) {
+                            itemName = item.getText().replace(/[\'\"\`]/g, '');
+                        }
+                    } else {
+                        itemName = item.getText().replace(/[\'\"\`]/g, '');
+                    }
+                } else {
+                    itemName = item.getText().replace(/[\'\"\`]/g, '');
+                }
             }
             else {
                 itemName = item.getText().replace(/[\'\"\`]/g, '');

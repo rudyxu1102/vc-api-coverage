@@ -110,19 +110,22 @@ describe('ComponentAnalyzer', () => {
         moduleResolution: ts.ModuleResolutionKind.NodeNext,
       },
     });
+    const commonCode = `
+        export const clickName = 'clickInfo';
+    `;
+    project.createSourceFile('./common.ts', commonCode);
     const code = `
         import { defineComponent } from 'vue';
-
+        import { clickName } from './common.ts';
         enum ButtonExpose {
             scrollTo = 'scrollTo',
         }
-        const clickName = 'clickInfo';
         const Button = defineComponent({
             name: 'Button',
             expose: [
               ButtonExpose.scrollTo, 
-              [clickName],
-              submit
+              clickName,
+              'submit'
             ] as string[],
         });
         export default Button;
