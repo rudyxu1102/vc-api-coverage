@@ -83,93 +83,91 @@ class ComponentAnalyzer {
     analyzeExposeArrayOption(exportedExpression: Expression) {
         const componentOptions = this.getComponentOptions(exportedExpression);
         if (!componentOptions) return;
-        const exposeArrayOption = componentOptions.getProperty('expose');
-        if (!exposeArrayOption || !Node.isPropertyAssignment(exposeArrayOption)) return;
 
-        let exposeArray = exposeArrayOption.getInitializerIfKind(SyntaxKind.ArrayLiteralExpression);
-
-        // Handle AsExpression
-        if (!exposeArray) {
-            const asExpression = exposeArrayOption.getInitializerIfKind(SyntaxKind.AsExpression);
-            if (asExpression) {
-                exposeArray = asExpression.getExpressionIfKind(SyntaxKind.ArrayLiteralExpression);
-            }
-        }
-
+        const exposeArray = this.getExposeArrayFromOptions(componentOptions);
         if (!exposeArray) return;
+
         const exposeItems = exposeArray.getElements();
         for (const item of exposeItems) {
-            let itemName = '';
-            if (Node.isPropertyAccessExpression(item)) {
-                const symbol = item.getSymbol();
-                if (symbol) {
-                    const valueDeclaration = symbol.getDeclarations()[0];
-                    if (Node.isEnumMember(valueDeclaration)) {
-                        const enumMemberValue = valueDeclaration.getValue();
-                        if (typeof enumMemberValue === 'string') {
-                            itemName = enumMemberValue;
-                        } else {
-                             // Fallback for non-string enum values or if value is undefined
-                            itemName = item.getText().replace(/[\'\"\`]/g, '');
-                        }
-                    }
-                } else {
-                     itemName = item.getText().replace(/[\'\"\`]/g, '');
-                }
-            } else if (Node.isStringLiteral(item)) {
-                itemName = item.getLiteralValue();
-            } else if (Node.isIdentifier(item)) {
-                const symbol = item.getSymbol();
-                if (symbol) {
-                    const declarations = symbol.getDeclarations();
-                    if (declarations.length > 0) {
-                        // Attempt to find a VariableDeclaration with a StringLiteral initializer
-                        let resolved = false;
-                        for (const declaration of declarations) {
-                            if (Node.isVariableDeclaration(declaration)) {
-                                const initializer = declaration.getInitializer();
-                                if (initializer && Node.isStringLiteral(initializer)) {
-                                    itemName = initializer.getLiteralValue();
-                                    resolved = true;
-                                    break;
-                                }
-                            }
-                            // Handle imported identifiers
-                            else if (Node.isImportSpecifier(declaration)) {
-                                const importedSymbol = declaration.getNameNode().getSymbol();
-                                if (importedSymbol) {
-                                   const importedDeclarations = importedSymbol.getAliasedSymbol()?.getDeclarations() ?? importedSymbol.getDeclarations();
-                                   for(const impDecl of importedDeclarations) {
-                                       if(Node.isVariableDeclaration(impDecl)){
-                                           const initializer = impDecl.getInitializer();
-                                           if (initializer && Node.isStringLiteral(initializer)) {
-                                               itemName = initializer.getLiteralValue();
-                                               resolved = true;
-                                               break;
-                                           }
-                                       }
-                                   }
-                                }
-                                if (resolved) break;
-                            }
-                        }
-                        if (!resolved) {
-                            itemName = item.getText().replace(/[\'\"\`]/g, '');
-                        }
-                    } else {
-                        itemName = item.getText().replace(/[\'\"\`]/g, '');
-                    }
-                } else {
-                    itemName = item.getText().replace(/[\'\"\`]/g, '');
-                }
-            }
-            else {
-                itemName = item.getText().replace(/[\'\"\`]/g, '');
-            }
+            const itemName = this.getItemName(item);
             if (itemName && !this.exposes.has(itemName)) {
                 this.exposes.add(itemName);
             }
         }
+    }
+
+    private getExposeArrayFromOptions(componentOptions: ObjectLiteralExpression) {
+        const exposeArrayOption = componentOptions.getProperty('expose');
+        if (!exposeArrayOption || !Node.isPropertyAssignment(exposeArrayOption)) return undefined;
+
+        let exposeArray = exposeArrayOption.getInitializerIfKind(SyntaxKind.ArrayLiteralExpression);
+        if (exposeArray) return exposeArray;
+
+        const asExpression = exposeArrayOption.getInitializerIfKind(SyntaxKind.AsExpression);
+        if (asExpression) {
+            exposeArray = asExpression.getExpressionIfKind(SyntaxKind.ArrayLiteralExpression);
+        }
+        return exposeArray;
+    }
+
+    private getItemName(item: Expression): string {
+        if (Node.isPropertyAccessExpression(item)) {
+            return this.getNameFromPropertyAccess(item);
+        }
+        if (Node.isStringLiteral(item)) {
+            return item.getLiteralValue();
+        }
+        if (Node.isIdentifier(item)) {
+            return this.getNameFromIdentifier(item);
+        }
+        return item.getText().replace(/[\'\"\`]/g, '');
+    }
+
+    private getNameFromPropertyAccess(item: Expression): string {
+        const symbol = item.getSymbol();
+        if (symbol) {
+            const valueDeclaration = symbol.getDeclarations()[0];
+            if (Node.isEnumMember(valueDeclaration)) {
+                const enumMemberValue = valueDeclaration.getValue();
+                if (typeof enumMemberValue === 'string') {
+                    return enumMemberValue;
+                }
+            }
+        }
+        return item.getText().replace(/[\'\"\`]/g, '');
+    }
+
+    private getNameFromIdentifier(item: Expression): string {
+        if (!Node.isIdentifier(item)) return item.getText().replace(/[\'\"\`]/g, '');
+
+        const symbol = item.getSymbol();
+        if (!symbol) return item.getText().replace(/[\'\"\`]/g, '');
+
+        const declarations = symbol.getDeclarations();
+        if (declarations.length === 0) return item.getText().replace(/[\'\"\`]/g, '');
+        
+        for (const declaration of declarations) {
+            if (Node.isVariableDeclaration(declaration)) {
+                const initializer = declaration.getInitializer();
+                if (initializer && Node.isStringLiteral(initializer)) {
+                    return initializer.getLiteralValue();
+                }
+            } else if (Node.isImportSpecifier(declaration)) {
+                const importedSymbol = declaration.getNameNode().getSymbol();
+                if (importedSymbol) {
+                    const importedDeclarations = importedSymbol.getAliasedSymbol()?.getDeclarations() ?? importedSymbol.getDeclarations();
+                    for (const impDecl of importedDeclarations) {
+                        if (Node.isVariableDeclaration(impDecl)) {
+                            const initializer = impDecl.getInitializer();
+                            if (initializer && Node.isStringLiteral(initializer)) {
+                                return initializer.getLiteralValue();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return item.getText().replace(/[\'\"\`]/g, '');
     }
 
     isComponentFile(type: Type) {
@@ -179,61 +177,69 @@ class ComponentAnalyzer {
     }
 
     getExportedExpression() {
-        let exportedExpression: Expression | null = null;
-        const defaultExport = this.sourceFile.getDefaultExportSymbol();
-        if (defaultExport) {
-            const exportAssignmentDeclaration = defaultExport.getDeclarations()[0];
-            if (exportAssignmentDeclaration && Node.isExportAssignment(exportAssignmentDeclaration)) {
-                let expression = exportAssignmentDeclaration.getExpression();
-                if (Node.isIdentifier(expression)) {
-                    const symbol = expression.getSymbol();
-                    if (symbol) {
-                        const valueDeclaration = symbol.getValueDeclaration();
-                        if (valueDeclaration && Node.isVariableDeclaration(valueDeclaration)) {
-                            expression = valueDeclaration.getInitializer()!;
-                        }
-                    }
-                }
-                if (expression) {
-                    const varType = expression.getType();
-                    if (this.isComponentFile(varType)) {
-                        exportedExpression = expression;
-                        return exportedExpression;
-                    }
-                }
-            }
-        }
-        if (!exportedExpression) {
-            const namedExport = this.sourceFile.getExportSymbols().find(symbol => {
-                const valueDeclaration = symbol.getValueDeclaration();
-                if (!valueDeclaration) return false;
-                const varType = valueDeclaration.getType();
-                return this.isComponentFile(varType);
-            });
-            if (namedExport) {
-                const declarations = namedExport.getDeclarations();
-                if (declarations.length > 0) {
-                    const declaration = declarations[0];
-                    if (Node.isExportAssignment(declaration)) {
-                        exportedExpression = declaration.getExpression();
-                    } else if (Node.isVariableDeclaration(declaration)) {
-                        exportedExpression = declaration.getInitializer()!;
-                    } else if (Node.isExportSpecifier(declaration)) {
-                        const localTargetSymbol = declaration.getLocalTargetSymbol();
-                        if (localTargetSymbol) {
-                            const localDeclarations = localTargetSymbol.getDeclarations();
-                            if (localDeclarations.length > 0) {
-                                const localDeclaration = localDeclarations[0];
-                                if (Node.isVariableDeclaration(localDeclaration)) {
-                                    exportedExpression = localDeclaration.getInitializer()!;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let exportedExpression = this.getExportedExpressionFromDefault();
+        if (exportedExpression) return exportedExpression;
+
+        exportedExpression = this.getExportedExpressionFromNamed();
         return exportedExpression;
+    }
+
+    private getExportedExpressionFromDefault(): Expression | null {
+        const defaultExport = this.sourceFile.getDefaultExportSymbol();
+        if (!defaultExport) return null;
+
+        const exportAssignmentDeclaration = defaultExport.getDeclarations()[0];
+        if (!exportAssignmentDeclaration || !Node.isExportAssignment(exportAssignmentDeclaration)) return null;
+
+        let expression = exportAssignmentDeclaration.getExpression();
+        if (Node.isIdentifier(expression)) {
+            const symbol = expression.getSymbol();
+            if (symbol) {
+                const valueDeclaration = symbol.getValueDeclaration();
+                if (valueDeclaration && Node.isVariableDeclaration(valueDeclaration)) {
+                    expression = valueDeclaration.getInitializer()!;
+                }
+            }
+        }
+
+        if (expression && this.isComponentFile(expression.getType())) {
+            return expression;
+        }
+        return null;
+    }
+
+    private getExportedExpressionFromNamed(): Expression | null {
+        const namedExportSymbol = this.sourceFile.getExportSymbols().find(symbol => {
+            const valueDeclaration = symbol.getValueDeclaration();
+            if (!valueDeclaration) return false;
+            return this.isComponentFile(valueDeclaration.getType());
+        });
+
+        if (!namedExportSymbol) return null;
+
+        const declarations = namedExportSymbol.getDeclarations();
+        if (declarations.length === 0) return null;
+
+        const declaration = declarations[0];
+        let expression: Expression | null = null;
+
+        if (Node.isExportAssignment(declaration)) {
+            expression = declaration.getExpression();
+        } else if (Node.isVariableDeclaration(declaration)) {
+            expression = declaration.getInitializer()!;
+        } else if (Node.isExportSpecifier(declaration)) {
+            const localTargetSymbol = declaration.getLocalTargetSymbol();
+            if (localTargetSymbol) {
+                const localDeclarations = localTargetSymbol.getDeclarations();
+                if (localDeclarations.length > 0) {
+                    const localDeclaration = localDeclarations[0];
+                    if (Node.isVariableDeclaration(localDeclaration)) {
+                        expression = localDeclaration.getInitializer()!;
+                    }
+                }
+            }
+        }
+        return expression;
     }
 
     getComponentOptions(exportedExpression: Expression) {
