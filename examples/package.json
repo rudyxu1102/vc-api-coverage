@@ -18,6 +18,10 @@
     "@vue/test-utils": "^2.4.0",
     "jsdom": "^22.1.0",
     "vitest": "^3.1.2",
-    "vue": "^3.3.0"
+    "vue": "^3.3.0",
+    "@testing-library/vue": "^7.0.0"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21"
   }
 }

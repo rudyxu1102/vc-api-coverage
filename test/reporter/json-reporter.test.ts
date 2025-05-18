@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { JSONReporter } from '../../lib/reporter/json-reporter'
+import { JSONReporter } from '../../src/reporter/JsonReporter'
 import { promises as fs } from 'fs'
 import path from 'path'
 
@@ -23,6 +23,8 @@ describe('json-reporter', () => {
     const coverageData = [{
       name: 'MyComponent',
       file: 'src/components/MyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
         total: 2,
         covered: 2,
@@ -64,8 +66,6 @@ describe('json-reporter', () => {
         totalComponents: 1,
         totalProps: 2,
         coveredProps: 2,
-        totalEmits: 2,
-        coveredEmits: 1,
         totalSlots: 1,
         coveredSlots: 1,
         totalExposes: 0,
@@ -73,10 +73,9 @@ describe('json-reporter', () => {
       },
       stats: {
         props: 100,
-        events: 50,
         slots: 100,
         methods: 100,
-        total: 80
+        total: 100
       },
       components: coverageData
     })
@@ -86,12 +85,9 @@ describe('json-reporter', () => {
     const coverageData = [{
       name: 'EmptyComponent',
       file: 'src/components/EmptyComponent.vue',
+      total: 0,
+      covered: 0,
       props: {
-        total: 0,
-        covered: 0,
-        details: []
-      },
-      emits: {
         total: 0,
         covered: 0,
         details: []
@@ -119,8 +115,6 @@ describe('json-reporter', () => {
         totalComponents: 1,
         totalProps: 0,
         coveredProps: 0,
-        totalEmits: 0,
-        coveredEmits: 0,
         totalSlots: 0,
         coveredSlots: 0,
         totalExposes: 0,
@@ -128,7 +122,6 @@ describe('json-reporter', () => {
       },
       stats: {
         props: 100,
-        events: 100,
         slots: 100,
         methods: 100,
         total: 100
@@ -142,6 +135,8 @@ describe('json-reporter', () => {
       {
         name: 'ComponentA',
         file: 'src/components/ComponentA.vue',
+        total: 0,
+        covered: 0,
         props: {
           total: 2,
           covered: 2,
@@ -150,22 +145,15 @@ describe('json-reporter', () => {
             { name: 'propB', covered: true }
           ]
         },
-        emits: { total: 0, covered: 0, details: [] },
         slots: { total: 0, covered: 0, details: [] },
         exposes: { total: 0, covered: 0, details: [] }
       },
       {
         name: 'ComponentB',
         file: 'src/components/ComponentB.vue',
+        total: 0,
+        covered: 0,
         props: { total: 0, covered: 0, details: [] },
-        emits: {
-          total: 2,
-          covered: 1,
-          details: [
-            { name: 'eventA', covered: true },
-            { name: 'eventB', covered: false }
-          ]
-        },
         slots: { total: 0, covered: 0, details: [] },
         exposes: { total: 0, covered: 0, details: [] }
       }
@@ -182,8 +170,6 @@ describe('json-reporter', () => {
         totalComponents: 2,
         totalProps: 2,
         coveredProps: 2,
-        totalEmits: 2,
-        coveredEmits: 1,
         totalSlots: 0,
         coveredSlots: 0,
         totalExposes: 0,
@@ -191,10 +177,9 @@ describe('json-reporter', () => {
       },
       stats: {
         props: 100,
-        events: 50,
         slots: 100,
         methods: 100,
-        total: 75
+        total: 100
       },
       components: coverageData
     })

@@ -3,6 +3,7 @@ export interface VcCoverageOptions {
   outputDir?: string
   openBrowser?: boolean
   include?: string | string[]
+  onFinished?: (data: VcCoverageData[]) => void
 }
 
 export interface ComponentCoverage {
@@ -17,20 +18,31 @@ export type ReportFormat = 'cli' | 'html' | 'json'
 
 export interface VcData {
   props: string[],
-  emits:  string[],
   slots: string[],
-  exposes: string[]
+  exposes: string[],
+}
+
+export interface VcTotalData {
+  props: {
+    total: number,
+    covered: number
+  },
+  slots: {
+    total: number,
+    covered: number
+  },
+  exposes: {
+    total: number,
+    covered: number
+  }
 }
 
 export interface VcCoverageData {
   name: string;
   file: string;
+  total: number;
+  covered: number;
   props: {
-    total: number;
-    covered: number;
-    details: Array<{ name: string; covered: boolean }>;
-  };
-  emits: {
     total: number;
     covered: number;
     details: Array<{ name: string; covered: boolean }>;

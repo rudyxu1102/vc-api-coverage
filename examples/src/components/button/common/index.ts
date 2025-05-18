@@ -1,0 +1,2 @@
+
+export { commonProps } from './test'

@@ -1,5 +1,5 @@
-import Button from './Button'
+import UiButton from './Button'
 
-export default Button
+export default UiButton
 
-export { Button }
+export { UiButton as Button }

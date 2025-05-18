@@ -1,6 +1,5 @@
 import { defineComponent } from 'vue';
-import { buttonProps, buttonEmits, buttonExpose, buttonSlots } from './props';
-
+import { buttonProps, buttonEmits, buttonExpose, buttonSlots, ButtonEvent } from './props';
 
 export default defineComponent({
   name: 'MyButton',
@@ -10,9 +9,12 @@ export default defineComponent({
   slots: buttonSlots,
 
   // 2. Emits 定义
-  emits: buttonEmits,
+  emits: {
+    click: (event: MouseEvent) => true,
+    [ButtonEvent.InfoClick]: (event: MouseEvent) => true,
+  },
 
-  expose: buttonExpose,
+  expose: ['focus'] as string[],
 
   methods: {
     handleClick(event: MouseEvent) {

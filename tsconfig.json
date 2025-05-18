@@ -4,8 +4,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "lib": ["ESNext", "DOM"], // 包含的库定义 (DOM 用于 @vue/test-utils 等可能需要的类型)
-    "outDir": "dist",
-    "rootDir": "./", // 源文件根目录
+    "outDir": "lib",
+    "rootDir": "src", // 源文件根目录
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -16,7 +16,7 @@
 
     /* Declaration Files */
     "declaration": true,
-    "declarationDir": "dist/types",
+    "declarationDir": "lib/types",
 
     /* Source Maps */
     "sourceMap": true, // 生成 .map 文件，方便调试
@@ -31,15 +31,11 @@
     "types": ["vite/client", "vitest/globals", "@vue/runtime-core/dist/runtime-core.d.ts"]
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "lib/**/*.ts",
-    "reporters/**/*.ts",
-    "index.ts"
+    "src/**/*",
   ],
   "exclude": [
     "node_modules", // 排除 node_modules
-    "dist", // 排除输出目录
+    "lib", // 排除输出目录
     "examples" // 排除示例目录
   ]
 } 

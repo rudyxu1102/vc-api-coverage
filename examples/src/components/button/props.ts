@@ -1,4 +1,5 @@
 import { commonProps } from './common'
+import { aaa } from '../common'
 import { SlotsType, VNode } from 'vue';
 
 export const buttonProps = {
@@ -15,3 +16,6 @@ export const buttonSlots = Object as SlotsType<{
     default?: () => VNode[];
     icon?: () => VNode[];
   }>
+export enum ButtonEvent {
+    InfoClick = 'infoclick',
+}

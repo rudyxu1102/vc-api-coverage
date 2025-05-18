@@ -12,5 +12,5 @@
         "esModuleInterop": true,
         "strict": true
     },
-    "include": ["src/**/*"]
+    "include": ["src/**/*", "src/components/aaa.ts"]
 }

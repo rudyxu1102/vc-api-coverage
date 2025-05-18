@@ -1,29 +1,27 @@
 import type { Reporter } from 'vitest/reporters'
-import type { TestModule, Vitest } from 'vitest/node'
+import type { TestModule } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
-import { analyzeProps } from '../lib/analyzer/props-analyzer';
-import { analyzeEmits } from '../lib/analyzer/emits-analyzer';
-import { analyzeSlots } from '../lib/analyzer/slots-analyzer';
-import { analyzeExpose } from '../lib/analyzer/expose-analyzer';
-import { generateCliReport } from '../lib/reporter/cli-reporter';
-import { HTMLReporter } from '../lib/reporter/html-reporter';
-import { JSONReporter } from '../lib/reporter/json-reporter';
-import { VcCoverageOptions, ReportFormat } from '../lib/types';
-import { parseComponent } from '../lib/common/shared-parser';
-import type { VcCoverageData, VcData } from '../lib/types';
-import { analyzeTestUnits } from '../lib/analyzer/test-units-analyzer';
-import { ViteDevServer } from 'vite';
+import ComponentAnalyzer from './analyzer/ComponentAnalyzer';
+import { generateCliReport } from './reporter/CliReporter';
+import { HTMLReporter } from './reporter/HtmlReporter';
+import { JSONReporter } from './reporter/JsonReporter';
+import { VcCoverageOptions, ReportFormat } from './types';
+import type { VcCoverageData, VcData } from './types';
+import TestUnitAnalyzer from './analyzer/UnitTestAnalyzer';
+import { Project, ts } from 'ts-morph';
 
 export default class VcCoverageReporter implements Reporter {
-  private ctx!: Vitest;
   private options: VcCoverageOptions;
   private htmlReporter: HTMLReporter;
   private jsonReporter: JSONReporter;
   private coverageData: Array<VcCoverageData> = [];
   private unitData: Record<string, VcData> = {};
   private compData: Record<string, VcData> = {};
+  private project: Project;
+  private onFinishedCallback?: (data: VcCoverageData[]) => void;
+
 
   constructor(options: VcCoverageOptions = {}) {
     this.options = {
@@ -35,32 +33,38 @@ export default class VcCoverageReporter implements Reporter {
 
     this.htmlReporter = new HTMLReporter(this.options.outputDir);
     this.jsonReporter = new JSONReporter(this.options.outputDir);
+    this.project = new Project({
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext, 
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      },
+    });
+    if (options.onFinished) {
+      this.onFinishedCallback = options.onFinished 
+    }
   }
-
-  onInit(ctx: Vitest): void {
-    this.ctx = ctx;
-    console.log('\n[vc-api-coverage] Initialized.');
-  }
-
 
   onTestModuleEnd(testModule: TestModule) {
-    const vitenode = testModule.project.vite
-    const cache = vitenode.moduleGraph.getModuleById(testModule.moduleId)
-    const code = cache?.transformResult?.code || ''
-    const res = analyzeTestUnits(code, vitenode as unknown as ViteDevServer)
-    const rootDir = this.ctx.config.root
-    for (const path in res) {
-      const fullPath = `${rootDir}${path}`
+
+    const sourceFile = this.project.addSourceFileAtPath(testModule.moduleId)
+
+    const res = new TestUnitAnalyzer(sourceFile, this.project).analyze()
+    if (!res) {
+      console.warn(`[vc-api-coverage] Warning: No test unit data found for ${testModule.moduleId}`);
+      return;
+    }
+    for (const fullPath in res) {
       let info: VcData = {
         props: [],
-        emits: [],
         slots: [],
-        exposes: []
+        exposes: [],
       }
       if (this.unitData[fullPath]) {
         info = this.unitData[fullPath]
       } 
-      this.unitData[fullPath] = _.mergeWith({}, info, res[path], (objValue: unknown, srcValue: unknown) => {
+      this.unitData[fullPath] = _.mergeWith({}, info, res[fullPath], (objValue: unknown, srcValue: unknown) => {
         if (Array.isArray(objValue) && Array.isArray(srcValue)) {
           return Array.from(new Set([...objValue, ...srcValue]));
         }
@@ -71,36 +75,35 @@ export default class VcCoverageReporter implements Reporter {
 
   analyzerComponent() {
     for (const path in this.unitData) {
-      const module = this.ctx.vite.moduleGraph.getModuleById(path);
-      const code = module?.transformResult?.code || '';
-      const parsedContent = parseComponent(code);
-        
+      let sourceFile = this.project.addSourceFileAtPath(path)
       // 分析组件API
-      const props = analyzeProps(code, parsedContent.ast, path);  // 传入文件路径
-      const emits = analyzeEmits(code, parsedContent.ast, path);
-      const slots = analyzeSlots(code, parsedContent, path);
-      const exposes = analyzeExpose(code, parsedContent.ast, path)
+      const analyzer = new ComponentAnalyzer(sourceFile)
+      const { props, slots, exposes } = analyzer.analyze()
       this.compData[path] = {
-        props,
-        emits,
-        slots,
-        exposes
+        props: Array.from(props),
+        slots: Array.from(slots),
+        exposes: Array.from(exposes),
       }
     }
   }
 
   mergeData(unitData: Record<string, VcData>, compData: Record<string, VcData>): VcCoverageData[] {
     const res: VcCoverageData[] = [] 
+    
+    // 使用处理后的数据
     for (const path in unitData) {
+      // 如果compData中不存在该路径的组件数据，跳过该路径
+      if (!compData[path]) {
+        console.warn(`[vc-api-coverage] Warning: No component data found for ${path}`);
+        continue;
+      }
+      
       const info: VcCoverageData = {
         name: '',
         file: '',
+        total: 0,
+        covered: 0,
         props: {
-          total: 0,
-          covered: 0,
-          details: []
-        },
-        emits: {
           total: 0,
           covered: 0,
           details: []
@@ -118,22 +121,24 @@ export default class VcCoverageReporter implements Reporter {
       }
       const unit = unitData[path]
       const comp = compData[path]
-      info.name = path.split('/').pop() || ''
+      info.name = path.split('/').slice(-2).join('/') || ''
       info.file = path
+      
       info.props.total += comp.props.length
-      info.props.covered += unit.props.filter(p => comp.props.includes(p)).length
-      info.emits.total += comp.emits.length
-      info.emits.covered += unit.emits.filter(e => comp.emits.includes(e)).length
       info.slots.total += comp.slots.length
-      info.slots.covered += unit.slots.length
       info.exposes.total += comp.exposes.length
-      info.exposes.covered += unit.exposes.filter(e => comp.exposes.includes(e)).length
       info.props.details = comp.props.map(p => ({ name: p, covered: unit.props.includes(p) }))
-      info.emits.details = comp.emits.map(e => ({ name: e, covered: unit.emits.includes(e) }))
       info.slots.details = comp.slots.map(s => ({ name: s, covered: unit.slots.includes(s) }))
       info.exposes.details = comp.exposes.map(e => ({ name: e, covered: unit.exposes.includes(e) }))
+      info.props.covered = info.props.details.filter(d => d.covered).length
+      info.slots.covered = info.slots.details.filter(d => d.covered).length
+      info.exposes.covered = info.exposes.details.filter(d => d.covered).length
+      info.total = info.props.total + info.slots.total + info.exposes.total
+      info.covered = info.props.covered + info.slots.covered + info.exposes.covered
       res.push(info)
     }
+    
+    res.sort((a, b) => a.name.localeCompare(b.name))
     return res
   }
 
@@ -142,6 +147,7 @@ export default class VcCoverageReporter implements Reporter {
     this.coverageData = this.mergeData(this.unitData, this.compData)
     this.analyzeFromCoverage(coverage)
     this.genReport()
+    this.onFinishedCallback?.(this.coverageData)
   }
 
   checkFromCoverage(coverage: any, name: string) {
@@ -164,12 +170,6 @@ export default class VcCoverageReporter implements Reporter {
           item.exposes.covered += 1
         }
       }
-      for (const emit of item.emits.details) {
-        if (this.checkFromCoverage(coverage, emit.name) && !emit.covered) {
-          emit.covered = true
-          item.emits.covered += 1
-        }
-      }
     }
   }
 
@@ -188,7 +188,7 @@ export default class VcCoverageReporter implements Reporter {
       this.htmlReporter.setCoverageData(this.coverageData);
       await this.htmlReporter.generateReport();
       if (this.options.openBrowser) {
-        const htmlPath = path.join(process.cwd(), this.options.outputDir || 'coverage', 'index.html');
+        const htmlPath = path.join(process.cwd(), this.options.outputDir || 'coverage-api', 'index.html');
         await open(htmlPath);
       }
     }

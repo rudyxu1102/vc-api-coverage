@@ -22,12 +22,19 @@ export default defineConfig({
     environment: 'jsdom', // 模拟 DOM 环境
     
     // 使用绝对路径
-    reporters: ['default', [path.resolve(__dirname, '../dist/reporters/vc-api-coverage.js'), {
-      outputDir: 'coverage-api'
+    reporters: ['default', [path.resolve(__dirname, '../lib/CoverageReporter.js'), {
+      outputDir: 'coverage-api',
+      onFinished: (data) => {
+        // for (const item of data) {
+        //   if (item.total > item.covered) {
+        //     throw new Error(`${item.name} API Coverage is not 100%`)
+        //   }
+        // }
+      }
     }]], // 指向编译后的 JS 文件
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['json'],
       include: ['src/**'],
     },
     // 指定测试文件查找目录，避免扫描项目根目录的 node_modules

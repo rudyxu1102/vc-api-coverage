@@ -1,221 +1,269 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { analyzeTestUnits } from '../../lib/analyzer/test-units-analyzer'
+import TestUnitAnalyzer from '../../src/analyzer/UnitTestAnalyzer'
+import { Project } from 'ts-morph'
 
 describe('test-units-analyzer', () => {
     beforeEach(() => {
       vi.clearAllMocks()
     })
     it('should analyze props in test units', () => {
-        const code = `
-            import Button from "src/components/Button.tsx";
-            import Input from "src/components/Input.vue";
-            import { describe, it, expect } from 'vitest';
+        const fakeTestFilePath = './prop-analyzer.test.tsx'
+        const project = new Project({
+            useInMemoryFileSystem: true
+        })
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonProps.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
 
             describe('components', () => {
-                it('should render correctly 1', () => {
+                test('should render correctly 1', () => {
                     const wrapper = shallowMount(Button, {
                         props: {
-                            size: 'large',
                             type: 'primary'
                         }
                     })
+                    expect(1).toBe(1)
+                })
+                it('should render correctly 1', () => {
+                    render(() => <Button size="large" />, {})
+                    expect(1).toBe(1)
                 })
                 it('should render correctly 2', () => {
-                    const wrapper = shallowMount(Input, {
+                    render(Button, {
                         props: {
-                            size: 'large',
+                            block: true
                         }
                     })
+                    expect(1).toBe(1)
+                })
+                it('should render correctly 3', () => {
+                    mount({
+                        template: '<Button shape="circle" />',
+                        components: {
+                            Button: Button
+                        }
+                    })
+                    expect(1).toBe(1)
                 })
             })
-        `
-
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].props).toEqual(['size', 'type'])
-        expect(res['src/components/Input.vue'].props).toEqual(['size'])
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonProps.tsx`].props!.sort()).toEqual(['type', 'block', 'size', 'shape'].sort())
     })
-
     it('should analyze emits in test units', () => {
-        const code = `
-            import Button from "src/components/Button.tsx";
-            import Input from "src/components/Input.vue";
-            import { describe, it, expect } from 'vitest';
+        const fakeTestFilePath = './emits-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonEmit.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
 
             describe('components', () => {
-                it('should emit click event 1', () => {
+                test('should render correctly 1', () => {
+                    const onClick = vi.fn()
+                    const fn = vi.fn()
                     const wrapper = shallowMount(Button, {
                         props: {
-                            onClick: () => {}
+                            type: 'primary',
+                            onClick,
+                            onFocus: fn
                         }
                     })
+                    expect(1).toBe(1)
                 })
-
-                it('should emit input event 2', () => {
-                    const wrapper = shallowMount(Input, {
-                        props: {
-                            onChange: () => {},
-                            'onUpdate:modelValue': () => {}
+                it('should render correctly 1', () => {
+                    const onHover = vi.fn();
+                    render(() => <Button onHover={onHover}></Button>, {});
+                    expect(1).toBe(1)
+                })
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Button shape="circle" @change="test" @update:value="test" />',
+                        components: {
+                            Button: Button
                         }
                     })
+                    expect(1).toBe(1)
                 })
             })
-        `
-        
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
-        expect(res['src/components/Input.vue'].emits).toEqual(['change', 'update:modelValue'])
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonEmit.tsx`].emits!.sort()).toEqual(['onClick', 'onFocus', 'onHover', 'onChange', 'onUpdate:value'].sort())
     })
 
     it('should analyze slots in test units', () => {
-        const code = `
-            import Button from "src/components/Button.tsx";
-            import Input from "src/components/Input.vue";
-            import { describe, it, expect } from 'vitest';
+        const fakeTestFilePath = './slots-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonSlot.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                test('should render correctly 1', () => {
+                    const wrapper = shallowMount(Button, {
+                        slots: {
+                            default: 'Hello World'
+                        }
+                    })
+                    expect(wrapper.text()).toBe('Hello World')
+                })
+                it('should render correctly 1', () => {
+                    render(() => <Button>{{ header: () => 'Hello World' }}</Button>, {})
+                    expect(1).toBe(1)
+                })
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Button><template #trigger>Hello World</template></Button>',
+                        components: {
+                            Button: Button
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonSlot.tsx`].slots!.sort()).toEqual(['default', 'trigger', 'header'].sort())
+    })
+
+    it('should analyze slots in test units without default slot', () => {
+        const fakeTestFilePath = './slots-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonSlot.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                test('should render correctly 1', () => {
+                    const wrapper = shallowMount(Button, {
+                        slots: {
+                            footer: 'Hello World'
+                        }
+                    })
+                    expect(wrapper.text()).toBe('Hello World')
+                })
+                it('should render correctly 1', () => {
+                    render(() => <Button>{{ header: () => 'Hello World' }}</Button>, {})
+                    expect(1).toBe(1)
+                })
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Button><template #trigger>Hello World</template></Button>',
+                        components: {
+                            Button: Button
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonSlot.tsx`].slots!.sort()).toEqual(['footer', 'header', 'trigger'].sort())
+    })
+
+    it('should not analyze props in `mount` test units without expect', () => {
+        const fakeTestFilePath = './prop-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonProps.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                test('should render correctly 1', () => {
+                    const wrapper = shallowMount(Button, {
+                        props: {
+                            type: 'primary'
+                        },
+                    })
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonProps.tsx`]).toEqual(undefined)
+    })
+
+    it('should not analyze props in `jsx` test units without expect', () => {
+        const fakeTestFilePath = './prop-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonProps.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
 
             describe('components', () => {
                 it('should render correctly 1', () => {
-                    const wrapper = shallowMount(Button, {
-                        slots: {
-                            default: 'Button'
+                    render(() => <Button size="large"></Button>, {})
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonProps.tsx`]).toEqual(undefined)
+    })
+
+    it('should analyze v-model in test units', () => {
+        const fakeTestFilePath = './model-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonModel.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 1', () => {
+                    render(() => <Button v-model={value} />, {})
+                    expect(1).toBe(1)
+                })
+
+                it('should render correctly 1', () => {
+                    render(() => <Button v-model:visible={value} />, {})
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonModel.tsx`].props!.sort()).toEqual(['value', 'visible', 'onUpdate:value', 'onUpdate:visible'].sort())
+    })
+
+    it('should analyze in test units with muti components', () => {
+        const fakeTestFilePath = './multi-components.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Menu from './Menu.tsx';
+            import MenuItem from './MenuItem.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 1', () => {
+                    render(() => <Menu type="vertical"><MenuItem size="large"/></Menu>, {})
+                    expect(1).toBe(1)
+                })
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Menu shape="round"><MenuItem label="test"/></Menu>',
+                        components: {
+                            MenuItem: MenuItem,
+                            Menu: Menu,
                         }
                     })
-                })
-
-                it('should render correctly2', () => {
-                    const wrapper = shallowMount(Input, {
-                        slots: {
-                            default: 'Input'
-                        }
-                    })
+                    expect(1).toBe(1)
                 })
             })
-        `
-
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
-        expect(res['src/components/Input.vue'].slots).toEqual(['default'])
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./Menu.tsx`].props!.sort()).toEqual(['shape', 'type'].sort())
+        expect(res[`./MenuItem.tsx`].props!.sort()).toEqual(['label', 'size'].sort())
     })
-
-
-    it('should analyze props in jsx', () => {
-        const code = `
-            import Button from 'src/components/Button.tsx';
-            import { createVNode} from 'vue'
-
-            describe('Button', () => {
-                it('should render correctly', () => {
-                    createVNode(Button, {
-                        size: 'large',
-                        type: 'primary'
-                    })
-                })
-            })
-        `
-
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].props).toEqual(['size', 'type'])
-    })
-
-    it('should analyze emits in jsx', () => {
-        const code = `
-            import Button from 'src/components/Button.tsx';
-            import { createVNode} from 'vue'
-
-            describe('Button', () => {
-                it('should emit click event', () => {
-                    createVNode(Button, {
-                        onClick: () => {}
-                    })
-                })
-            })
-        `
-
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
-    })
-
-    it('should analyze default slot in jsx', () => {
-        const code = `
-            import Button from 'src/components/Button.tsx';
-            import { createVNode} from 'vue'
-
-            describe('Button', () => {
-                it('should render correctly', () => {
-                    createVNode(Button, {}, {
-                        default: () => '123'
-                    })
-                })
-            })
-        `
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
-    })
-
-    it('should analyze muti slots in jsx', () => {
-        const code = `
-            import Button from 'src/components/Button.vue';
-            import { createVNode } from 'vue'
-
-            describe('Button', () => {
-                it('should render correctly', () => {
-                    createVNode(Button, {}, {
-                        default: () => '123',
-                        footer: () => '456'
-                    })
-                })
-            })
-        `
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.vue'].slots).toEqual(['default', 'footer'])
-    })
-
-    it('should analyze props in jsx with _createVNode', () => {
-        const code = `
-            import Button from 'src/components/Button.tsx';
-            import { createVNode as _createVNode } from 'vue'
-
-            describe('Button', () => {
-                it('should render correctly', () => {
-                    _createVNode(Button, {
-                        size: 'large',
-                        type: 'primary'
-                    })
-                })
-            })
-        `
-
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].props).toEqual(['size', 'type'])
-    })
-
-    it('should analyze props in jsx with render', () => {
-        const code = `
-            import Button from 'src/components/Button.tsx';
-            import { createVNode as _createVNode, createTextVNode as _createTextVNode } from 'vue'
-            import { render, fireEvent } from '@testing-library/vue'
-
-            describe('Button', () => {
-                it('可点击', async () => {
-                    const onClick = vi.fn();
-                    const {
-                        getByRole
-                } = render(() => _createVNode(Button, {
-                    "onClick": onClick  
-                    }, {
-                    default: () => [_createTextVNode("123")]
-                }), {});
-                    const button = getByRole('button');
-                    fireEvent.click(button);
-                    expect(onClick).toHaveBeenCalled();
-                    expect(onClick).toHaveBeenCalledWith(expect.any(MouseEvent));
-                });
-            });
-        `
-
-        const res = analyzeTestUnits(code)
-        expect(res['src/components/Button.tsx'].emits).toEqual(['click'])
-        expect(res['src/components/Button.tsx'].slots).toEqual(['default'])
-    })
-
-
 })

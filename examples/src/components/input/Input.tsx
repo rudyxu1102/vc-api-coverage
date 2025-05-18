@@ -1,18 +1,16 @@
 import { defineComponent, ref, computed, SlotsType, VNode } from 'vue';
 import type { CSSProperties } from 'vue';
+import { pick } from 'lodash';
+import { allprops } from './props';
 
-const props = {
-  modelValue: { type: String, default: '' },
-  placeholder: { type: String, default: '' },
-  disabled: { type: Boolean, default: false },
-  type: { type: String, default: 'text' },
-  size: { type: String, default: 'md' },
-  clearable: { type: Boolean, default: false },
-}
+export const props = pick(allprops, ['modelValue', 'placeholder', 'disabled', 'type', 'size', 'clearable']);
+
 export default defineComponent({
   name: 'MyInput',
 
-  props,
+  props: {
+    ...props,
+  },
 
   slots: Object as SlotsType<{
     prefix?: () => VNode[];
@@ -64,16 +62,9 @@ export default defineComponent({
 
     // 暴露方法
     expose({
-      focus,
-      select,
-      clear,
-      test11111: () => {
-        console.log('test1');
-      },
-      test22222: () => {
-        console.log('test2');
-      },
-      
+      focus: focus,
+      select: select,
+      clear: clear,
     });
 
     const wrapperStyle = {
