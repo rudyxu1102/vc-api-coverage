@@ -76,5 +76,29 @@ describe('ComponentAnalyzer', () => {
     expect(result.exposes).toStrictEqual(['name', 'age'])
   });
 
+  it('should analyze expose of the component', () => {
+    const project = new Project({
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      },
+    });
+    const code = `
+        import { defineComponent } from 'vue';
+
+        const Button = defineComponent({
+            name: 'Button',
+            expose: ['name', 'age'] as string[],
+        });
+        export default Button;
+
+    `;
+    const sourceFile = project.createSourceFile('./button.tsx', code);
+    const analyzer = new ComponentAnalyzer(sourceFile);
+    const result = analyzer.analyze();
+    expect(result.exposes).toStrictEqual(['name', 'age'])
+  });
 
 });

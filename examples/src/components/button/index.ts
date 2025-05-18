@@ -1,5 +1,5 @@
-import MooButton from './Button'
+import UiButton from './Button'
 
-export default MooButton
+export default UiButton
 
-export { MooButton as Button }
+export { UiButton as Button }

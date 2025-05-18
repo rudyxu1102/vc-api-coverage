@@ -85,7 +85,17 @@ class ComponentAnalyzer {
         if (!componentOptions) return;
         const exposeArrayOption = componentOptions.getProperty('expose');
         if (!exposeArrayOption || !Node.isPropertyAssignment(exposeArrayOption)) return;
-        const exposeArray = exposeArrayOption.getInitializerIfKind(SyntaxKind.ArrayLiteralExpression);
+
+        let exposeArray = exposeArrayOption.getInitializerIfKind(SyntaxKind.ArrayLiteralExpression);
+
+        // Handle AsExpression
+        if (!exposeArray) {
+            const asExpression = exposeArrayOption.getInitializerIfKind(SyntaxKind.AsExpression);
+            if (asExpression) {
+                exposeArray = asExpression.getExpressionIfKind(SyntaxKind.ArrayLiteralExpression);
+            }
+        }
+
         if (!exposeArray) return;
         const exposeItems = exposeArray.getElements();
         for (const item of exposeItems) {
