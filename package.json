@@ -1,6 +1,6 @@
 {
   "name": "vc-api-coverage",
-  "version": "0.5.22",
+  "version": "0.5.23",
   "description": "Vue Component API Coverage Reporter",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
