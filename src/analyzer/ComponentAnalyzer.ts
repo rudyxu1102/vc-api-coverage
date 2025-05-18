@@ -99,7 +99,38 @@ class ComponentAnalyzer {
         if (!exposeArray) return;
         const exposeItems = exposeArray.getElements();
         for (const item of exposeItems) {
-            const itemName = item.getText().replace(/[\'\"\`]/g, '');
+            let itemName = '';
+            if (Node.isPropertyAccessExpression(item)) {
+                const symbol = item.getSymbol();
+                if (symbol) {
+                    const valueDeclaration = symbol.getDeclarations()[0];
+                    if (Node.isEnumMember(valueDeclaration)) {
+                        const enumMemberValue = valueDeclaration.getValue();
+                        if (typeof enumMemberValue === 'string') {
+                            itemName = enumMemberValue;
+                        } else {
+                             // Fallback for non-string enum values or if value is undefined
+                            itemName = item.getText().replace(/[\'\"\`]/g, '');
+                        }
+                    } else {
+                        // Fallback if it's not an enum member (e.g. a const)
+                        // Attempt to get the initializer's text if it's a string literal
+                        const initializer = symbol.getValueDeclaration()?.getSymbol()?.getDeclarations()[0]?.asKind(SyntaxKind.VariableDeclaration)?.getInitializer();
+                        if (initializer && Node.isStringLiteral(initializer)) {
+                            itemName = initializer.getLiteralValue();
+                        } else {
+                            itemName = item.getText().replace(/[\'\"\`]/g, '');
+                        }
+                    }
+                } else {
+                     itemName = item.getText().replace(/[\'\"\`]/g, '');
+                }
+            } else if (Node.isStringLiteral(item)) {
+                itemName = item.getLiteralValue();
+            }
+            else {
+                itemName = item.getText().replace(/[\'\"\`]/g, '');
+            }
             if (itemName && !this.exposes.has(itemName)) {
                 this.exposes.add(itemName);
             }

@@ -116,9 +116,14 @@ describe('ComponentAnalyzer', () => {
         enum ButtonExpose {
             scrollTo = 'scrollTo',
         }
+        const clickName = 'clickInfo';
         const Button = defineComponent({
             name: 'Button',
-            expose: [ButtonExpose.scrollTo, 'clickInfo'] as string[],
+            expose: [
+              ButtonExpose.scrollTo, 
+              [clickName],
+              submit
+            ] as string[],
         });
         export default Button;
 
@@ -126,6 +131,6 @@ describe('ComponentAnalyzer', () => {
     const sourceFile = project.createSourceFile('./button.tsx', code);
     const analyzer = new ComponentAnalyzer(sourceFile);
     const result = analyzer.analyze();
-    expect(result.exposes).toStrictEqual(['scrollTo', 'clickInfo'])
+    expect(result.exposes).toStrictEqual(['scrollTo', 'clickInfo', 'submit'])
   });
 });
