@@ -168,6 +168,27 @@ describe('test-units-analyzer', () => {
         expect(res[`./ButtonSlot.tsx`].slots!.sort()).toEqual(['footer', 'header', 'trigger'].sort())
     })
 
+
+    it('should analyze `v-slots` in test units without default slot', () => {
+        const fakeTestFilePath = './slots-analyzer.test.tsx'
+        const project = new Project()
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Button from './ButtonSlot.tsx';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 1', () => {
+                    render(() => <Button v-slots={{ header: () => 'Hello World' }}></Button>, {})
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`./ButtonSlot.tsx`].slots!.sort()).toEqual(['header'].sort())
+    })
+
     it('should not analyze props in `mount` test units without expect', () => {
         const fakeTestFilePath = './prop-analyzer.test.tsx'
         const project = new Project()

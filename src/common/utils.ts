@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { VcCoverageData } from '../types';
 import path from 'path';
 import fs from 'fs';
+import { Type } from 'ts-morph';
 
 export function logDebug(moduleName: string, message: string, ...args: any[]) {
   if (process.env.DEBUG) {
@@ -109,4 +110,10 @@ export function getThrowableMessage(e: Error, split = '\n') {
     }
   }
   return '';
+}
+
+export function isComponentType(type: Type) {
+  const constructSignatures = type.getConstructSignatures();
+  if (constructSignatures.length === 0) return false;
+  return true
 }

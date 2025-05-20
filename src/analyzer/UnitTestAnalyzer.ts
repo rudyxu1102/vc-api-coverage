@@ -1,4 +1,5 @@
 import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier, Symbol } from 'ts-morph';
+import { isComponentFile, isComponentType } from '../common/utils';
 
 interface TestUnit {
     props?: string[];
@@ -89,10 +90,31 @@ class TestUnitAnalyzer {
             if (!declarationNode) return null;
             const declarationSourceFile = declarationNode.getSourceFile();
             const originalPath = declarationSourceFile.getFilePath();
+            if (!isComponentFile(originalPath)) {
+                return this.resolveTsPath(declarationNode);
+            }
             return originalPath;
         } catch (error) {
             return null;
         }
+    }
+
+    // 解析ts路径
+    resolveTsPath(declarationNode: Node) {
+        if (!Node.isExportAssignment(declarationNode)) return null;
+        const exportedExpression = declarationNode.getExpression();
+        if (Node.isCallExpression(exportedExpression)) {
+            const args = exportedExpression.getArguments();
+            for (const arg of args) {
+                const argType = arg.getType();
+                if (isComponentType(argType)) {
+                    // 获取文件路径
+                    const res = this.resolveComponentPath(arg as Identifier) as string;
+                    return res;
+                }
+            }
+        }
+        return null;
     }
 
 
@@ -544,6 +566,23 @@ class TestUnitAnalyzer {
 
                         if (!component.emits.includes(propName)) {
                             component.emits.push(propName);
+                        }
+                    } else if (propName === 'v-slots') {
+                        // Handle v-slots directive
+                        const initializer = attr.getInitializer();
+                        if (initializer && Node.isJsxExpression(initializer)) {
+                            const expression = initializer.getExpression();
+                            if (expression && Node.isObjectLiteralExpression(expression)) {
+                                component.slots = component.slots || [];
+                                expression.getProperties().forEach(prop => {
+                                    if (Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) {
+                                        const slotName = prop.getName();
+                                        if (slotName && !component.slots!.includes(slotName)) {
+                                            component.slots!.push(slotName);
+                                        }
+                                    }
+                                });
+                            }
                         }
                     } else {
                         let isVModel = false;

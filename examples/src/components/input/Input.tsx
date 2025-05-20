@@ -10,6 +10,7 @@ export default defineComponent({
 
   props: {
     ...props,
+    label: String
   },
 
   slots: Object as SlotsType<{
