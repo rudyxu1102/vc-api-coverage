@@ -55,8 +55,6 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     reporters: [['vc-api-coverage', {
-      // File patterns to include in the coverage report
-      include: ['src/**/*.vue', 'src/**/*.tsx', 'src/**/*.ts'],
       
       // Output directory for the coverage report
       outputDir: 'coverage-api',
