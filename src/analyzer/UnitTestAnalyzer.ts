@@ -1,4 +1,5 @@
 import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier, Symbol } from 'ts-morph';
+import { isComponentFile, isComponentType } from '../common/utils';
 
 interface TestUnit {
     props?: string[];
@@ -89,10 +90,31 @@ class TestUnitAnalyzer {
             if (!declarationNode) return null;
             const declarationSourceFile = declarationNode.getSourceFile();
             const originalPath = declarationSourceFile.getFilePath();
+            if (!isComponentFile(originalPath)) {
+                return this.resolveTsPath(declarationNode);
+            }
             return originalPath;
         } catch (error) {
             return null;
         }
+    }
+
+    // 解析ts路径
+    resolveTsPath(declarationNode: Node) {
+        if (!Node.isExportAssignment(declarationNode)) return null;
+        const exportedExpression = declarationNode.getExpression();
+        if (Node.isCallExpression(exportedExpression)) {
+            const args = exportedExpression.getArguments();
+            for (const arg of args) {
+                const argType = arg.getType();
+                if (isComponentType(argType)) {
+                    // 获取文件路径
+                    const res = this.resolveComponentPath(arg as Identifier) as string;
+                    return res;
+                }
+            }
+        }
+        return null;
     }
 
 

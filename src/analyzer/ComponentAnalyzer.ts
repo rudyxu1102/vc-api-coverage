@@ -1,4 +1,5 @@
 import { SourceFile, Node, Type, Expression, ObjectLiteralExpression, SyntaxKind } from "ts-morph";
+import { isComponentType } from "../common/utils";
 
 class ComponentAnalyzer {
     private sourceFile: SourceFile;
@@ -170,12 +171,6 @@ class ComponentAnalyzer {
         return item.getText().replace(/[\'\"\`]/g, '');
     }
 
-    isComponentFile(type: Type) {
-        const constructSignatures = type.getConstructSignatures();
-        if (constructSignatures.length === 0) return false;
-        return true
-    }
-
     getExportedExpression() {
         let exportedExpression = this.getExportedExpressionFromDefault();
         if (exportedExpression) return exportedExpression;
@@ -202,7 +197,7 @@ class ComponentAnalyzer {
             }
         }
 
-        if (expression && this.isComponentFile(expression.getType())) {
+        if (expression && isComponentType(expression.getType())) {
             return expression;
         }
         return null;
@@ -212,7 +207,7 @@ class ComponentAnalyzer {
         const namedExportSymbol = this.sourceFile.getExportSymbols().find(symbol => {
             const valueDeclaration = symbol.getValueDeclaration();
             if (!valueDeclaration) return false;
-            return this.isComponentFile(valueDeclaration.getType());
+            return isComponentType(valueDeclaration.getType());
         });
 
         if (!namedExportSymbol) return null;

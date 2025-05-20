@@ -111,7 +111,7 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
     formatComponentName('All', totalPercentage),
     colorizePercentage(propsCoverage),
     colorizePercentage(slotsCoverage),
-    colorizePercentage(exposesCoverage)
+    colorizePercentage(exposesCoverage),
   ];
   
   // 如果有未覆盖的API或空组件，添加空列
@@ -139,7 +139,6 @@ export function generateCliReport(allCoverageData: VcCoverageData[]): string {
       // 对于没有API的组件，使用特殊标记
       const row = [
         formatComponentName(data.name, totalPercentage),
-        chalk.dim('N/A'),
         chalk.dim('N/A'),
         chalk.dim('N/A'),
         chalk.dim('N/A')
