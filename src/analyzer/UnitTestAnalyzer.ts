@@ -567,6 +567,23 @@ class TestUnitAnalyzer {
                         if (!component.emits.includes(propName)) {
                             component.emits.push(propName);
                         }
+                    } else if (propName === 'v-slots') {
+                        // Handle v-slots directive
+                        const initializer = attr.getInitializer();
+                        if (initializer && Node.isJsxExpression(initializer)) {
+                            const expression = initializer.getExpression();
+                            if (expression && Node.isObjectLiteralExpression(expression)) {
+                                component.slots = component.slots || [];
+                                expression.getProperties().forEach(prop => {
+                                    if (Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) {
+                                        const slotName = prop.getName();
+                                        if (slotName && !component.slots!.includes(slotName)) {
+                                            component.slots!.push(slotName);
+                                        }
+                                    }
+                                });
+                            }
+                        }
                     } else {
                         let isVModel = false;
                         // Handle v-model transformation for props
