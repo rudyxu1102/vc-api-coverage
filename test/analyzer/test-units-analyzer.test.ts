@@ -287,4 +287,73 @@ describe('test-units-analyzer', () => {
         expect(res[`./Menu.tsx`].props!.sort()).toEqual(['shape', 'type'].sort())
         expect(res[`./MenuItem.tsx`].props!.sort()).toEqual(['label', 'size'].sort())
     })
+
+    it('should analyze in test units', () => {
+        const fakeTestFilePath = '/fake/multi-components.test.tsx'
+        const project = new Project()
+        project.createSourceFile('/fake/Menu.tsx', `
+            import { defineComponent } from 'vue'
+            export default defineComponent()
+        `)
+        project.createSourceFile('/fake/index.ts', `
+            import Menu from './Menu.tsx'
+            export default Menu;
+        `)
+
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import Menu from './index.ts';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Menu shape="round"></Menu>',
+                        components: {
+                            Menu,
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        expect(res[`/fake/Menu.tsx`].props!.sort()).toEqual(['shape'].sort())
+    })
+
+    it('should analyze in test units', () => {
+        const fakeTestFilePath = '/fake/multi-components.test.tsx'
+        const project = new Project()
+        project.createSourceFile('/fake/Menu.tsx', `
+            import { defineComponent } from 'vue'
+            export default defineComponent()
+        `)
+        project.createSourceFile('/fake/index.ts', `
+            import Menu from './Menu.tsx'
+            export { Menu };
+        `)
+
+        const sourceFile = project.createSourceFile(fakeTestFilePath, `
+            import { Menu } from './index.ts';
+            import { describe, it, expect, test } from 'vitest';
+            import { shallowMount } from '@vue/test-utils'
+            import { render } from '@testing-library/vue'
+
+            describe('components', () => {
+                it('should render correctly 2', () => {
+                    mount({
+                        template: '<Menu shape="round"></Menu>',
+                        components: {
+                            Menu,
+                        }
+                    })
+                    expect(1).toBe(1)
+                })
+            })
+        `)
+        const res = new TestUnitAnalyzer(sourceFile, project).analyze()
+        console.log(res)
+        expect(res[`/fake/Menu.tsx`].props!.sort()).toEqual(['shape'].sort())
+    })
 })

@@ -8,7 +8,7 @@ describe('Button.tsx', () => {
     const wrapper = mount({
       template: '<Button @click="fn" />',
       components: {
-        Button: Button
+        Button
       },
       data() {
         return {

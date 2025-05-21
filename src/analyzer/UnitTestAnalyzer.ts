@@ -226,7 +226,7 @@ class TestUnitAnalyzer {
         
         for (const definition of definitions) {
             const declarationNode = definition.getDeclarationNode();
-            if (declarationNode && Node.isImportSpecifier(declarationNode)) {
+            if (Node.isImportSpecifier(declarationNode) || Node.isImportClause(declarationNode)) {
                 resolvedDeclarationSymbol = declarationNode.getSymbol();
                 if (resolvedDeclarationSymbol) {
                     break; 
