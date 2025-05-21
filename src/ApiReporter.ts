@@ -164,6 +164,7 @@ export default class VcCoverageReporter implements Reporter {
     const data = (coverage as any).data
     for (const item of this.coverageData) {
       const coverage = data[item.file]
+      if(!coverage) continue
       for (const method of item.exposes.details) {
         if (this.checkFromCoverage(coverage, method.name) && !method.covered) {
           method.covered = true
