@@ -22,7 +22,7 @@ export default defineConfig({
     environment: 'jsdom', // 模拟 DOM 环境
     
     // 使用绝对路径
-    reporters: ['default', [path.resolve(__dirname, '../lib/CoverageReporter.js'), {
+    reporters: ['default', [path.resolve(__dirname, '../lib/ApiReporter.js'), {
       outputDir: 'coverage-api',
       onFinished: (data) => {
         // for (const item of data) {
