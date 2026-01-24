@@ -106,7 +106,7 @@ export default class VcCoverageReporter implements Reporter {
         continue;
       }
 
-      let sourceFile = this.project.addSourceFileAtPath(path)
+      const sourceFile = this.project.addSourceFileAtPath(path)
       // 分析组件API
       const analyzer = new ComponentAnalyzer(sourceFile)
       const { props, slots, exposes } = analyzer.analyze()

@@ -1,7 +1,8 @@
 {
   "name": "vc-api-coverage",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "description": "Vue Component API Coverage Reporter",
+  "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "scripts": {
@@ -11,7 +12,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build",
-    "lint": "eslint 'src/**/*.ts' 'examples/src/**/*.ts' 'examples/src/**/*.vue' --fix"
+    "lint": "eslint . --ext .ts,.tsx,.vue --fix"
   },
   "dependencies": {
     "cli-table3": "^0.6.5",
@@ -21,9 +22,12 @@
     "ts-morph": "^22.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@testing-library/vue": "^7.0.0",
     "@types/lodash": "^4.6.9",
     "@types/node": "^22.14.1",
+    "@typescript-eslint/eslint-plugin": "^8.53.1",
+    "@typescript-eslint/parser": "^8.53.1",
     "@typescript-eslint/types": "^8.31.1",
     "@typescript-eslint/typescript-estree": "^8.31.1",
     "@vitejs/plugin-vue": "^4.5.0",
@@ -32,7 +36,11 @@
     "@vue/test-utils": "^2.4.0",
     "boxen": "^8.0.1",
     "chalk": "^5.3.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-vitest": "^0.5.4",
+    "eslint-plugin-vue": "^10.7.0",
     "fast-glob": "^3.3.0",
+    "globals": "^17.1.0",
     "jsdom": "^22.1.0",
     "ts-morph": "^22.0.0",
     "typescript": "^5.0.0",
