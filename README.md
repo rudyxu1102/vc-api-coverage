@@ -103,6 +103,16 @@ export default defineConfig({
 })
 ```
 
+## How It Works
+
+This tool analyzes your Vue 3 TSX components by leveraging TypeScript's type system and AST analysis:
+
+- **Props/Events**: Extracted via `InstanceType<typeof Component>['$props']`
+- **Slots**: Extracted via `InstanceType<typeof Component>['$slots']`
+- **Exposed Methods**: Identified through AST analysis of `defineExpose()`
+
+For detailed implementation information, see [Implementation Details](./docs/implementation.md).
+
 ## Example Output
 
 ### 1. CLI Format

@@ -4,7 +4,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 
 describe('json-reporter', () => {
-  const testOutputDir = 'test-coverage'
+  const testOutputDir = 'coverage-test'
   let reporter: JSONReporter
 
   beforeEach(() => {

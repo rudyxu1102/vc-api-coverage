@@ -13,6 +13,8 @@ export default defineConfig({
         'node_modules/**',
         'test/**',
         '**/*.d.ts',
+        'vitest.config.ts',
+        'eslint.config.js',
       ],
     },
   },
