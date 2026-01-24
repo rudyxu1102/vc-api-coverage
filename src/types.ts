@@ -4,6 +4,7 @@ export interface VcCoverageOptions {
   openBrowser?: boolean
   include?: string | string[]
   exclude?: string | string[]
+  strict?: boolean
   onFinished?: (data: VcCoverageData[]) => void
 }
 
@@ -17,8 +18,28 @@ export interface ComponentCoverage {
 export type ReportFormat = 'cli' | 'html' | 'json' 
 
 
+export type PropVariantType = 'literal' | 'string' | 'number' | 'boolean' | 'function' | 'object' | 'undefined' | 'null'
+
+export interface PropVariant {
+  type: PropVariantType
+  value: string | number | boolean | null | undefined
+}
+
+export interface PropWithVariants {
+  name: string
+  variants?: PropVariant[]
+}
+
+export interface PropValue {
+  propName: string
+  value: string | number | boolean | null | undefined
+  type: 'literal' | 'string' | 'number' | 'boolean' | 'function' | 'object' | 'undefined' | 'null'
+}
+
 export interface VcData {
   props: string[],
+  propsWithVariants?: PropWithVariants[]
+  propValues?: PropValue[]
   slots: string[],
   exposes: string[],
 }
@@ -38,6 +59,13 @@ export interface VcTotalData {
   }
 }
 
+export interface PropDetail {
+  name: string
+  covered: boolean
+  variant?: string  // e.g., 'primary', 'string', 'true'
+  propName?: string  // original prop name when this is a variant
+}
+
 export interface VcCoverageData {
   name: string;
   file: string;
@@ -46,7 +74,7 @@ export interface VcCoverageData {
   props: {
     total: number;
     covered: number;
-    details: Array<{ name: string; covered: boolean }>;
+    details: Array<PropDetail>;
   };
   slots: {
     total: number;

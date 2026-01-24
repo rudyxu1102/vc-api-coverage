@@ -1,22 +1,27 @@
 import { SourceFile, Node, Type, Expression, ObjectLiteralExpression, SyntaxKind } from "ts-morph";
 import { isComponentType } from "../common/utils";
+import { PropVariant, PropWithVariants } from "../types";
 
 class ComponentAnalyzer {
     private sourceFile: SourceFile;
     private props = new Set<string>();
+    private propsWithVariants: PropWithVariants[] = [];
     private slots = new Set<string>();
     private exposes = new Set<string>();
     private code: string;
+    private strictMode: boolean;
 
-    constructor(sourceFile: SourceFile) {
+    constructor(sourceFile: SourceFile, strictMode: boolean = false) {
         this.sourceFile = sourceFile;
         this.code = sourceFile.getFullText();
+        this.strictMode = strictMode;
     }
 
     analyze() {
         this.analyzerComponentType();
         return {
             props: Array.from(this.props),
+            propsWithVariants: this.strictMode ? this.propsWithVariants : undefined,
             slots: Array.from(this.slots),
             exposes: Array.from(this.exposes),
         }
@@ -33,7 +38,104 @@ class ComponentAnalyzer {
                 return;
             }
             this.props.add(propName);
+
+            // In strict mode, extract variants for union types
+            if (this.strictMode) {
+                const propType = propSymbol.getTypeAtLocation(exportedExpression);
+                const variants = this.extractVariantsFromType(propType);
+                if (variants.length > 0) {
+                    this.propsWithVariants.push({
+                        name: propName,
+                        variants
+                    });
+                }
+            }
         });
+    }
+
+    private extractVariantsFromType(type: Type): PropVariant[] {
+        const variants: PropVariant[] = [];
+
+        // Check if it's a union type
+        if (type.isUnion()) {
+            const unionTypes = type.getUnionTypes();
+
+            for (const unionType of unionTypes) {
+                // Skip undefined and null types
+                if (unionType.isUndefined() || unionType.isNull()) {
+                    continue;
+                }
+
+                const variant = this.getVariantFromType(unionType);
+                if (variant) {
+                    // Also skip variants that are undefined or null
+                    if (variant.type !== 'undefined' && variant.type !== 'null') {
+                        variants.push(variant);
+                    }
+                }
+            }
+        } else {
+            // Not a union, but might be boolean which we want to expand
+            const variant = this.getVariantFromType(type);
+            if (variant && variant.type === 'boolean') {
+                // Expand boolean to true and false
+                variants.push({ type: 'literal', value: true });
+                variants.push({ type: 'literal', value: false });
+            }
+        }
+
+        return variants;
+    }
+
+    private getVariantFromType(type: Type): PropVariant | null {
+        // Literal types (string, number, boolean literals)
+        if (type.isLiteral()) {
+            const literalValue = type.getLiteralValue();
+            return {
+                type: 'literal',
+                value: literalValue as string | number | boolean
+            };
+        }
+
+        // Boolean type (expand to true/false)
+        if (type.isBoolean()) {
+            // Return a marker that this is boolean type
+            // Will be expanded to true/false in extractVariantsFromType
+            return { type: 'boolean', value: 'boolean' };
+        }
+
+        // String type
+        if (type.isString()) {
+            return { type: 'string', value: 'string' };
+        }
+
+        // Number type
+        if (type.isNumber()) {
+            return { type: 'number', value: 'number' };
+        }
+
+        // Undefined
+        if (type.isUndefined()) {
+            return { type: 'undefined', value: undefined };
+        }
+
+        // Null
+        if (type.isNull()) {
+            return { type: 'null', value: null };
+        }
+
+        // Check for function signatures
+        const callSignatures = type.getCallSignatures();
+        if (callSignatures.length > 0) {
+            return { type: 'function', value: 'function' };
+        }
+
+        // Object type (default)
+        if (type.isObject() && !type.isArray()) {
+            return { type: 'object', value: 'object' };
+        }
+
+        return null;
     }
 
     analyzeSlots(instanceType: Type, exportedExpression: Expression) {
