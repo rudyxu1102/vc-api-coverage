@@ -8,4 +8,5 @@ export default function vcApiCoverage(options: VcCoverageOptions = {}) {
 
 // 导出类型和reporter供直接使用
 export { VcCoverageReporter };
+export * from './types';
 export type { VcCoverageOptions }; 
