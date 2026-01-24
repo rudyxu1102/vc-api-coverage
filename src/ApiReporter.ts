@@ -53,7 +53,9 @@ export default class VcCoverageReporter implements Reporter {
     // 如果设置了 include，检查文件是否匹配 include 模式
     if (include) {
       const includePatterns = Array.isArray(include) ? include : [include];
-      const matchesInclude = includePatterns.some(pattern => minimatch(filePath, pattern));
+      const matchesInclude = includePatterns.some(pattern =>
+        minimatch(filePath, pattern, { matchBase: true })
+      );
       if (!matchesInclude) {
         return false;
       }
@@ -62,8 +64,9 @@ export default class VcCoverageReporter implements Reporter {
     // 如果设置了 exclude，检查文件是否匹配 exclude 模式
     if (exclude) {
       const excludePatterns = Array.isArray(exclude) ? exclude : [exclude];
-      const matchesExclude = excludePatterns.some(pattern => minimatch(filePath, pattern));
-      console.log('matchesExclude', filePath, matchesExclude);
+      const matchesExclude = excludePatterns.some(pattern =>
+        minimatch(filePath, pattern, { matchBase: true })
+      );
       if (matchesExclude) {
         return false;
       }
