@@ -6,13 +6,13 @@ export default defineComponent({
 
   props: buttonProps,
 
-  slots: buttonSlots,
-
   // 2. Emits 定义
   emits: {
     click: (event: MouseEvent) => true,
     [ButtonEvent.InfoClick]: (event: MouseEvent) => true,
   },
+
+  slots: buttonSlots,
 
   expose: ['focus'] as string[],
 

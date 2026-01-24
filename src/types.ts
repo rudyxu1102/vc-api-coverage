@@ -3,6 +3,7 @@ export interface VcCoverageOptions {
   outputDir?: string
   openBrowser?: boolean
   include?: string | string[]
+  exclude?: string | string[]
   onFinished?: (data: VcCoverageData[]) => void
 }
 

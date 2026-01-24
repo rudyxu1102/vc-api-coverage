@@ -13,18 +13,18 @@ export default defineComponent({
     label: String
   },
 
-  slots: Object as SlotsType<{
-    prefix?: () => VNode[];
-    suffix?: () => VNode[];
-    clearIcon?: () => VNode[];
-  }>,
-
   emits: {
     'update:modelValue': (value: string) => true,
     'focus': (e: FocusEvent) => true,
     'blur': (e: FocusEvent) => true,
     'clear': () => true,
   },
+
+  slots: Object as SlotsType<{
+    prefix?: () => VNode[];
+    suffix?: () => VNode[];
+    clearIcon?: () => VNode[];
+  }>,
 
   setup(props, { emit, slots, expose }) {
     const inputRef = ref<HTMLInputElement | null>(null);

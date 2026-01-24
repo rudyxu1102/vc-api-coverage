@@ -244,7 +244,7 @@ class TestUnitAnalyzer {
         const args = mountCall.getArguments();
         if (args.length === 0) return;
 
-        let componentArgNode: Node | undefined = args[0];
+        const componentArgNode: Node | undefined = args[0];
         if (Node.isIdentifier(componentArgNode)) {
             this.processMountComponent(componentArgNode, args[1] as ObjectLiteralExpression);
         } else if (Node.isObjectLiteralExpression(componentArgNode)) {
@@ -307,7 +307,7 @@ class TestUnitAnalyzer {
             if (!attrsString) continue;
 
             // Regex to find attribute names starting with @ or v-on:
-            const attrRegex = /([@a-zA-Z0-9_:-]+)(?:=(?:\"[^\"]*\"|'[^']*'|[^\s>]*))?/g;
+            const attrRegex = /([@a-zA-Z0-9_:-]+)(?:=(?:"[^"]*"|'[^']*'|[^\s>]*))?/g;
             let attrMatch;
             while ((attrMatch = attrRegex.exec(attrsString)) !== null) {
                 let emitName = attrMatch[1];
@@ -555,7 +555,7 @@ class TestUnitAnalyzer {
             for (const attr of attributes) {
                 if (Node.isJsxAttribute(attr)) {
                     let propName = attr.getNameNode().getText();
-                    let originalPropName = propName; // Keep original for emit generation
+                    const originalPropName = propName; // Keep original for emit generation
 
                     // Handle event handlers (props starting with "on")
                     if (propName.startsWith('on') && propName.length > 2) {

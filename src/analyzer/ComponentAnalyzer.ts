@@ -121,7 +121,7 @@ class ComponentAnalyzer {
         if (Node.isIdentifier(item)) {
             return this.getNameFromIdentifier(item);
         }
-        return item.getText().replace(/[\'\"\`]/g, '');
+        return item.getText().replace(/['"`]/g, '');
     }
 
     private getNameFromPropertyAccess(item: Expression): string {
@@ -135,17 +135,16 @@ class ComponentAnalyzer {
                 }
             }
         }
-        return item.getText().replace(/[\'\"\`]/g, '');
+        return item.getText().replace(/['"`]/g, '');
     }
 
     private getNameFromIdentifier(item: Expression): string {
-        if (!Node.isIdentifier(item)) return item.getText().replace(/[\'\"\`]/g, '');
-
+        if (!Node.isIdentifier(item)) return item.getText().replace(/['"`]/g, '');
         const symbol = item.getSymbol();
-        if (!symbol) return item.getText().replace(/[\'\"\`]/g, '');
+        if (!symbol) return item.getText().replace(/['"`]/g, '');
 
         const declarations = symbol.getDeclarations();
-        if (declarations.length === 0) return item.getText().replace(/[\'\"\`]/g, '');
+        if (declarations.length === 0) return item.getText().replace(/['"`]/g, '');
         
         for (const declaration of declarations) {
             if (Node.isVariableDeclaration(declaration)) {
@@ -168,7 +167,7 @@ class ComponentAnalyzer {
                 }
             }
         }
-        return item.getText().replace(/[\'\"\`]/g, '');
+        return item.getText().replace(/['"`]/g, '');
     }
 
     getExportedExpression() {

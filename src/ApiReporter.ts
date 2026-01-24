@@ -3,6 +3,7 @@ import type { TestModule } from 'vitest/node'
 import path from 'path';
 import open from 'open';
 import _ from 'lodash';
+import { minimatch } from 'minimatch';
 import ComponentAnalyzer from './analyzer/ComponentAnalyzer';
 import { generateCliReport } from './reporter/CliReporter';
 import { HTMLReporter } from './reporter/HtmlReporter';
@@ -35,15 +36,40 @@ export default class VcCoverageReporter implements Reporter {
     this.jsonReporter = new JSONReporter(this.options.outputDir);
     this.project = new Project({
       compilerOptions: {
-        target: ts.ScriptTarget.ESNext, 
+        target: ts.ScriptTarget.ESNext,
         module: ts.ModuleKind.ESNext,
         jsx: ts.JsxEmit.Preserve,
         moduleResolution: ts.ModuleResolutionKind.NodeNext,
       },
     });
     if (options.onFinished) {
-      this.onFinishedCallback = options.onFinished 
+      this.onFinishedCallback = options.onFinished
     }
+  }
+
+  private shouldIncludeFile(filePath: string): boolean {
+    const { include, exclude } = this.options;
+
+    // 如果设置了 include，检查文件是否匹配 include 模式
+    if (include) {
+      const includePatterns = Array.isArray(include) ? include : [include];
+      const matchesInclude = includePatterns.some(pattern => minimatch(filePath, pattern));
+      if (!matchesInclude) {
+        return false;
+      }
+    }
+
+    // 如果设置了 exclude，检查文件是否匹配 exclude 模式
+    if (exclude) {
+      const excludePatterns = Array.isArray(exclude) ? exclude : [exclude];
+      const matchesExclude = excludePatterns.some(pattern => minimatch(filePath, pattern));
+      console.log('matchesExclude', filePath, matchesExclude);
+      if (matchesExclude) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   onTestModuleEnd(testModule: TestModule) {
@@ -75,7 +101,12 @@ export default class VcCoverageReporter implements Reporter {
 
   analyzerComponent() {
     for (const path in this.unitData) {
-      let sourceFile = this.project.addSourceFileAtPath(path)
+      // 检查文件是否应该被包含
+      if (!this.shouldIncludeFile(path)) {
+        continue;
+      }
+
+      const sourceFile = this.project.addSourceFileAtPath(path)
       // 分析组件API
       const analyzer = new ComponentAnalyzer(sourceFile)
       const { props, slots, exposes } = analyzer.analyze()
@@ -88,10 +119,15 @@ export default class VcCoverageReporter implements Reporter {
   }
 
   mergeData(unitData: Record<string, VcData>, compData: Record<string, VcData>): VcCoverageData[] {
-    const res: VcCoverageData[] = [] 
-    
+    const res: VcCoverageData[] = []
+
     // 使用处理后的数据
     for (const path in unitData) {
+      // 检查文件是否应该被包含
+      if (!this.shouldIncludeFile(path)) {
+        continue;
+      }
+
       // 如果compData中不存在该路径的组件数据，跳过该路径
       if (!compData[path]) {
         console.warn(`[vc-api-coverage] Warning: No component data found for ${path}`);

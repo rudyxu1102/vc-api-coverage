@@ -79,9 +79,9 @@ export function isComponentFile(filePath: string) {
 }
 
 export function getThrowableMessage(e: Error, split = '\n') {
-  let name    = e && e.name ? e.name : 'Error';
-  let stack   = e && e.stack ? e.stack : '';
-  let message = e && e.message ? e.message : '';
+  const name    = e && e.name ? e.name : 'Error';
+  const stack   = e && e.stack ? e.stack : '';
+  const message = e && e.message ? e.message : '';
 
   return split + 'name: ' + name + split + 'message: ' + message + split + 'stack: ' + stack + split;
 }
