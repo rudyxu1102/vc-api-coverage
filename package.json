@@ -18,7 +18,7 @@
     "cli-table3": "^0.6.5",
     "lodash": "^4.5.0",
     "minimatch": "^10.1.1",
-    "open": "^10.1.1",
+    "open": "^11.0.0",
     "ts-morph": "^22.0.0"
   },
   "devDependencies": {
