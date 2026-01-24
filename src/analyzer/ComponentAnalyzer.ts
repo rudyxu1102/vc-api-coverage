@@ -42,7 +42,13 @@ class ComponentAnalyzer {
             // In strict mode, extract variants for union types
             if (this.strictMode) {
                 const propType = propSymbol.getTypeAtLocation(exportedExpression);
-                const variants = this.extractVariantsFromType(propType);
+
+                // Get the non-nullable version of the type for analysis
+                // This removes undefined from optional props
+                const nonNullableType = propType.getNonNullableType();
+
+                const variants = this.extractVariantsFromType(nonNullableType);
+
                 if (variants.length > 0) {
                     this.propsWithVariants.push({
                         name: propName,
@@ -88,7 +94,16 @@ class ComponentAnalyzer {
     }
 
     private getVariantFromType(type: Type): PropVariant | null {
-        // Literal types (string, number, boolean literals)
+        // Boolean literals (true/false)
+        if (type.isBooleanLiteral()) {
+            const typeText = type.getText();
+            return {
+                type: 'literal',
+                value: typeText === 'true'
+            };
+        }
+
+        // Literal types (string, number literals)
         if (type.isLiteral()) {
             const literalValue = type.getLiteralValue();
             return {
