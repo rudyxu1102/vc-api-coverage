@@ -3,6 +3,20 @@ A Vue Component API Coverage Tool.
 
 A specialized Vitest reporter designed for Vue 3 TSX components that helps you track and improve your component API coverage. This tool analyzes and reports the usage coverage of your component's Props, Events, Slots, and Exposed methods in your tests.
 
+[![NPM version][npm-image]][npm-url]
+[![build status][ci-image]][ci-url]
+[![Test coverage][coveralls-image]][coveralls-url]
+[![npm download][download-image]][download-url]
+
+[npm-image]: http://img.shields.io/npm/v/vc-api-coverage.svg?style=flat-square
+[npm-url]: http://npmjs.org/package/vc-api-coverage
+[ci-image]: https://github.com/rudyxu1102/vc-api-coverage/workflows/CI/badge.svg
+[ci-url]: https://github.com/rudyxu1102/vc-api-coverage/actions
+[coveralls-image]: https://img.shields.io/coveralls/rudyxu1102/vc-api-coverage.svg?style=flat-square
+[coveralls-url]: https://coveralls.io/r/rudyxu1102/vc-api-coverage?branch=main
+[download-image]: https://img.shields.io/npm/dm/vc-api-coverage.svg?style=flat-square
+[download-url]: https://npmjs.org/package/vc-api-coverage
+
 ## Features
 
 - 📊 Detailed coverage reporting for Vue 3 TSX components
@@ -55,16 +69,24 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     reporters: [['vc-api-coverage', {
-      
+
       // Output directory for the coverage report
       outputDir: 'coverage-api',
-      
+
       // Report formats: 'cli', 'html', 'json'
       // You can specify multiple formats: ['cli', 'html']
       format: ['cli', 'html', 'json'],
-      
+
       // Whether to open browser after generating HTML report
       openBrowser: false,
+
+      // Include patterns: only analyze files matching these glob patterns
+      // Can be a single string or an array of strings
+      include: ['**/src/components/**/*.{tsx,vue}'],
+
+      // Exclude patterns: skip files matching these glob patterns
+      // Can be a single string or an array of strings
+      exclude: ['**/*.vue'],
 
       // Callback function executed when coverage report is completed
       // Receives coverage data array where each item contains component coverage details
