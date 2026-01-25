@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
 import Button from '../index';
+import { type ButtonSize } from '../type';
 
 describe('Button.tsx', () => {
   it('renders emits click', async () => {
@@ -20,4 +21,16 @@ describe('Button.tsx', () => {
     expect(fn).toHaveBeenCalled()
   })
 
+  it('renders with size prop', () => {
+    const size: ButtonSize[] = ['sm', 'md'];
+    for (const s of size) {
+      const wrapper = mount(Button, {
+        props: {
+          label: 'Test Button',
+          size: s
+        }
+      });
+      expect(wrapper.classes()).toContain(`button-${s}`);
+    }
+  })
 }); 
