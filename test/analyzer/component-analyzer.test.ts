@@ -307,5 +307,170 @@ describe('ComponentAnalyzer', () => {
       expect(result.props).toStrictEqual(['variant']);
       expect(result.propsWithVariants).toBeUndefined();
     });
+
+    it('should handle false literal in boolean union (filtered)', () => {
+      const project = new Project({
+        compilerOptions: {
+          target: ts.ScriptTarget.ESNext,
+          module: ts.ModuleKind.ESNext,
+          jsx: ts.JsxEmit.Preserve,
+          moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        },
+      });
+      const code = `
+        import { defineComponent } from 'vue';
+
+        export default defineComponent({
+          name: 'Button',
+          props: {
+            disabled: { type: Boolean, default: false },
+            loading: { type: Boolean, default: false }
+          },
+        });
+      `;
+      const sourceFile = project.createSourceFile('./button.tsx', code);
+      const analyzer = new ComponentAnalyzer(sourceFile, true);
+      const result = analyzer.analyze();
+
+      expect(result.props).toContain('disabled');
+      expect(result.props).toContain('loading');
+      expect(result.propsWithVariants).toBeDefined();
+
+      // All boolean props should only have 'true' variant (false is filtered)
+      result.propsWithVariants?.forEach(prop => {
+        if (prop.variants) {
+          expect(prop.variants.every(v => v.value !== false)).toBe(true);
+        }
+      });
+    });
+
+    it('should handle mixed literal and primitive union types', () => {
+      const project = new Project({
+        compilerOptions: {
+          target: ts.ScriptTarget.ESNext,
+          module: ts.ModuleKind.ESNext,
+          jsx: ts.JsxEmit.Preserve,
+          moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        },
+      });
+      const code = `
+        import { defineComponent, PropType } from 'vue';
+
+        export default defineComponent({
+          name: 'Button',
+          props: {
+            width: {
+              type: [String, Number] as PropType<'auto' | number>,
+            },
+          },
+        });
+      `;
+      const sourceFile = project.createSourceFile('./button.tsx', code);
+      const analyzer = new ComponentAnalyzer(sourceFile, true);
+      const result = analyzer.analyze();
+
+      expect(result.props).toStrictEqual(['width']);
+      expect(result.propsWithVariants).toBeDefined();
+      expect(result.propsWithVariants?.[0].variants?.length).toBeGreaterThan(0);
+    });
+
+    it('should handle complex union types with function', () => {
+      const project = new Project({
+        compilerOptions: {
+          target: ts.ScriptTarget.ESNext,
+          module: ts.ModuleKind.ESNext,
+          jsx: ts.JsxEmit.Preserve,
+          moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        },
+      });
+      const code = `
+        import { defineComponent, PropType } from 'vue';
+
+        export default defineComponent({
+          name: 'Button',
+          props: {
+            value: {
+              type: [String, Function] as PropType<string | (() => string)>
+            },
+          },
+        });
+      `;
+      const sourceFile = project.createSourceFile('./button.tsx', code);
+      const analyzer = new ComponentAnalyzer(sourceFile, true);
+      const result = analyzer.analyze();
+
+      expect(result.props).toStrictEqual(['value']);
+      expect(result.propsWithVariants).toBeDefined();
+      expect(result.propsWithVariants?.[0].variants?.length).toBe(2);
+      expect(result.propsWithVariants?.[0].variants).toContainEqual({ type: 'string', value: 'string' });
+      expect(result.propsWithVariants?.[0].variants).toContainEqual({ type: 'function', value: 'function' });
+    });
+
+    it('should handle null in union types (filtered out)', () => {
+      const project = new Project({
+        compilerOptions: {
+          target: ts.ScriptTarget.ESNext,
+          module: ts.ModuleKind.ESNext,
+          jsx: ts.JsxEmit.Preserve,
+          moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        },
+      });
+      const code = `
+        import { defineComponent, PropType } from 'vue';
+
+        export default defineComponent({
+          name: 'Button',
+          props: {
+            value: {
+              type: String as PropType<'a' | 'b' | null>,
+            },
+          },
+        });
+      `;
+      const sourceFile = project.createSourceFile('./button.tsx', code);
+      const analyzer = new ComponentAnalyzer(sourceFile, true);
+      const result = analyzer.analyze();
+
+      expect(result.props).toStrictEqual(['value']);
+      expect(result.propsWithVariants).toBeDefined();
+      // null should be filtered out
+      expect(result.propsWithVariants?.[0].variants?.every(v => v.type !== 'null')).toBe(true);
+      expect(result.propsWithVariants?.[0].variants?.length).toBe(2); // only 'a' and 'b'
+    });
+
+    it('should handle number literal union types', () => {
+      const project = new Project({
+        compilerOptions: {
+          target: ts.ScriptTarget.ESNext,
+          module: ts.ModuleKind.ESNext,
+          jsx: ts.JsxEmit.Preserve,
+          moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        },
+      });
+      const code = `
+        import { defineComponent, PropType } from 'vue';
+
+        export default defineComponent({
+          name: 'Button',
+          props: {
+            level: {
+              type: Number as PropType<1 | 2 | 3>,
+              default: 1
+            },
+          },
+        });
+      `;
+      const sourceFile = project.createSourceFile('./button.tsx', code);
+      const analyzer = new ComponentAnalyzer(sourceFile, true);
+      const result = analyzer.analyze();
+
+      expect(result.props).toStrictEqual(['level']);
+      expect(result.propsWithVariants).toBeDefined();
+      expect(result.propsWithVariants?.[0].variants).toEqual([
+        { type: 'literal', value: 1 },
+        { type: 'literal', value: 2 },
+        { type: 'literal', value: 3 }
+      ]);
+    });
   });
 });
