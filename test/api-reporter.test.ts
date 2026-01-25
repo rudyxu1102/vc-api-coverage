@@ -640,5 +640,100 @@ describe('VcCoverageReporter', () => {
       const isCovered = (reporter as any).isVariantCovered('variant', variant, propValues)
       expect(isCovered).toBe(false)
     })
+
+    it('should match literal string values to String type variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      // String type variant should accept string literal values
+      const variant = { type: 'string' as const, value: 'string' }
+      const propValues = [
+        { propName: 'content', value: 'Some content', type: 'literal' as const }
+      ]
+
+      const isCovered = (reporter as any).isVariantCovered('content', variant, propValues)
+      expect(isCovered).toBe(true)
+    })
+
+    it('should match literal number values to Number type variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      // Number type variant should accept number literal values
+      const variant = { type: 'number' as const, value: 'number' }
+      const propValues = [
+        { propName: 'count', value: 42, type: 'literal' as const }
+      ]
+
+      const isCovered = (reporter as any).isVariantCovered('count', variant, propValues)
+      expect(isCovered).toBe(true)
+    })
+
+    it('should match literal boolean values to Boolean type variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      // Boolean type variant should accept boolean literal values
+      const variant = { type: 'boolean' as const, value: 'boolean' }
+      const propValues = [
+        { propName: 'flag', value: true, type: 'literal' as const }
+      ]
+
+      const isCovered = (reporter as any).isVariantCovered('flag', variant, propValues)
+      expect(isCovered).toBe(true)
+    })
+
+    it('should match function values to object type variants (Vue Function prop type)', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      // Vue's Function prop type is recognized as 'object' by TypeScript
+      // But actual function values are extracted as 'function' type
+      const variant = { type: 'object' as const, value: 'object' }
+      const propValues = [
+        { propName: 'content', value: 'function', type: 'function' as const }
+      ]
+
+      const isCovered = (reporter as any).isVariantCovered('content', variant, propValues)
+      expect(isCovered).toBe(true)
+    })
+
+    it('should handle String and Function union type props (Vue prop type pattern)', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const unitData = {
+        '/test/Button.tsx': {
+          props: ['content'],
+          propValues: [
+            { propName: 'content', value: 'Some content', type: 'literal' as const },
+            { propName: 'content', value: 'function', type: 'function' as const }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const compData = {
+        '/test/Button.tsx': {
+          props: ['content'],
+          propsWithVariants: [
+            {
+              name: 'content',
+              variants: [
+                { type: 'string' as const, value: 'string' },
+                { type: 'object' as const, value: 'object' } // Function type recognized as object
+              ]
+            }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const result = (reporter as any).mergeData(unitData, compData)
+
+      expect(result[0].props.total).toBe(2)
+      expect(result[0].props.covered).toBe(2) // Both variants should be covered
+      expect(result[0].props.details[0].name).toBe('content[string]')
+      expect(result[0].props.details[0].covered).toBe(true) // Covered by literal string
+      expect(result[0].props.details[1].name).toBe('content[object]')
+      expect(result[0].props.details[1].covered).toBe(true) // Covered by function
+    })
   })
 })

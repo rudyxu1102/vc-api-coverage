@@ -9,6 +9,7 @@ export const buttonProps = {
     size: { type: String as PropType<ButtonSize>, default: 'md' },
     disabled: { type: Boolean, default: false },
     variant: { type: String as PropType<ButtonType>, default: 'primary' },
+    content: { type: [String, Function], default: ''},
 }
 
 
