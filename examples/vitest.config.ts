@@ -24,6 +24,7 @@ export default defineConfig({
     // 使用绝对路径
     reporters: ['default', [path.resolve(__dirname, '../lib/ApiReporter.js'), {
       outputDir: 'coverage-api',
+      strict: true, // Enable strict mode to check all variants of union types
       // include: ['**/src/components/**/*.{tsx,vue}'], // 只包含特定目录的文件
       // exclude: ['**/components/input/*.tsx'], // 排除测试文件和 node_modules
       onFinished: (data) => {

@@ -24,6 +24,7 @@ A specialized Vitest reporter designed for Vue 3 TSX components that helps you t
 - 🎯 Visual representation of test coverage with emoji indicators
 - 🔍 Clear identification of untested component APIs
 - 📈 Coverage percentage calculation for each API category
+- 🔬 **Strict Mode**: Granular tracking of union type variants (e.g., checks each value of `'primary' | 'secondary' | 'tertiary'` separately)
 
 ## Installation
 
@@ -87,6 +88,12 @@ export default defineConfig({
       // Exclude patterns: skip files matching these glob patterns
       // Can be a single string or an array of strings
       exclude: ['**/*.vue'],
+
+      // Strict mode: check each variant of union type props individually
+      // When enabled, props like 'variant: "primary" | "secondary" | "tertiary"'
+      // are tracked as 3 separate APIs instead of 1
+      // See docs/strict-mode.md for details
+      strict: false,
 
       // Callback function executed when coverage report is completed
       // Receives coverage data array where each item contains component coverage details
@@ -188,6 +195,76 @@ For detailed implementation information, see [Implementation Details](./docs/imp
   ]
 }
 ```
+
+## Strict Mode
+
+Strict mode enables more granular API coverage tracking by expanding union types and checking each variant individually.
+
+### Why Use Strict Mode?
+
+In normal mode, the tool only checks if a prop is tested at all. In strict mode, it ensures that each possible value of a union type prop is tested, helping you achieve more thorough test coverage.
+
+### Example
+
+```typescript
+// Component definition
+const buttonProps = {
+  variant: {
+    type: String as PropType<'primary' | 'secondary' | 'tertiary'>,
+    default: 'primary'
+  },
+  disabled: { type: Boolean, default: false }
+}
+```
+
+**Normal Mode** - Checks if prop is tested with any value:
+```
+║ button/Button.tsx │ 2/2 │ Uncovered APIs: (none)
+```
+
+**Strict Mode** - Checks if each variant is tested:
+```
+║ button/Button.tsx │ 3/4 │ Uncovered APIs: variant[tertiary]
+```
+
+### Enabling Strict Mode
+
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    reporters: [['vc-api-coverage', {
+      strict: true  // Enable strict mode
+    }]]
+  }
+})
+```
+
+### Variant Expansion Rules
+
+| Type | Expansion Behavior | Example |
+|------|-------------------|---------|
+| Literal Union | Each value tracked separately | `'a' \| 'b' \| 'c'` → `[a]`, `[b]`, `[c]` |
+| Boolean | Only `true` tracked (false filtered) | `boolean` → `[true]` |
+| Primitive Union | Each type tracked | `string \| number` → `[string]`, `[number]` |
+| Optional Props | `undefined` filtered out | `T \| undefined` → `T` only |
+
+### Example Output with Strict Mode
+
+```
+╔═══════════════════╤═══════════════╤═══════╤═════════╤════════════════════════════════╗
+║ Components        │  Props/Events │ Slots │ Exposes │ Uncovered APIs                 ║
+╟───────────────────┼───────────────┼───────┼─────────┼────────────────────────────────╢
+║ button/Button.tsx │          5/10 │   0/2 │     0/1 │ variant[tertiary],             ║
+║                   │               │       │         │ loading[true],                 ║
+║                   │               │       │         │ size, onInfoclick,             ║
+║                   │               │       │         │ default, icon, focus           ║
+╚═══════════════════╧═══════════════╧═══════╧═════════╧════════════════════════════════╝
+```
+
+Notice how `variant[tertiary]` and `loading[true]` are tracked as individual variants.
+
+For complete documentation, see [Strict Mode Documentation](./docs/strict-mode.md).
 
 ## Contributing
 

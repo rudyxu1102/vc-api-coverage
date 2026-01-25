@@ -29,6 +29,7 @@ export default class VcCoverageReporter implements Reporter {
       format: ['cli', 'html', 'json'],
       outputDir: 'coverage',
       openBrowser: false,
+      strict: false,
       ...options
     };
 
@@ -79,7 +80,7 @@ export default class VcCoverageReporter implements Reporter {
 
     const sourceFile = this.project.addSourceFileAtPath(testModule.moduleId)
 
-    const res = new TestUnitAnalyzer(sourceFile, this.project).analyze()
+    const res = new TestUnitAnalyzer(sourceFile, this.project, this.options.strict).analyze()
     if (!res) {
       console.warn(`[vc-api-coverage] Warning: No test unit data found for ${testModule.moduleId}`);
       return;
@@ -102,6 +103,28 @@ export default class VcCoverageReporter implements Reporter {
     }
   }
 
+  private isVariantCovered(propName: string, variant: any, propValues: any[]): boolean {
+    // Find if this prop was tested with the specific variant value/type
+    for (const propValue of propValues) {
+      if (propValue.propName !== propName) continue
+
+      // Literal type: must match exact value
+      if (variant.type === 'literal') {
+        if (propValue.type === 'literal' && propValue.value === variant.value) {
+          return true
+        }
+      } else {
+        // Non-literal type (string, number, function, object, etc.)
+        // Just need to match the type
+        if (propValue.type === variant.type) {
+          return true
+        }
+      }
+    }
+
+    return false
+  }
+
   analyzerComponent() {
     for (const path in this.unitData) {
       // 检查文件是否应该被包含
@@ -111,10 +134,11 @@ export default class VcCoverageReporter implements Reporter {
 
       const sourceFile = this.project.addSourceFileAtPath(path)
       // 分析组件API
-      const analyzer = new ComponentAnalyzer(sourceFile)
-      const { props, slots, exposes } = analyzer.analyze()
+      const analyzer = new ComponentAnalyzer(sourceFile, this.options.strict)
+      const { props, propsWithVariants, slots, exposes } = analyzer.analyze()
       this.compData[path] = {
         props: Array.from(props),
+        propsWithVariants,
         slots: Array.from(slots),
         exposes: Array.from(exposes),
       }
@@ -163,12 +187,55 @@ export default class VcCoverageReporter implements Reporter {
       info.name = path.split('/').slice(-2).join('/') || ''
       info.file = path
       
-      info.props.total += comp.props.length
+      // Handle props - with strict mode support
+      if (this.options.strict && comp.propsWithVariants && comp.propsWithVariants.length > 0) {
+        // Strict mode: expand props with variants
+        for (const propWithVariants of comp.propsWithVariants) {
+          if (!propWithVariants.variants || propWithVariants.variants.length === 0) {
+            // No variants, treat as normal prop
+            info.props.total += 1
+            info.props.details.push({
+              name: propWithVariants.name,
+              covered: unit.props?.includes(propWithVariants.name) || false
+            })
+          } else {
+            // Has variants, check each one
+            for (const variant of propWithVariants.variants) {
+              const variantKey = String(variant.value)
+              const isCovered = this.isVariantCovered(propWithVariants.name, variant, unit.propValues || [])
+
+              info.props.total += 1
+              info.props.details.push({
+                name: `${propWithVariants.name}[${variantKey}]`,
+                covered: isCovered,
+                variant: variantKey,
+                propName: propWithVariants.name
+              })
+            }
+          }
+        }
+
+        // Add props that don't have variants
+        const propsWithVariantsNames = new Set(comp.propsWithVariants.map(p => p.name))
+        for (const propName of comp.props) {
+          if (!propsWithVariantsNames.has(propName)) {
+            info.props.total += 1
+            info.props.details.push({
+              name: propName,
+              covered: unit.props?.includes(propName) || false
+            })
+          }
+        }
+      } else {
+        // Normal mode: just check if prop is used
+        info.props.total += comp.props.length
+        info.props.details = comp.props.map(p => ({ name: p, covered: unit.props?.includes(p) || false }))
+      }
+
       info.slots.total += comp.slots.length
       info.exposes.total += comp.exposes.length
-      info.props.details = comp.props.map(p => ({ name: p, covered: unit.props.includes(p) }))
-      info.slots.details = comp.slots.length > 0 ? comp.slots.map(s => ({ name: s, covered: unit.slots.includes(s) })) : unit.slots.map(s => ({ name: s, covered: true }))
-      info.exposes.details = comp.exposes.map(e => ({ name: e, covered: unit.exposes.includes(e) }))
+      info.slots.details = comp.slots.length > 0 ? comp.slots.map(s => ({ name: s, covered: unit.slots?.includes(s) || false })) : unit.slots?.map(s => ({ name: s, covered: true })) || []
+      info.exposes.details = comp.exposes.map(e => ({ name: e, covered: unit.exposes?.includes(e) || false }))
       info.props.covered = info.props.details.filter(d => d.covered).length
       info.slots.covered = info.slots.details.filter(d => d.covered).length
       info.exposes.covered = info.exposes.details.filter(d => d.covered).length

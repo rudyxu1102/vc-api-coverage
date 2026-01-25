@@ -1,8 +1,15 @@
 import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier, Symbol } from 'ts-morph';
 import { isComponentFile, isComponentType } from '../common/utils';
 
+interface PropValue {
+    propName: string;
+    value: string | number | boolean | null | undefined;
+    type: 'literal' | 'string' | 'number' | 'boolean' | 'function' | 'object' | 'undefined' | 'null';
+}
+
 interface TestUnit {
     props?: string[];
+    propValues?: PropValue[];
     emits?: string[];
     slots?: string[];
 }
@@ -15,10 +22,12 @@ class TestUnitAnalyzer {
     private sourceFile: SourceFile;
     private result: TestUnitsResult = {};
     private project: Project;
+    private strictMode: boolean;
 
-    constructor(sourceFile: SourceFile, project: Project) {
+    constructor(sourceFile: SourceFile, project: Project, strictMode: boolean = false) {
         this.project = project;
         this.sourceFile = sourceFile;
+        this.strictMode = strictMode;
     }
 
     isValidTestCall(testCall: CallExpression) {
@@ -405,32 +414,83 @@ class TestUnitAnalyzer {
 
     }
 
+    private extractValueFromInitializer(initializer: Node): { value: any; type: PropValue['type'] } | null {
+        if (Node.isStringLiteral(initializer) || Node.isNoSubstitutionTemplateLiteral(initializer)) {
+            return { value: initializer.getLiteralValue(), type: 'literal' };
+        }
+        if (Node.isNumericLiteral(initializer)) {
+            return { value: Number(initializer.getLiteralValue()), type: 'literal' };
+        }
+        if (initializer.getKind() === SyntaxKind.TrueKeyword) {
+            return { value: true, type: 'literal' };
+        }
+        if (initializer.getKind() === SyntaxKind.FalseKeyword) {
+            return { value: false, type: 'literal' };
+        }
+        if (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer)) {
+            return { value: 'function', type: 'function' };
+        }
+        if (Node.isObjectLiteralExpression(initializer)) {
+            return { value: 'object', type: 'object' };
+        }
+
+        // Try to infer from type
+        const initType = initializer.getType();
+        if (initType.isString()) return { value: 'string', type: 'string' };
+        if (initType.isNumber()) return { value: 'number', type: 'number' };
+        if (initType.isBoolean()) return { value: 'boolean', type: 'boolean' };
+
+        const callSignatures = initType.getCallSignatures();
+        if (callSignatures.length > 0) {
+            return { value: 'function', type: 'function' };
+        }
+
+        return null;
+    }
+
     private extractProps(options: ObjectLiteralExpression, component: TestUnit) {
         const propsProperty = options.getProperty('props');
         if (propsProperty && Node.isPropertyAssignment(propsProperty)) {
             const initializer = propsProperty.getInitializer();
             if (initializer && Node.isObjectLiteralExpression(initializer)) {
-                const props = initializer.getProperties()
-                    .map(propNode => {
-                        let propName: string | undefined;
-                        if (Node.isPropertyAssignment(propNode)) {
-                            const nameNode = propNode.getNameNode();
-                            if (Node.isStringLiteral(nameNode)) {
-                                propName = nameNode.getLiteralValue();
-                            } else {
-                                propName = propNode.getName();
-                            }
-                        } else if (Node.isShorthandPropertyAssignment(propNode)) {
+                const props: string[] = [];
+
+                initializer.getProperties().forEach(propNode => {
+                    let propName: string | undefined;
+                    let propValueNode: Node | undefined;
+
+                    if (Node.isPropertyAssignment(propNode)) {
+                        const nameNode = propNode.getNameNode();
+                        if (Node.isStringLiteral(nameNode)) {
+                            propName = nameNode.getLiteralValue();
+                        } else {
                             propName = propNode.getName();
                         }
+                        propValueNode = propNode.getInitializer();
+                    } else if (Node.isShorthandPropertyAssignment(propNode)) {
+                        propName = propNode.getName();
+                    }
 
-                        // Exclude onXxx event handlers from props list
-                        if (propName && !(propName.startsWith('on') && propName.length > 2 && propName[2] === propName[2].toUpperCase())) {
-                            return propName;
+                    // Exclude onXxx event handlers from props list
+                    if (propName && !(propName.startsWith('on') && propName.length > 2 && propName[2] === propName[2].toUpperCase())) {
+                        props.push(propName);
+
+                        // In strict mode, extract the value
+                        if (this.strictMode && propValueNode) {
+                            const extractedValue = this.extractValueFromInitializer(propValueNode);
+                            if (extractedValue) {
+                                if (!component.propValues) {
+                                    component.propValues = [];
+                                }
+                                component.propValues.push({
+                                    propName,
+                                    value: extractedValue.value,
+                                    type: extractedValue.type
+                                });
+                            }
                         }
-                        return null;
-                    })
-                    .filter(Boolean) as string[];
+                    }
+                });
 
                 if (props.length > 0) {
                     component.props = component.props || [];
@@ -547,6 +607,115 @@ class TestUnitAnalyzer {
         }
     }
 
+    private extractPropValue(attr: Node): PropValue | null {
+        if (!Node.isJsxAttribute(attr)) return null;
+
+        const propName = attr.getNameNode().getText();
+        const initializer = attr.getInitializer();
+
+        if (!initializer) {
+            // Boolean prop without value (e.g., <Button disabled />)
+            return {
+                propName,
+                value: true,
+                type: 'literal'
+            };
+        }
+
+        // String literal
+        if (Node.isStringLiteral(initializer)) {
+            return {
+                propName,
+                value: initializer.getLiteralValue(),
+                type: 'literal'
+            };
+        }
+
+        // JSX Expression
+        if (Node.isJsxExpression(initializer)) {
+            const expression = initializer.getExpression();
+            if (!expression) return null;
+
+            // Numeric literal
+            if (Node.isNumericLiteral(expression)) {
+                return {
+                    propName,
+                    value: Number(expression.getLiteralValue()),
+                    type: 'literal'
+                };
+            }
+
+            // Boolean literal (true/false)
+            if (expression.getKind() === SyntaxKind.TrueKeyword) {
+                return {
+                    propName,
+                    value: true,
+                    type: 'literal'
+                };
+            }
+            if (expression.getKind() === SyntaxKind.FalseKeyword) {
+                return {
+                    propName,
+                    value: false,
+                    type: 'literal'
+                };
+            }
+
+            // String literal in expression
+            if (Node.isStringLiteral(expression)) {
+                return {
+                    propName,
+                    value: expression.getLiteralValue(),
+                    type: 'literal'
+                };
+            }
+
+            // Arrow function or function expression
+            if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
+                return {
+                    propName,
+                    value: 'function',
+                    type: 'function'
+                };
+            }
+
+            // Identifier - infer type from the expression type
+            if (Node.isIdentifier(expression)) {
+                const exprType = expression.getType();
+
+                if (exprType.isString()) {
+                    return { propName, value: 'string', type: 'string' };
+                }
+                if (exprType.isNumber()) {
+                    return { propName, value: 'number', type: 'number' };
+                }
+                if (exprType.isBoolean()) {
+                    return { propName, value: 'boolean', type: 'boolean' };
+                }
+
+                const callSignatures = exprType.getCallSignatures();
+                if (callSignatures.length > 0) {
+                    return { propName, value: 'function', type: 'function' };
+                }
+
+                if (exprType.isObject()) {
+                    return { propName, value: 'object', type: 'object' };
+                }
+            }
+
+            // Object literal
+            if (Node.isObjectLiteralExpression(expression)) {
+                return {
+                    propName,
+                    value: 'object',
+                    type: 'object'
+                };
+            }
+        }
+
+        return null;
+    }
+
     // Helper method to extract attributes from JSX elements
     private extractJSXAttrs(element: Node, component: TestUnit) {
         if (Node.isJsxOpeningElement(element) || Node.isJsxSelfClosingElement(element)) {
@@ -601,6 +770,20 @@ class TestUnitAnalyzer {
                         }
                         if (!component.props.includes(propName)) {
                             component.props.push(propName);
+                        }
+
+                        // In strict mode, also record the specific value/type
+                        if (this.strictMode) {
+                            const propValue = this.extractPropValue(attr);
+                            if (propValue) {
+                                // Update propName if it was v-model
+                                propValue.propName = propName;
+
+                                if (!component.propValues) {
+                                    component.propValues = [];
+                                }
+                                component.propValues.push(propValue);
+                            }
                         }
 
                         // If it was a v-model, also add the corresponding emit

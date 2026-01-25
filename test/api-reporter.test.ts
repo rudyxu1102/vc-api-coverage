@@ -432,4 +432,213 @@ describe('VcCoverageReporter', () => {
       expect(console.log).toHaveBeenCalledWith('[vc-api-coverage] Report generation finished.')
     })
   })
+
+  describe('Strict Mode', () => {
+    it('should initialize with strict mode enabled', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+      expect(reporter).toBeDefined()
+    })
+
+    it('should merge data with strict mode and expand variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const unitData = {
+        '/test/Button.tsx': {
+          props: ['variant'],
+          propValues: [
+            { propName: 'variant', value: 'primary', type: 'literal' as const },
+            { propName: 'variant', value: 'secondary', type: 'literal' as const }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const compData = {
+        '/test/Button.tsx': {
+          props: ['variant'],
+          propsWithVariants: [
+            {
+              name: 'variant',
+              variants: [
+                { type: 'literal' as const, value: 'primary' },
+                { type: 'literal' as const, value: 'secondary' },
+                { type: 'literal' as const, value: 'tertiary' }
+              ]
+            }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const result = (reporter as any).mergeData(unitData, compData)
+
+      expect(result).toHaveLength(1)
+      expect(result[0].props.total).toBe(3) // 3 variants
+      expect(result[0].props.covered).toBe(2) // only primary and secondary tested
+      expect(result[0].props.details).toHaveLength(3)
+      expect(result[0].props.details[0].name).toBe('variant[primary]')
+      expect(result[0].props.details[0].covered).toBe(true)
+      expect(result[0].props.details[1].name).toBe('variant[secondary]')
+      expect(result[0].props.details[1].covered).toBe(true)
+      expect(result[0].props.details[2].name).toBe('variant[tertiary]')
+      expect(result[0].props.details[2].covered).toBe(false)
+    })
+
+    it('should merge data with strict mode and boolean variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const unitData = {
+        '/test/Button.tsx': {
+          props: ['disabled'],
+          propValues: [
+            { propName: 'disabled', value: true, type: 'literal' as const }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const compData = {
+        '/test/Button.tsx': {
+          props: ['disabled'],
+          propsWithVariants: [
+            {
+              name: 'disabled',
+              variants: [
+                { type: 'literal' as const, value: true }
+              ]
+            }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const result = (reporter as any).mergeData(unitData, compData)
+
+      expect(result[0].props.total).toBe(1) // only true variant
+      expect(result[0].props.covered).toBe(1)
+      expect(result[0].props.details[0].name).toBe('disabled[true]')
+      expect(result[0].props.details[0].covered).toBe(true)
+    })
+
+    it('should merge data with strict mode and mixed type variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const unitData = {
+        '/test/Input.tsx': {
+          props: ['value'],
+          propValues: [
+            { propName: 'value', value: 'hello', type: 'string' as const },
+            { propName: 'value', value: 42, type: 'number' as const }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const compData = {
+        '/test/Input.tsx': {
+          props: ['value'],
+          propsWithVariants: [
+            {
+              name: 'value',
+              variants: [
+                { type: 'string' as const, value: 'string' },
+                { type: 'number' as const, value: 'number' }
+              ]
+            }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const result = (reporter as any).mergeData(unitData, compData)
+
+      expect(result[0].props.total).toBe(2)
+      expect(result[0].props.covered).toBe(2)
+      expect(result[0].props.details[0].name).toBe('value[string]')
+      expect(result[0].props.details[0].covered).toBe(true)
+      expect(result[0].props.details[1].name).toBe('value[number]')
+      expect(result[0].props.details[1].covered).toBe(true)
+    })
+
+    it('should merge data with strict mode and props without variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const unitData = {
+        '/test/Button.tsx': {
+          props: ['label', 'variant'],
+          propValues: [
+            { propName: 'variant', value: 'primary', type: 'literal' as const }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const compData = {
+        '/test/Button.tsx': {
+          props: ['label', 'variant'],
+          propsWithVariants: [
+            {
+              name: 'variant',
+              variants: [
+                { type: 'literal' as const, value: 'primary' }
+              ]
+            }
+          ],
+          slots: [],
+          exposes: []
+        }
+      }
+
+      const result = (reporter as any).mergeData(unitData, compData)
+
+      // label doesn't have variants, so it's tracked normally
+      // variant has variants
+      expect(result[0].props.total).toBe(2)
+      expect(result[0].props.details.some((d: any) => d.name === 'label')).toBe(true)
+      expect(result[0].props.details.some((d: any) => d.name === 'variant[primary]')).toBe(true)
+    })
+
+    it('should handle isVariantCovered with literal types', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const variant = { type: 'literal' as const, value: 'primary' }
+      const propValues = [
+        { propName: 'variant', value: 'primary', type: 'literal' as const }
+      ]
+
+      const isCovered = (reporter as any).isVariantCovered('variant', variant, propValues)
+      expect(isCovered).toBe(true)
+    })
+
+    it('should handle isVariantCovered with non-literal types', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const variant = { type: 'string' as const, value: 'string' }
+      const propValues = [
+        { propName: 'value', value: 'hello', type: 'string' as const }
+      ]
+
+      const isCovered = (reporter as any).isVariantCovered('value', variant, propValues)
+      expect(isCovered).toBe(true)
+    })
+
+    it('should return false for uncovered variants', () => {
+      reporter = new VcCoverageReporter({ strict: true })
+
+      const variant = { type: 'literal' as const, value: 'tertiary' }
+      const propValues = [
+        { propName: 'variant', value: 'primary', type: 'literal' as const }
+      ]
+
+      const isCovered = (reporter as any).isVariantCovered('variant', variant, propValues)
+      expect(isCovered).toBe(false)
+    })
+  })
 })
