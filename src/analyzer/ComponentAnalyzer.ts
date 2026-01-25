@@ -74,8 +74,10 @@ class ComponentAnalyzer {
 
                 const variant = this.getVariantFromType(unionType);
                 if (variant) {
-                    // Also skip variants that are undefined or null
-                    if (variant.type !== 'undefined' && variant.type !== 'null') {
+                    // Skip undefined, null, and boolean false variants
+                    if (variant.type !== 'undefined' &&
+                        variant.type !== 'null' &&
+                        !(variant.type === 'literal' && variant.value === false)) {
                         variants.push(variant);
                     }
                 }
@@ -84,9 +86,8 @@ class ComponentAnalyzer {
             // Not a union, but might be boolean which we want to expand
             const variant = this.getVariantFromType(type);
             if (variant && variant.type === 'boolean') {
-                // Expand boolean to true and false
+                // Only expand boolean to true (skip false)
                 variants.push({ type: 'literal', value: true });
-                variants.push({ type: 'literal', value: false });
             }
         }
 

@@ -5,7 +5,7 @@ import { SlotsType, VNode, PropType } from 'vue';
 export const buttonProps = {
     ...commonProps,
     label: { type: String, required: true },
-    size: { type: String, default: 'md' },
+    size: { type: [String, Number], default: 'md' },
     disabled: { type: Boolean, default: false },
     variant: { type: String as PropType<'primary' | 'secondary' | 'tertiary'>, default: 'primary' },
 }
