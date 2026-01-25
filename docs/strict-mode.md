@@ -149,6 +149,81 @@ describe('Button', () => {
 });
 ```
 
+### Loop-Based Testing
+
+Strict mode intelligently detects and extracts values from loop-based tests:
+
+#### ✅ Supported Loop Patterns
+
+**1. for...of Loop**
+```typescript
+it('renders with different sizes', () => {
+  const sizes: ButtonSize[] = ['sm', 'md']; // Missing 'lg'
+  for (const size of sizes) {
+    mount(Button, { props: { size } });
+    // assertions...
+  }
+});
+// ✅ Detects: size[sm], size[md] are covered
+// ❌ Reports: size[lg] is NOT covered
+```
+
+**2. for...in Loop**
+```typescript
+it('renders with different sizes', () => {
+  const sizes: ButtonSize[] = ['sm', 'md'];
+  for (const i in sizes) {
+    mount(Button, { props: { size: sizes[i] } });
+    // assertions...
+  }
+});
+// ✅ Detects array element access pattern
+```
+
+**3. Array.forEach()**
+```typescript
+it('renders with different sizes', () => {
+  const sizes: ButtonSize[] = ['sm', 'md'];
+  sizes.forEach(size => {
+    mount(Button, { props: { size } });
+    // assertions...
+  });
+});
+// ✅ Detects callback parameter pattern
+```
+
+**4. Array.map()**
+```typescript
+it('renders with different sizes', () => {
+  const sizes: ButtonSize[] = ['sm', 'md'];
+  const wrappers = sizes.map(size => mount(Button, { props: { size } }));
+  wrappers.forEach(wrapper => expect(wrapper.exists()).toBe(true));
+});
+// ✅ Detects map callback pattern
+```
+
+**5. JSX in Loops**
+```typescript
+it('renders with different sizes', () => {
+  const sizes: ButtonSize[] = ['sm', 'md'];
+  for (const size of sizes) {
+    render(() => <Button size={size} />, {});
+    // assertions...
+  }
+});
+// ✅ Works with JSX syntax too
+```
+
+#### How It Works
+
+The tool uses **AST (Abstract Syntax Tree) backtracking** to:
+1. Detect when a prop value comes from a loop variable
+2. Find the source array being iterated
+3. Extract the array's literal values
+4. Compare against the full type definition to find missing values
+
+This means you can write concise loop-based tests, and the tool will still accurately detect which enum values are covered and which are missing.
+
 ## Benefits
 
 1. **More Thorough Testing**: Ensures all code paths for different prop values are tested

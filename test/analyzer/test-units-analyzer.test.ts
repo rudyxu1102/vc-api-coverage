@@ -356,4 +356,150 @@ describe('test-units-analyzer', () => {
         console.log(res)
         expect(res[`/fake/Menu.tsx`].props!.sort()).toEqual(['shape'].sort())
     })
+
+    describe('strict mode - loop value detection', () => {
+        it('should extract values from for...of loop', () => {
+            const fakeTestFilePath = './loop-forof.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Button from './Button.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { mount } from '@vue/test-utils'
+
+                type ButtonSize = 'sm' | 'md' | 'lg';
+
+                describe('Button', () => {
+                    it('should render with size prop', () => {
+                        const sizes: ButtonSize[] = ['sm', 'md'];
+                        for (const s of sizes) {
+                            const wrapper = mount(Button, {
+                                props: {
+                                    size: s
+                                }
+                            });
+                            expect(wrapper.exists()).toBe(true);
+                        }
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Button.tsx`].propValues).toBeDefined()
+            expect(res[`./Button.tsx`].propValues!.length).toBe(2)
+            expect(res[`./Button.tsx`].propValues!.map(pv => pv.value).sort()).toEqual(['sm', 'md'].sort())
+        })
+
+        it('should extract values from for...in loop', () => {
+            const fakeTestFilePath = './loop-forin.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Button from './Button.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { mount } from '@vue/test-utils'
+
+                type ButtonSize = 'sm' | 'md' | 'lg';
+
+                describe('Button', () => {
+                    it('should render with size prop', () => {
+                        const sizes: ButtonSize[] = ['sm', 'md'];
+                        for (const i in sizes) {
+                            const wrapper = mount(Button, {
+                                props: {
+                                    size: sizes[i]
+                                }
+                            });
+                            expect(wrapper.exists()).toBe(true);
+                        }
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Button.tsx`].propValues).toBeDefined()
+            expect(res[`./Button.tsx`].propValues!.length).toBe(2)
+            expect(res[`./Button.tsx`].propValues!.map(pv => pv.value).sort()).toEqual(['sm', 'md'].sort())
+        })
+
+        it('should extract values from array.forEach', () => {
+            const fakeTestFilePath = './loop-foreach.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Button from './Button.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { mount } from '@vue/test-utils'
+
+                type ButtonSize = 'sm' | 'md' | 'lg';
+
+                describe('Button', () => {
+                    it('should render with size prop', () => {
+                        const sizes: ButtonSize[] = ['sm', 'md'];
+                        sizes.forEach(s => {
+                            const wrapper = mount(Button, {
+                                props: {
+                                    size: s
+                                }
+                            });
+                            expect(wrapper.exists()).toBe(true);
+                        });
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Button.tsx`].propValues).toBeDefined()
+            expect(res[`./Button.tsx`].propValues!.length).toBe(2)
+            expect(res[`./Button.tsx`].propValues!.map(pv => pv.value).sort()).toEqual(['sm', 'md'].sort())
+        })
+
+        it('should extract values from array.map', () => {
+            const fakeTestFilePath = './loop-map.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Button from './Button.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { mount } from '@vue/test-utils'
+
+                type ButtonSize = 'sm' | 'md' | 'lg';
+
+                describe('Button', () => {
+                    it('should render with size prop', () => {
+                        const sizes: ButtonSize[] = ['sm', 'md'];
+                        const wrappers = sizes.map(s => mount(Button, {
+                            props: {
+                                size: s
+                            }
+                        }));
+                        wrappers.forEach(w => expect(w.exists()).toBe(true));
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Button.tsx`].propValues).toBeDefined()
+            expect(res[`./Button.tsx`].propValues!.length).toBe(2)
+            expect(res[`./Button.tsx`].propValues!.map(pv => pv.value).sort()).toEqual(['sm', 'md'].sort())
+        })
+
+        it('should extract values from JSX in for...of loop', () => {
+            const fakeTestFilePath = './loop-jsx.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Button from './Button.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { render } from '@testing-library/vue'
+
+                type ButtonSize = 'sm' | 'md' | 'lg';
+
+                describe('Button', () => {
+                    it('should render with size prop', () => {
+                        const sizes: ButtonSize[] = ['sm', 'md'];
+                        for (const s of sizes) {
+                            render(() => <Button size={s} />, {});
+                            expect(1).toBe(1);
+                        }
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Button.tsx`].propValues).toBeDefined()
+            expect(res[`./Button.tsx`].propValues!.length).toBe(2)
+            expect(res[`./Button.tsx`].propValues!.map(pv => pv.value).sort()).toEqual(['sm', 'md'].sort())
+        })
+    })
 })

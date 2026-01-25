@@ -1,13 +1,14 @@
 import { commonProps } from './common'
 import { aaa } from '../common'
 import { SlotsType, VNode, PropType } from 'vue';
+import { ButtonSize, ButtonType } from './type';
 
 export const buttonProps = {
     ...commonProps,
     label: { type: String, required: true },
-    size: { type: [String, Number], default: 'md' },
+    size: { type: String as PropType<ButtonSize>, default: 'md' },
     disabled: { type: Boolean, default: false },
-    variant: { type: String as PropType<'primary' | 'secondary' | 'tertiary'>, default: 'primary' },
+    variant: { type: String as PropType<ButtonType>, default: 'primary' },
 }
 
 

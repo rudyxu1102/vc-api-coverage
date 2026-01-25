@@ -434,8 +434,64 @@ class TestUnitAnalyzer {
             return { value: 'object', type: 'object' };
         }
 
+        // Handle element access expressions (e.g., array[i])
+        if (Node.isElementAccessExpression(initializer)) {
+            const expression = initializer.getExpression();
+            if (Node.isIdentifier(expression)) {
+                // Try to extract the array values
+                const actualValues = this.extractArrayLiteralValues(expression);
+                if (actualValues.length > 0) {
+                    return {
+                        value: '__ARRAY_LITERALS__',
+                        type: 'literal',
+                        arrayValues: actualValues
+                    } as any;
+                }
+            }
+        }
+
         // Try to infer from type
         const initType = initializer.getType();
+
+        // Check if it's a literal type (e.g., variable with specific literal value)
+        if (initType.isLiteral()) {
+            const literalValue = initType.getLiteralValue();
+            if (literalValue !== undefined) {
+                return { value: literalValue as string | number | boolean, type: 'literal' };
+            }
+        }
+
+        // Check if it's a boolean literal type
+        if (initType.isBooleanLiteral()) {
+            const typeText = initType.getText();
+            return { value: typeText === 'true', type: 'literal' };
+        }
+
+        // Special case: For union types (e.g., loop variables),
+        // try to extract actual array values
+        if (initType.isUnion()) {
+            const unionTypes = initType.getUnionTypes();
+            const allLiterals = unionTypes.every(t => t.isLiteral() || t.isBooleanLiteral());
+            if (allLiterals && Node.isIdentifier(initializer)) {
+                // Try to find the array literal
+                const actualValues = this.extractArrayLiteralValues(initializer);
+                if (actualValues.length > 0) {
+                    return {
+                        value: '__ARRAY_LITERALS__',
+                        type: 'literal',
+                        arrayValues: actualValues
+                    } as any;
+                }
+
+                // Fallback to union type expansion
+                return {
+                    value: '__UNION_TYPE__',
+                    type: 'literal',
+                    unionType: initType
+                } as any;
+            }
+        }
+
         if (initType.isString()) return { value: 'string', type: 'string' };
         if (initType.isNumber()) return { value: 'number', type: 'number' };
         if (initType.isBoolean()) return { value: 'boolean', type: 'boolean' };
@@ -482,11 +538,54 @@ class TestUnitAnalyzer {
                                 if (!component.propValues) {
                                     component.propValues = [];
                                 }
-                                component.propValues.push({
-                                    propName,
-                                    value: extractedValue.value,
-                                    type: extractedValue.type
-                                });
+
+                                // Check if this is an array literals marker
+                                if ((extractedValue as any).value === '__ARRAY_LITERALS__' && (extractedValue as any).arrayValues) {
+                                    const arrayValues = (extractedValue as any).arrayValues;
+                                    for (const val of arrayValues) {
+                                        component.propValues.push({
+                                            propName,
+                                            value: val,
+                                            type: 'literal'
+                                        });
+                                    }
+                                }
+                                // Check if this is a union type marker
+                                else if ((extractedValue as any).value === '__UNION_TYPE__' && (extractedValue as any).unionType) {
+                                    // Expand union type to all literal values
+                                    const unionType = (extractedValue as any).unionType;
+                                    const unionTypes = unionType.getUnionTypes();
+
+                                    for (const uType of unionTypes) {
+                                        if (uType.isLiteral()) {
+                                            const literalValue = uType.getLiteralValue();
+                                            if (literalValue !== undefined) {
+                                                component.propValues.push({
+                                                    propName,
+                                                    value: literalValue as string | number | boolean,
+                                                    type: 'literal'
+                                                });
+                                            }
+                                        } else if (uType.isBooleanLiteral()) {
+                                            const typeText = uType.getText();
+                                            const boolValue = typeText === 'true';
+                                            // Skip false in boolean unions
+                                            if (boolValue) {
+                                                component.propValues.push({
+                                                    propName,
+                                                    value: boolValue,
+                                                    type: 'literal'
+                                                });
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    component.propValues.push({
+                                        propName,
+                                        value: extractedValue.value,
+                                        type: extractedValue.type
+                                    });
+                                }
                             }
                         }
                     }
@@ -607,6 +706,136 @@ class TestUnitAnalyzer {
         }
     }
 
+    private extractArrayLiteralValues(identifier: Node): Array<string | number | boolean> {
+        const values: Array<string | number | boolean> = [];
+
+        if (!Node.isIdentifier(identifier)) return values;
+
+        // Try to find the iterable source by backtracking the AST
+        const iterableSource = this.findIterableSource(identifier);
+        if (iterableSource) {
+            return this.extractLiteralsFromArrayVariable(iterableSource);
+        }
+
+        // Fallback: check if it's a regular variable with array literal
+        return this.extractLiteralsFromArrayVariable(identifier);
+    }
+
+    /**
+     * Find the source array being iterated by backtracking the AST tree
+     * Handles: for...of, for...in, forEach, map, filter, etc.
+     */
+    private findIterableSource(identifier: Node): Node | null {
+        const identifierName = identifier.getText();
+        let current: Node | undefined = identifier.getParent();
+
+        while (current) {
+            // Check for for...of: for (const s of size)
+            if (Node.isForOfStatement(current)) {
+                const initializer = current.getInitializer();
+                if (Node.isVariableDeclarationList(initializer)) {
+                    const declarations = initializer.getDeclarations();
+                    for (const decl of declarations) {
+                        if (decl.getName() === identifierName) {
+                            // Found the loop variable, return the iterable expression
+                            return current.getExpression();
+                        }
+                    }
+                }
+            }
+
+            // Check for for...in: for (const i in size)
+            if (Node.isForInStatement(current)) {
+                const initializer = current.getInitializer();
+                if (Node.isVariableDeclarationList(initializer)) {
+                    const declarations = initializer.getDeclarations();
+                    for (const decl of declarations) {
+                        if (decl.getName() === identifierName) {
+                            // Found the loop variable, return the iterable expression
+                            return current.getExpression();
+                        }
+                    }
+                }
+            }
+
+            // Check for array methods: arr.forEach(s => ...), arr.map(s => ...), etc.
+            if (Node.isArrowFunction(current) || Node.isFunctionExpression(current)) {
+                const params = current.getParameters();
+                // Check if identifier is the first parameter of the callback
+                if (params.length > 0 && params[0].getName() === identifierName) {
+                    const parent = current.getParent();
+                    if (Node.isCallExpression(parent)) {
+                        const expr = parent.getExpression();
+                        // Check for method calls like arr.forEach, arr.map, etc.
+                        if (Node.isPropertyAccessExpression(expr)) {
+                            const methodName = expr.getName();
+                            // Common array iteration methods
+                            if (['forEach', 'map', 'filter', 'some', 'every', 'find', 'findIndex', 'reduce'].includes(methodName)) {
+                                return expr.getExpression(); // Return the array
+                            }
+                        }
+                    }
+                }
+            }
+
+            current = current.getParent();
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract literal values from an array variable or expression
+     */
+    private extractLiteralsFromArrayVariable(node: Node): Array<string | number | boolean> {
+        const values: Array<string | number | boolean> = [];
+
+        if (!node) return values;
+
+        // If it's an identifier, find its declaration
+        if (Node.isIdentifier(node)) {
+            const definitions = node.getDefinitions();
+            for (const def of definitions) {
+                const declarationNode = def.getDeclarationNode();
+                if (Node.isVariableDeclaration(declarationNode)) {
+                    const initializer = declarationNode.getInitializer();
+                    if (initializer) {
+                        return this.extractLiteralsFromExpression(initializer);
+                    }
+                }
+            }
+        } else {
+            // If it's already an expression, extract directly
+            return this.extractLiteralsFromExpression(node);
+        }
+
+        return values;
+    }
+
+    /**
+     * Extract literal values from an expression (array literal, etc.)
+     */
+    private extractLiteralsFromExpression(expr: Node): Array<string | number | boolean> {
+        const values: Array<string | number | boolean> = [];
+
+        if (Node.isArrayLiteralExpression(expr)) {
+            const elements = expr.getElements();
+            for (const element of elements) {
+                if (Node.isStringLiteral(element)) {
+                    values.push(element.getLiteralValue());
+                } else if (Node.isNumericLiteral(element)) {
+                    values.push(Number(element.getLiteralValue()));
+                } else if (element.getKind() === SyntaxKind.TrueKeyword) {
+                    values.push(true);
+                } else if (element.getKind() === SyntaxKind.FalseKeyword) {
+                    values.push(false);
+                }
+            }
+        }
+
+        return values;
+    }
+
     private extractPropValue(attr: Node): PropValue | null {
         if (!Node.isJsxAttribute(attr)) return null;
 
@@ -682,6 +911,55 @@ class TestUnitAnalyzer {
             // Identifier - infer type from the expression type
             if (Node.isIdentifier(expression)) {
                 const exprType = expression.getType();
+
+                // Check if it's a literal type (e.g., variable with specific literal value)
+                if (exprType.isLiteral()) {
+                    const literalValue = exprType.getLiteralValue();
+                    if (literalValue !== undefined) {
+                        return {
+                            propName,
+                            value: literalValue as string | number | boolean,
+                            type: 'literal'
+                        };
+                    }
+                }
+
+                // Check if it's a boolean literal type
+                if (exprType.isBooleanLiteral()) {
+                    const typeText = exprType.getText();
+                    return {
+                        propName,
+                        value: typeText === 'true',
+                        type: 'literal'
+                    };
+                }
+
+                // Special case: For union types (e.g., loop variables),
+                // try to find the actual array literal to get real values
+                if (exprType.isUnion()) {
+                    const unionTypes = exprType.getUnionTypes();
+                    const allLiterals = unionTypes.every(t => t.isLiteral() || t.isBooleanLiteral());
+                    if (allLiterals) {
+                        // Try to find the variable declaration and extract array elements
+                        const actualValues = this.extractArrayLiteralValues(expression);
+                        if (actualValues.length > 0) {
+                            return {
+                                propName,
+                                value: '__ARRAY_LITERALS__',
+                                type: 'literal',
+                                arrayValues: actualValues
+                            } as any;
+                        }
+
+                        // Fallback: expand to all union members
+                        return {
+                            propName,
+                            value: '__UNION_TYPE__',
+                            type: 'literal',
+                            unionType: exprType
+                        } as any;
+                    }
+                }
 
                 if (exprType.isString()) {
                     return { propName, value: 'string', type: 'string' };
@@ -782,7 +1060,51 @@ class TestUnitAnalyzer {
                                 if (!component.propValues) {
                                     component.propValues = [];
                                 }
-                                component.propValues.push(propValue);
+
+                                // Check if this is an array literals marker (actual values from array)
+                                if ((propValue as any).value === '__ARRAY_LITERALS__' && (propValue as any).arrayValues) {
+                                    // Use actual array values
+                                    const arrayValues = (propValue as any).arrayValues;
+                                    for (const val of arrayValues) {
+                                        component.propValues.push({
+                                            propName,
+                                            value: val,
+                                            type: 'literal'
+                                        });
+                                    }
+                                }
+                                // Check if this is a union type marker (fallback)
+                                else if ((propValue as any).value === '__UNION_TYPE__' && (propValue as any).unionType) {
+                                    // Expand union type to all literal values
+                                    const unionType = (propValue as any).unionType;
+                                    const unionTypes = unionType.getUnionTypes();
+
+                                    for (const uType of unionTypes) {
+                                        if (uType.isLiteral()) {
+                                            const literalValue = uType.getLiteralValue();
+                                            if (literalValue !== undefined) {
+                                                component.propValues.push({
+                                                    propName,
+                                                    value: literalValue as string | number | boolean,
+                                                    type: 'literal'
+                                                });
+                                            }
+                                        } else if (uType.isBooleanLiteral()) {
+                                            const typeText = uType.getText();
+                                            const boolValue = typeText === 'true';
+                                            // Skip false in boolean unions
+                                            if (boolValue) {
+                                                component.propValues.push({
+                                                    propName,
+                                                    value: boolValue,
+                                                    type: 'literal'
+                                                });
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    component.propValues.push(propValue);
+                                }
                             }
                         }
 
