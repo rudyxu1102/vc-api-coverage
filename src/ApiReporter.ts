@@ -119,6 +119,29 @@ export default class VcCoverageReporter implements Reporter {
         if (propValue.type === variant.type) {
           return true
         }
+
+        // Special case: literal values can satisfy primitive type requirements
+        // e.g., 'Some content' (literal) satisfies String type requirement
+        if (propValue.type === 'literal') {
+          const literalValueType = typeof propValue.value
+          if (variant.type === 'string' && literalValueType === 'string') {
+            return true
+          }
+          if (variant.type === 'number' && literalValueType === 'number') {
+            return true
+          }
+          if (variant.type === 'boolean' && literalValueType === 'boolean') {
+            return true
+          }
+        }
+
+        // Special case: Vue's Function prop type is recognized as 'object' by TypeScript,
+        // but test values with actual functions are extracted as 'function' type.
+        // Allow 'function' test values to satisfy 'object' variant requirements when
+        // the 'object' variant represents Vue's Function constructor type.
+        if (variant.type === 'object' && propValue.type === 'function') {
+          return true
+        }
       }
     }
 

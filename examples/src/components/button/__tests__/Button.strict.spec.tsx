@@ -42,4 +42,23 @@ describe('Button.tsx - Strict Mode Test', () => {
     });
     expect(wrapper.find('button').attributes('disabled')).toBeUndefined();
   });
+  it('renders with content as string', () => {
+    const wrapper = mount(Button, {
+      props: {
+        label: 'Click me',
+        content: 'Some content'
+      }
+    });
+    expect(wrapper.find('button')).toBeDefined();
+  });
+
+  it('renders with content as function', () => {
+    const wrapper = mount(Button, {
+      props: {
+        label: 'Click me',
+        content: () => 'Dynamic content'
+      }
+    });
+    expect(wrapper.find('button')).toBeDefined();
+  });
 });

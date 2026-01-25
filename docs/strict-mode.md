@@ -90,6 +90,24 @@ value: { type: [String, Number] as PropType<string | number> }
 // - value[number] - Any number value satisfies this
 ```
 
+**Type Matching Rules:**
+
+Literal values can satisfy primitive type requirements:
+
+```typescript
+// Component definition
+content: { type: String }
+
+// Test with literal string
+mount(Component, { props: { content: 'Hello' } })
+// ✅ Literal string 'Hello' satisfies String type requirement
+```
+
+This applies to all primitive types:
+- String literal `'text'` → satisfies `String` type
+- Number literal `42` → satisfies `Number` type
+- Boolean literal `true` → satisfies `Boolean` type
+
 ### 4. Complex Union Types
 
 ```typescript
@@ -99,7 +117,24 @@ width: { type: [String, Number, Function] as PropType<'fixed' | number | (() => 
 // Strict mode checks:
 // - width[fixed]     - Must test with literal 'fixed'
 // - width[number]    - Any number satisfies this
-// - width[function]  - Any function satisfies this
+// - width[object]    - Any function satisfies this (see note below)
+```
+
+**Note on Function Types:**
+
+Due to TypeScript's type system, Vue's `Function` prop type is recognized as `object` in the coverage reports, not `function`. However, the tool correctly matches function values in tests:
+
+```typescript
+// Component definition
+content: { type: [String, Function] }
+
+// Tests
+mount(Component, { props: { content: 'text' } })          // ✅ Covers String type
+mount(Component, { props: { content: () => 'text' } })     // ✅ Covers Function type (shown as 'object')
+
+// Coverage report will show:
+// - content[string] ✅
+// - content[object] ✅  (represents Function type)
 ```
 
 ### 5. Filtered Types
@@ -246,13 +281,15 @@ This means you can write concise loop-based tests, and the tool will still accur
 
 ## Type Support Matrix
 
-| Type | Expanded | Example |
-|------|----------|---------|
-| Literal Union | ✅ Yes | `'a' \| 'b' \| 'c'` → `[a]`, `[b]`, `[c]` |
-| Boolean | ✅ Partial | `boolean` → `[true]` only |
-| String | ❌ No | `string` → `[string]` |
-| Number | ❌ No | `number` → `[number]` |
-| Function | ❌ No | `() => void` → `[function]` |
-| Object | ❌ No | `object` → `[object]` |
-| Mixed Union | ✅ Yes | `'a' \| number` → `[a]`, `[number]` |
-| Optional | Filtered | `T \| undefined` → T only |
+| Type | Expanded | Coverage Matching | Example |
+|------|----------|------------------|---------|
+| Literal Union | ✅ Yes | Exact value match | `'a' \| 'b' \| 'c'` → `[a]`, `[b]`, `[c]` |
+| Boolean | ✅ Partial | Literal match | `boolean` → `[true]` only |
+| String | ❌ No | Type or literal | `string` → `[string]`, accepts any string literal |
+| Number | ❌ No | Type or literal | `number` → `[number]`, accepts any number literal |
+| Function | ❌ No | Type match* | `() => void` → `[object]`* (see note below) |
+| Object | ❌ No | Type match | `object` → `[object]` |
+| Mixed Union | ✅ Yes | Type/literal | `'a' \| number` → `[a]`, `[number]` |
+| Optional | Filtered | — | `T \| undefined` → T only |
+
+**\*Function Type Note:** Vue's `Function` prop type appears as `[object]` in reports due to TypeScript's type system, but correctly matches function values in tests.
