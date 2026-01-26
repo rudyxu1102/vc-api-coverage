@@ -1,5 +1,5 @@
 export  const allprops = {
-    modelValue: { type: String, default: '' },
+    value: { type: [String, Number], default: '' },
     placeholder: { type: String, default: '' },
     disabled: { type: Boolean, default: false },
     type: { type: String, default: 'text' },
