@@ -116,7 +116,9 @@ This tool analyzes your Vue 3 TSX components by leveraging TypeScript's type sys
 
 - **Props/Events**: Extracted via `InstanceType<typeof Component>['$props']`
 - **Slots**: Extracted via `InstanceType<typeof Component>['$slots']`
-- **Exposed Methods**: Identified through AST analysis of `defineExpose()`
+- **Exposed Methods**: Identified through AST analysis of `defineExpose()` and method name matching in tests
+
+**Expose Detection**: Uses a simple and reliable method name matching approach - scans test files for property access expressions (like `wrapper.vm.focus()`) and matches against exposed method names. This avoids complex variable tracking and V8 coverage dependency, resulting in better maintainability and accuracy.
 
 For detailed implementation information, see [Implementation Details](./docs/implementation.md).
 

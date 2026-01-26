@@ -102,7 +102,11 @@ Benefits of explicit slots definition:
 
 ### Exposed Methods Coverage
 
-Exposed methods coverage is calculated through **AST (Abstract Syntax Tree) analysis** of your component's source code. The tool parses the component file to identify all methods exposed via `defineExpose()`.
+Exposed methods coverage is calculated through **AST (Abstract Syntax Tree) analysis** of both your component's source code and test files.
+
+#### Component Analysis
+
+The tool parses the component file to identify all methods exposed via `defineExpose()`.
 
 **Example:**
 
@@ -126,6 +130,45 @@ export default defineComponent({
 ```
 
 The AST parser will identify `focus` and `blur` as exposed methods that should be covered in tests.
+
+#### Test Analysis
+
+The tool scans test files for method calls that match exposed method names. It uses a simple and reliable approach:
+
+1. **Scans all property access expressions** in test code (e.g., `xxx.methodName`)
+2. **Filters for exposed method names** (focus, blur, validate, clear, select, etc.)
+3. **Associates found methods** with components tested in the same test file
+
+**Supported Test Patterns:**
+
+```tsx
+// ✅ Direct calls
+wrapper.vm.focus()
+ref.value?.validate()
+
+// ✅ Type assertions
+(wrapper.vm as any).focus()
+
+// ✅ Variable assignments
+const instance = wrapper.vm
+instance.focus()
+
+// ✅ Testing existence
+expect(wrapper.vm.focus).toBeDefined()
+
+// ✅ Complex access patterns
+formRef.value?.validate()
+el.__vueParentComponent.exposed.setScrollTop(100)
+```
+
+**How It Works:**
+
+The detection is intentionally simple - it matches method names rather than tracking variable sources. This approach:
+
+- ✅ **Simple and maintainable**: ~30 lines of code vs 300+ for variable tracking
+- ✅ **Reliable**: No dependency on V8 coverage or complex AST traversal
+- ✅ **Fast**: Direct method name matching
+- ✅ **Accurate**: Exposed methods typically have unique names (focus, validate, etc.), so false positives are rare
 
 ## How Coverage Is Determined
 

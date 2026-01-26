@@ -1,4 +1,14 @@
 ## 更新日志
+
+### 0.8.4
+- **重大改进**: 重构 expose 方法检测机制
+  - 移除基于 V8 coverage 的检测方式（不可靠，fnMap 名称可能被混淆）
+  - 采用简化的方法名匹配策略
+  - 从 300+ 行复杂的变量追踪代码简化为 30 行
+  - 支持所有常见测试模式：`wrapper.vm.method()`, `ref.value?.method()`, `(vm as any).method()` 等
+  - 提升可维护性和准确性
+  - 详见文档：[Implementation Details](./docs/implementation.md)
+
 ### 0.6.4
 - 修复default symbol寻找不到
 
