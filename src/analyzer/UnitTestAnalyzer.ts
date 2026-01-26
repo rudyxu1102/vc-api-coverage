@@ -1191,150 +1191,39 @@ class TestUnitAnalyzer {
 
     /**
      * Analyze exposed method calls in test code
+     * Simplified approach: just collect all method names that look like exposed methods
      */
     private analyzeExposedMethods(testCall: CallExpression) {
-        const exposedMethodsMap = new Map<string, Set<string>>();
+        // Collect all potentially exposed method calls in this test
+        const calledMethods = new Set<string>();
 
-        // Find all call expressions in the test
-        const callExpressions = testCall.getDescendantsOfKind(SyntaxKind.CallExpression);
-
-        for (const callExpr of callExpressions) {
-            const expression = callExpr.getExpression();
-
-            // Handle property access expressions: obj.method()
-            if (Node.isPropertyAccessExpression(expression)) {
-                const methodName = expression.getName();
-                const object = expression.getExpression();
-
-                // Check if this is a component instance access
-                if (this.isExposedVariable(object)) {
-                    if (this.isExposedMethod(methodName)) {
-                        // Try to resolve the component file path
-                        const componentFile = this.resolveComponentFileFromInstance(object);
-                        if (componentFile) {
-                            if (!exposedMethodsMap.has(componentFile)) {
-                                exposedMethodsMap.set(componentFile, new Set());
-                            }
-                            exposedMethodsMap.get(componentFile)!.add(methodName);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Also check property access expressions for patterns like: expect(xxx.method).toBeDefined()
+        // Find all property access expressions (xxx.methodName)
         const propertyAccesses = testCall.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression);
 
         for (const access of propertyAccesses) {
             const methodName = access.getName();
-            const object = access.getExpression();
 
-            // Skip if this is part of a call expression (already handled above)
-            const parent = access.getParent();
-            if (Node.isCallExpression(parent) && parent.getExpression() === access) {
-                continue;
-            }
-
-            if (this.isExposedVariable(object) && this.isExposedMethod(methodName)) {
-                const componentFile = this.resolveComponentFileFromInstance(object);
-                if (componentFile) {
-                    if (!exposedMethodsMap.has(componentFile)) {
-                        exposedMethodsMap.set(componentFile, new Set());
-                    }
-                    exposedMethodsMap.get(componentFile)!.add(methodName);
-                }
+            // Check if this looks like an exposed method
+            if (this.isExposedMethod(methodName)) {
+                calledMethods.add(methodName);
             }
         }
 
-        // Add exposed methods to the result
-        for (const [componentFile, methods] of exposedMethodsMap.entries()) {
-            if (!this.result[componentFile]) {
-                this.result[componentFile] = {};
-            }
+        // Add these methods to all components used in this test
+        // (Components are already tracked in this.result from mount/render calls)
+        for (const componentFile in this.result) {
             if (!this.result[componentFile].exposes) {
                 this.result[componentFile].exposes = [];
             }
-            for (const method of methods) {
-                if (!this.result[componentFile].exposes!.includes(method)) {
-                    this.result[componentFile].exposes!.push(method);
+
+            for (const method of calledMethods) {
+                if (!this.result[componentFile].exposes.includes(method)) {
+                    this.result[componentFile].exposes.push(method);
                 }
             }
         }
     }
 
-    /**
-     * Check if a variable is derived from an exposed or component instance
-     * Handles both PropertyAccessExpression (wrapper.vm, ref.value) and Identifier (variables)
-     */
-    private isExposedVariable(node: Node): boolean {
-        // Handle PropertyAccessExpression (e.g., wrapper.vm, ref.value, xxx.exposed)
-        if (Node.isPropertyAccessExpression(node)) {
-            let text = node.getText()
-                .replace(/\s+/g, '')
-                .replace(/as\w+/g, '')
-                .replace(/\(|\)/g, '');
-
-            const exposedPatterns = [
-                /\.vm$/,                           // wrapper.vm
-                /\.value$/,                        // formRef.value, xxxRef.value
-                /\.exposed$/,                      // xxx.exposed
-                /__vueParentComponent\.exposed/,   // __vueParentComponent.exposed
-            ];
-
-            if (exposedPatterns.some(pattern => pattern.test(text))) {
-                return true;
-            }
-
-            // Recursively check the expression part
-            return this.isExposedVariable(node.getExpression());
-        }
-
-        // Handle Identifier - track variable initialization
-        if (!Node.isIdentifier(node)) return false;
-
-        try {
-            const definitions = node.getDefinitions();
-
-            for (const def of definitions) {
-                const declarationNode = def.getDeclarationNode();
-
-                if (Node.isVariableDeclaration(declarationNode)) {
-                    const initializer = declarationNode.getInitializer();
-
-                    if (initializer) {
-                        const initText = initializer.getText();
-
-                        // Check if it comes from these patterns
-                        const exposedPatterns = [
-                            /__vueParentComponent\.exposed/,  // __vueParentComponent.exposed
-                            /\.exposed$/,                      // xxx.exposed
-                            /wrapper\.vm/,                     // wrapper.vm
-                            /\.value/,                         // ref.value
-                        ];
-
-                        if (exposedPatterns.some(pattern => pattern.test(initText))) {
-                            return true;
-                        }
-
-                        // Recursively check: variable might be assigned from another variable
-                        if (Node.isIdentifier(initializer)) {
-                            return this.isExposedVariable(initializer);
-                        }
-
-                        // Check property access expressions
-                        if (Node.isPropertyAccessExpression(initializer)) {
-                            return this.isExposedVariable(initializer);
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            // If tracking fails, return false
-            return false;
-        }
-
-        return false;
-    }
 
     /**
      * Check if a method name is likely an exposed method
@@ -1374,141 +1263,6 @@ class TestUnitAnalyzer {
         return !excludedMethods.includes(methodName) && !methodName.startsWith('$');
     }
 
-    /**
-     * Try to resolve the component file path from an instance node
-     */
-    private resolveComponentFileFromInstance(node: Node): string | null {
-        try {
-            // Try to find the component reference by tracking back
-            // This is a heuristic approach
-
-            // For ref.value pattern
-            if (Node.isPropertyAccessExpression(node)) {
-                const expression = node.getExpression();
-                if (Node.isIdentifier(expression)) {
-                    const refName = expression.getText();
-                    // Try to find where this ref is used with a component
-                    return this.findComponentFromRef(refName);
-                }
-            }
-
-            // For wrapper.vm pattern
-            if (Node.isPropertyAccessExpression(node)) {
-                const text = node.getText();
-                if (text.includes('wrapper')) {
-                    // Find the mount call that created this wrapper
-                    return this.findComponentFromWrapper(node);
-                }
-            }
-
-            // For simple identifiers, try to track their source
-            if (Node.isIdentifier(node)) {
-                return this.findComponentFromVariable(node);
-            }
-        } catch (error) {
-            // If resolution fails, return null
-        }
-
-        return null;
-    }
-
-    /**
-     * Find component file from a ref variable name
-     */
-    private findComponentFromRef(refName: string): string | null {
-        // Search for JSX elements or mount calls that use this ref
-        const jsxElements = this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxElement);
-        const selfClosingElements = this.sourceFile.getDescendantsOfKind(SyntaxKind.JsxSelfClosingElement);
-
-        for (const element of [...jsxElements, ...selfClosingElements]) {
-            const openingElement = Node.isJsxElement(element) ? element.getOpeningElement() : element;
-            const attributes = openingElement.getAttributes();
-
-            for (const attr of attributes) {
-                if (Node.isJsxAttribute(attr) && attr.getNameNode().getText() === 'ref') {
-                    const initializer = attr.getInitializer();
-                    if (initializer) {
-                        const refText = initializer.getText();
-                        if (refText.includes(refName)) {
-                            // Found the ref usage, get the component name
-                            const tagName = openingElement.getTagNameNode().getText();
-                            const importDecl = this.getImportDecl(tagName, this.sourceFile);
-                            if (importDecl) {
-                                const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-                                return this.resolveComponentPath(openingElement.getTagNameNode() as Identifier) || modulePath;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Find component file from a wrapper variable
-     */
-    private findComponentFromWrapper(node: Node): string | null {
-        // Find the closest mount/render call
-        let current: Node | undefined = node;
-        while (current) {
-            if (Node.isCallExpression(current)) {
-                const expression = current.getExpression();
-                if (Node.isIdentifier(expression)) {
-                    const name = expression.getText();
-                    if (name === 'mount' || name === 'shallowMount' || name === 'render') {
-                        const args = current.getArguments();
-                        if (args.length > 0) {
-                            const componentArg = args[0];
-                            if (Node.isIdentifier(componentArg)) {
-                                const componentName = componentArg.getText();
-                                const importDecl = this.getImportDecl(componentName, this.sourceFile);
-                                if (importDecl) {
-                                    const modulePath = importDecl.getModuleSpecifier().getLiteralValue();
-                                    return this.resolveComponentPath(componentArg) || modulePath;
-                                }
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            current = current.getParent();
-        }
-
-        return null;
-    }
-
-    /**
-     * Find component file from a variable name
-     */
-    private findComponentFromVariable(node: Node): string | null {
-        if (!Node.isIdentifier(node)) return null;
-
-        try {
-            const definitions = node.getDefinitions();
-
-            for (const def of definitions) {
-                const declarationNode = def.getDeclarationNode();
-
-                if (Node.isVariableDeclaration(declarationNode)) {
-                    const initializer = declarationNode.getInitializer();
-
-                    if (initializer) {
-                        // Check if it's from a property access (e.g., wrapper.vm, ref.value)
-                        if (Node.isPropertyAccessExpression(initializer)) {
-                            return this.resolveComponentFileFromInstance(initializer);
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            // Ignore errors
-        }
-
-        return null;
-    }
 
 }
 
