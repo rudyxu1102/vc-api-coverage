@@ -985,6 +985,53 @@ class TestUnitAnalyzer {
                 }
             }
 
+            // Property access expression (e.g., value.value in v-model)
+            if (Node.isPropertyAccessExpression(expression)) {
+                const exprType = expression.getType();
+
+                // Check if it's a literal type
+                if (exprType.isLiteral()) {
+                    const literalValue = exprType.getLiteralValue();
+                    if (literalValue !== undefined) {
+                        return {
+                            propName,
+                            value: literalValue as string | number | boolean,
+                            type: 'literal'
+                        };
+                    }
+                }
+
+                // Check if it's a boolean literal type
+                if (exprType.isBooleanLiteral()) {
+                    const typeText = exprType.getText();
+                    return {
+                        propName,
+                        value: typeText === 'true',
+                        type: 'literal'
+                    };
+                }
+
+                // Infer from primitive types
+                if (exprType.isString()) {
+                    return { propName, value: 'string', type: 'string' };
+                }
+                if (exprType.isNumber()) {
+                    return { propName, value: 'number', type: 'number' };
+                }
+                if (exprType.isBoolean()) {
+                    return { propName, value: 'boolean', type: 'boolean' };
+                }
+
+                const callSignatures = exprType.getCallSignatures();
+                if (callSignatures.length > 0) {
+                    return { propName, value: 'function', type: 'function' };
+                }
+
+                if (exprType.isObject()) {
+                    return { propName, value: 'object', type: 'object' };
+                }
+            }
+
             // Object literal
             if (Node.isObjectLiteralExpression(expression)) {
                 return {

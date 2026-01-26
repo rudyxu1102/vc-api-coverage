@@ -501,5 +501,44 @@ describe('test-units-analyzer', () => {
             expect(res[`./Button.tsx`].propValues!.length).toBe(2)
             expect(res[`./Button.tsx`].propValues!.map(pv => pv.value).sort()).toEqual(['sm', 'md'].sort())
         })
+
+        it('should extract value type from v-model with PropertyAccessExpression', () => {
+            const fakeTestFilePath = './vmodel-property-access.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Input from './Input.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { render } from '@testing-library/vue'
+                import { ref } from 'vue';
+
+                describe('components', () => {
+                    it('should handle v-model with string ref', () => {
+                        const value = ref('initial value');
+                        render(() => <Input v-model:value={value.value} />, {});
+                        expect(1).toBe(1);
+                    })
+
+                    it('should handle v-model with number ref', () => {
+                        const count = ref(42);
+                        render(() => <Input v-model:value={count.value} />, {});
+                        expect(1).toBe(1);
+                    })
+
+                    it('should handle v-model with boolean ref', () => {
+                        const isActive = ref(true);
+                        render(() => <Input v-model:value={isActive.value} />, {});
+                        expect(1).toBe(1);
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Input.tsx`].propValues).toBeDefined()
+            expect(res[`./Input.tsx`].propValues!.length).toBe(3)
+
+            const propValues = res[`./Input.tsx`].propValues!
+            expect(propValues.some(pv => pv.propName === 'value' && pv.type === 'string')).toBe(true)
+            expect(propValues.some(pv => pv.propName === 'value' && pv.type === 'number')).toBe(true)
+            expect(propValues.some(pv => pv.propName === 'value' && pv.type === 'boolean')).toBe(true)
+        })
     })
 })

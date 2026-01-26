@@ -3,7 +3,7 @@ import type { CSSProperties } from 'vue';
 import { pick } from 'lodash';
 import { allprops } from './props';
 
-export const props = pick(allprops, ['modelValue', 'placeholder', 'disabled', 'type', 'size', 'clearable']);
+export const props = pick(allprops, ['value', 'placeholder', 'disabled', 'type', 'size', 'clearable']);
 
 export default defineComponent({
   name: 'MyInput',
@@ -14,7 +14,7 @@ export default defineComponent({
   },
 
   emits: {
-    'update:modelValue': (value: string) => true,
+    'update:value': (value: string) => true,
     'focus': (e: FocusEvent) => true,
     'blur': (e: FocusEvent) => true,
     'clear': () => true,
@@ -30,12 +30,12 @@ export default defineComponent({
     const inputRef = ref<HTMLInputElement | null>(null);
 
     const showClear = computed(() => {
-      return props.clearable && props.modelValue && !props.disabled;
+      return props.clearable && props.value && !props.disabled;
     });
 
     const handleInput = (e: Event) => {
       const target = e.target as HTMLInputElement;
-      emit('update:modelValue', target.value);
+      emit('update:value', target.value);
     };
 
     const handleFocus = (e: FocusEvent) => {
@@ -47,7 +47,7 @@ export default defineComponent({
     };
 
     const clear = () => {
-      emit('update:modelValue', '');
+      emit('update:value', '');
       emit('clear');
       // 清空后自动聚焦
       inputRef.value?.focus();
@@ -117,7 +117,7 @@ export default defineComponent({
           type={props.type}
           style={inputStyle}
           class="input"
-          value={props.modelValue}
+          value={props.value}
           disabled={props.disabled}
           placeholder={props.placeholder}
           onInput={handleInput}
