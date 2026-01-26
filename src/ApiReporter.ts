@@ -274,33 +274,8 @@ export default class VcCoverageReporter implements Reporter {
   onCoverage(coverage: unknown) {
     this.analyzerComponent()
     this.coverageData = this.mergeData(this.unitData, this.compData)
-    this.analyzeFromCoverage(coverage)
     this.genReport()
     this.onFinishedCallback?.(this.coverageData)
-  }
-
-  checkFromCoverage(coverage: any, name: string) {
-    const info = coverage.fnMap
-    for (const key in info) {
-      if (info[key].name === name) {
-        return coverage.f[key] > 0
-      }
-    }
-    return false
-  }
-
-  analyzeFromCoverage(coverage: unknown) {
-    const data = (coverage as any).data
-    for (const item of this.coverageData) {
-      const coverage = data[item.file]
-      if(!coverage) continue
-      for (const method of item.exposes.details) {
-        if (this.checkFromCoverage(coverage, method.name) && !method.covered) {
-          method.covered = true
-          item.exposes.covered += 1
-        }
-      }
-    }
   }
 
   async genReport(): Promise<void> {
