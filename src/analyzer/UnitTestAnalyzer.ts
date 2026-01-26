@@ -1403,8 +1403,7 @@ class TestUnitAnalyzer {
 
             // For simple identifiers, try to track their source
             if (Node.isIdentifier(node)) {
-                const varName = node.getText();
-                return this.findComponentFromVariable(varName, node);
+                return this.findComponentFromVariable(node);
             }
         } catch (error) {
             // If resolution fails, return null
@@ -1484,7 +1483,7 @@ class TestUnitAnalyzer {
     /**
      * Find component file from a variable name
      */
-    private findComponentFromVariable(_varName: string, node: Node): string | null {
+    private findComponentFromVariable(node: Node): string | null {
         if (!Node.isIdentifier(node)) return null;
 
         try {
