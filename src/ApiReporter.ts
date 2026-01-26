@@ -271,7 +271,7 @@ export default class VcCoverageReporter implements Reporter {
     return res
   }
 
-  onCoverage(coverage: unknown) {
+  onCoverage() {
     this.analyzerComponent()
     this.coverageData = this.mergeData(this.unitData, this.compData)
     this.genReport()

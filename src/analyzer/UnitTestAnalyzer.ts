@@ -1403,8 +1403,7 @@ class TestUnitAnalyzer {
 
             // For simple identifiers, try to track their source
             if (Node.isIdentifier(node)) {
-                const varName = node.getText();
-                return this.findComponentFromVariable(varName, node);
+                return this.findComponentFromVariable(node);
             }
         } catch (error) {
             // If resolution fails, return null
@@ -1426,7 +1425,7 @@ class TestUnitAnalyzer {
             const attributes = openingElement.getAttributes();
 
             for (const attr of attributes) {
-                if (Node.isJsxAttribute(attr) && attr.getName() === 'ref') {
+                if (Node.isJsxAttribute(attr) && attr.getNameNode().getText() === 'ref') {
                     const initializer = attr.getInitializer();
                     if (initializer) {
                         const refText = initializer.getText();
@@ -1484,7 +1483,9 @@ class TestUnitAnalyzer {
     /**
      * Find component file from a variable name
      */
-    private findComponentFromVariable(varName: string, node: Node): string | null {
+    private findComponentFromVariable(node: Node): string | null {
+        if (!Node.isIdentifier(node)) return null;
+
         try {
             const definitions = node.getDefinitions();
 
