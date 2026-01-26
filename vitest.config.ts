@@ -14,7 +14,7 @@ export default defineConfig({
         'test/**',
         '**/*.d.ts',
         'vitest.config.ts',
-        'eslint.config.js',
+        'eslint.config.mjs',
       ],
     },
   },
