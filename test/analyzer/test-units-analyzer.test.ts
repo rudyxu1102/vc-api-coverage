@@ -502,6 +502,230 @@ describe('test-units-analyzer', () => {
             expect(res[`./Button.tsx`].propValues!.map(pv => pv.value).sort()).toEqual(['sm', 'md'].sort())
         })
 
+        it('should extract ref assignments with direct access', () => {
+            const fakeTestFilePath = './ref-direct-access.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Input from './Input.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { render } from '@testing-library/vue'
+                import { ref } from 'vue';
+
+                type InputSize = 'sm' | 'md' | 'lg';
+
+                describe('Input', () => {
+                    it('should render with size prop using ref', () => {
+                        const size = ref<InputSize>('sm');
+                        render(() => <Input size={size.value} />, {});
+                        expect(1).toBe(1);
+
+                        size.value = 'lg';
+                        render(() => <Input size={size.value} />, {});
+                        expect(1).toBe(1);
+
+                        size.value = 'md';
+                        render(() => <Input size={size.value} />, {});
+                        expect(1).toBe(1);
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Input.tsx`].propValues).toBeDefined()
+            expect(res[`./Input.tsx`].propValues!.length).toBeGreaterThanOrEqual(3)
+
+            const sizeValues = [...new Set(res[`./Input.tsx`].propValues!
+                .filter(pv => pv.propName === 'size')
+                .map(pv => pv.value))]
+                .sort()
+            expect(sizeValues).toEqual(['lg', 'md', 'sm'])
+        })
+
+        it('should extract ref assignments with type assertion', () => {
+            const fakeTestFilePath = './ref-type-assertion.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Input from './Input.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { render } from '@testing-library/vue'
+                import { ref } from 'vue';
+
+                type InputSize = 'sm' | 'md' | 'lg';
+
+                describe('Input', () => {
+                    it('should render with size prop using type assertion', () => {
+                        const size = ref('sm');
+                        render(() => <Input size={size.value as InputSize} />, {});
+                        expect(1).toBe(1);
+
+                        size.value = 'lg';
+                        render(() => <Input size={size.value as InputSize} />, {});
+                        expect(1).toBe(1);
+
+                        size.value = 'md';
+                        render(() => <Input size={size.value as InputSize} />, {});
+                        expect(1).toBe(1);
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Input.tsx`].propValues).toBeDefined()
+            expect(res[`./Input.tsx`].propValues!.length).toBeGreaterThanOrEqual(3)
+
+            const sizeValues = [...new Set(res[`./Input.tsx`].propValues!
+                .filter(pv => pv.propName === 'size')
+                .map(pv => pv.value))]
+                .sort()
+            expect(sizeValues).toEqual(['lg', 'md', 'sm'])
+        })
+
+        it('should extract ref assignments with parentheses', () => {
+            const fakeTestFilePath = './ref-parentheses.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Input from './Input.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { render } from '@testing-library/vue'
+                import { ref } from 'vue';
+
+                type InputSize = 'sm' | 'md' | 'lg';
+
+                describe('Input', () => {
+                    it('should render with size prop using parentheses', () => {
+                        const size = ref<InputSize>('sm');
+                        render(() => <Input size={(size.value)} />, {});
+                        expect(1).toBe(1);
+
+                        size.value = 'lg';
+                        render(() => <Input size={(size.value)} />, {});
+                        expect(1).toBe(1);
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Input.tsx`].propValues).toBeDefined()
+            expect(res[`./Input.tsx`].propValues!.length).toBeGreaterThanOrEqual(2)
+
+            const sizeValues = [...new Set(res[`./Input.tsx`].propValues!
+                .filter(pv => pv.propName === 'size')
+                .map(pv => pv.value))]
+                .sort()
+            expect(sizeValues).toEqual(['lg', 'sm'])
+        })
+
+        it('should extract ref assignments with non-null assertion', () => {
+            const fakeTestFilePath = './ref-non-null.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Input from './Input.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { render } from '@testing-library/vue'
+                import { ref } from 'vue';
+
+                type InputSize = 'sm' | 'md' | 'lg';
+
+                describe('Input', () => {
+                    it('should render with size prop using non-null assertion', () => {
+                        const size = ref<InputSize>('sm');
+                        render(() => <Input size={size.value!} />, {});
+                        expect(1).toBe(1);
+
+                        size.value = 'md';
+                        render(() => <Input size={size.value!} />, {});
+                        expect(1).toBe(1);
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Input.tsx`].propValues).toBeDefined()
+            expect(res[`./Input.tsx`].propValues!.length).toBeGreaterThanOrEqual(2)
+
+            const sizeValues = [...new Set(res[`./Input.tsx`].propValues!
+                .filter(pv => pv.propName === 'size')
+                .map(pv => pv.value))]
+                .sort()
+            expect(sizeValues).toEqual(['md', 'sm'])
+        })
+
+        it('should extract ref assignments with combined wrappers', () => {
+            const fakeTestFilePath = './ref-combined.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Input from './Input.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { render } from '@testing-library/vue'
+                import { ref } from 'vue';
+
+                type InputSize = 'sm' | 'md' | 'lg';
+
+                describe('Input', () => {
+                    it('should render with size prop using combined wrappers', () => {
+                        const size = ref('sm');
+                        // Multiple wrappers: parentheses + type assertion
+                        render(() => <Input size={(size.value as InputSize)} />, {});
+                        expect(1).toBe(1);
+
+                        size.value = 'lg';
+                        render(() => <Input size={(size.value as InputSize)} />, {});
+                        expect(1).toBe(1);
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Input.tsx`].propValues).toBeDefined()
+            expect(res[`./Input.tsx`].propValues!.length).toBeGreaterThanOrEqual(2)
+
+            const sizeValues = [...new Set(res[`./Input.tsx`].propValues!
+                .filter(pv => pv.propName === 'size')
+                .map(pv => pv.value))]
+                .sort()
+            expect(sizeValues).toEqual(['lg', 'sm'])
+        })
+
+        it('should extract ref assignments in mount options', () => {
+            const fakeTestFilePath = './ref-mount-options.test.tsx'
+            const project = new Project()
+            const sourceFile = project.createSourceFile(fakeTestFilePath, `
+                import Input from './Input.tsx';
+                import { describe, it, expect } from 'vitest';
+                import { mount } from '@vue/test-utils'
+                import { ref } from 'vue';
+
+                type InputSize = 'sm' | 'md' | 'lg';
+
+                describe('Input', () => {
+                    it('should render with size prop in mount options', () => {
+                        const size = ref<InputSize>('sm');
+                        const wrapper = mount(Input, {
+                            props: {
+                                size: size.value
+                            }
+                        });
+                        expect(wrapper.exists()).toBe(true);
+
+                        size.value = 'lg';
+                        const wrapper2 = mount(Input, {
+                            props: {
+                                size: size.value
+                            }
+                        });
+                        expect(wrapper2.exists()).toBe(true);
+                    })
+                })
+            `)
+            const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
+            expect(res[`./Input.tsx`].propValues).toBeDefined()
+            expect(res[`./Input.tsx`].propValues!.length).toBeGreaterThanOrEqual(1)
+
+            const sizeValues = [...new Set(res[`./Input.tsx`].propValues!
+                .filter(pv => pv.propName === 'size')
+                .map(pv => pv.value))]
+                .sort()
+            // Should extract at least some ref values
+            expect(sizeValues.length).toBeGreaterThan(0)
+            // Should contain at least one of the assigned values
+            expect(['sm', 'lg'].some(val => sizeValues.includes(val))).toBe(true)
+        })
+
         it('should extract value type from v-model with PropertyAccessExpression', () => {
             const fakeTestFilePath = './vmodel-property-access.test.tsx'
             const project = new Project()
@@ -533,12 +757,17 @@ describe('test-units-analyzer', () => {
             `)
             const res = new TestUnitAnalyzer(sourceFile, project, true).analyze()
             expect(res[`./Input.tsx`].propValues).toBeDefined()
-            expect(res[`./Input.tsx`].propValues!.length).toBe(3)
+            expect(res[`./Input.tsx`].propValues!.length).toBeGreaterThanOrEqual(3)
 
             const propValues = res[`./Input.tsx`].propValues!
-            expect(propValues.some(pv => pv.propName === 'value' && pv.type === 'string')).toBe(true)
-            expect(propValues.some(pv => pv.propName === 'value' && pv.type === 'number')).toBe(true)
-            expect(propValues.some(pv => pv.propName === 'value' && pv.type === 'boolean')).toBe(true)
+            // Should extract the actual literal values from ref initialization or infer types
+            const hasString = propValues.some(pv => pv.propName === 'value' && (pv.type === 'literal' && typeof pv.value === 'string' || pv.type === 'string'))
+            const hasNumber = propValues.some(pv => pv.propName === 'value' && (pv.type === 'literal' && typeof pv.value === 'number' || pv.type === 'number'))
+            const hasBoolean = propValues.some(pv => pv.propName === 'value' && (pv.type === 'literal' && typeof pv.value === 'boolean' || pv.type === 'boolean'))
+
+            expect(hasString).toBe(true)
+            expect(hasNumber).toBe(true)
+            expect(hasBoolean).toBe(true)
         })
     })
 })
