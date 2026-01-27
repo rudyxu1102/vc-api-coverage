@@ -1,5 +1,17 @@
 ## 更新日志
 
+### 0.8.6
+- **修复**: 改进 ref 值的 prop 覆盖率检测
+  - 修复在测试中使用 `ref().value` 模式时，prop 的具体值无法正确识别的问题
+  - 新增 `extractRefAssignments` 方法，支持提取 ref 的初始值和所有赋值语句
+  - 新增 `unwrapExpression` 通用方法，统一处理类型断言、括号等表达式包装
+  - 支持检测各种 ref 使用模式：
+    - `size.value`（直接访问）
+    - `size.value as InputSize`（类型断言）
+    - `(size.value)`（括号包装）
+    - `size.value!`（非空断言）
+  - 提升 strict mode 下对动态 prop 值的覆盖率准确性
+
 ### 0.8.4
 - **重大改进**: 重构 expose 方法检测机制
   - 移除基于 V8 coverage 的检测方式（不可靠，fnMap 名称可能被混淆）

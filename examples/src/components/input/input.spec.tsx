@@ -2,7 +2,8 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
 import { ref } from 'vue';
 import Input from './index';
-import { render, screen } from '@testing-library/vue';
+import { render } from '@testing-library/vue';
+import { InputSize } from './type';
 
 describe('Input.tsx', () => {
   // 测试 props
@@ -17,9 +18,25 @@ describe('Input.tsx', () => {
   });
 
 
-  it('size prop', () => {
-    const { container } = render(() => <Input size="sm" />);
+  it('size prop', async() => {
+    const size = ref('sm')
+    const { container, rerender } = render(() => <Input size={size.value as InputSize} />);
     expect(container.querySelector('.input-sm')).not.toBeNull();
+
+    size.value = 'lg'
+    await rerender(() => <Input size={size.value as InputSize} />)
+    expect(container.querySelector('.input-lg')).not.toBeNull();
+
+  })
+
+  it('size prop 1', async() => {
+    const size = ref<InputSize>('sm')
+    const { container, rerender } = render(() => <Input size={size.value} />);
+    expect(container.querySelector('.input-sm')).not.toBeNull();
+
+    size.value = 'md'
+    await rerender(() => <Input size={size.value as InputSize} />)
+    expect(container.querySelector('.input-md')).not.toBeNull();
   })
 
   it('renders with custom props', () => {

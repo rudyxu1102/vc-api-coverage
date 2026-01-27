@@ -1,4 +1,4 @@
-import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier, Symbol } from 'ts-morph';
+import { Project, SyntaxKind, Node, SourceFile, CallExpression, ObjectLiteralExpression, JsxSelfClosingElement, JsxElement, Identifier, Symbol, Type } from 'ts-morph';
 import { isComponentFile, isComponentType } from '../common/utils';
 
 interface PropValue {
@@ -710,6 +710,30 @@ class TestUnitAnalyzer {
         }
     }
 
+    /**
+     * Unwrap an expression by removing type assertions, parentheses, and other wrappers
+     * Returns the innermost expression and the outermost type for union type checking
+     */
+    private unwrapExpression(expr: Node): { innerExpression: Node; outerType: Type } {
+        let current = expr;
+        const outerType = expr.getType();
+
+        // Keep unwrapping until we can't unwrap anymore
+        while (true) {
+            if (Node.isAsExpression(current)) {
+                current = current.getExpression();
+            } else if (Node.isParenthesizedExpression(current)) {
+                current = current.getExpression();
+            } else if (Node.isNonNullExpression(current)) {
+                current = current.getExpression();
+            } else {
+                break;
+            }
+        }
+
+        return { innerExpression: current, outerType };
+    }
+
     private extractArrayLiteralValues(identifier: Node): Array<string | number | boolean> {
         const values: Array<string | number | boolean> = [];
 
@@ -786,6 +810,81 @@ class TestUnitAnalyzer {
         }
 
         return null;
+    }
+
+    /**
+     * Extract all values assigned to a ref variable (including initial value and subsequent assignments)
+     * Handles patterns like: const size = ref('sm'); size.value = 'lg'; size.value = 'md'
+     */
+    private extractRefAssignments(identifier: Node): Array<string | number | boolean> {
+        const values: Array<string | number | boolean> = [];
+
+        if (!Node.isIdentifier(identifier)) return values;
+
+        const identifierName = identifier.getText();
+
+        // Find the variable declaration
+        const definitions = identifier.getDefinitions();
+        for (const def of definitions) {
+            const declarationNode = def.getDeclarationNode();
+            if (Node.isVariableDeclaration(declarationNode)) {
+                const initializer = declarationNode.getInitializer();
+
+                // Extract initial value from ref() call
+                if (initializer && Node.isCallExpression(initializer)) {
+                    const callExpr = initializer.getExpression();
+                    if (Node.isIdentifier(callExpr) && callExpr.getText() === 'ref') {
+                        const args = initializer.getArguments();
+                        if (args.length > 0) {
+                            const arg = args[0];
+                            if (Node.isStringLiteral(arg)) {
+                                values.push(arg.getLiteralValue());
+                            } else if (Node.isNumericLiteral(arg)) {
+                                values.push(Number(arg.getLiteralValue()));
+                            } else if (arg.getKind() === SyntaxKind.TrueKeyword) {
+                                values.push(true);
+                            } else if (arg.getKind() === SyntaxKind.FalseKeyword) {
+                                values.push(false);
+                            }
+                        }
+                    }
+                }
+
+                // Find all assignments to this ref in the same function/scope
+                const sourceFile = declarationNode.getSourceFile();
+                const refAssignments = sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)
+                    .filter(binExpr => {
+                        const operator = binExpr.getOperatorToken();
+                        if (operator.getKind() !== SyntaxKind.EqualsToken) return false;
+
+                        const left = binExpr.getLeft();
+                        // Check if it's assigning to identifierName.value
+                        if (Node.isPropertyAccessExpression(left)) {
+                            const expr = left.getExpression();
+                            if (Node.isIdentifier(expr) && expr.getText() === identifierName) {
+                                const prop = left.getName();
+                                return prop === 'value';
+                            }
+                        }
+                        return false;
+                    });
+
+                for (const assignment of refAssignments) {
+                    const right = assignment.getRight();
+                    if (Node.isStringLiteral(right)) {
+                        values.push(right.getLiteralValue());
+                    } else if (Node.isNumericLiteral(right)) {
+                        values.push(Number(right.getLiteralValue()));
+                    } else if (right.getKind() === SyntaxKind.TrueKeyword) {
+                        values.push(true);
+                    } else if (right.getKind() === SyntaxKind.FalseKeyword) {
+                        values.push(false);
+                    }
+                }
+            }
+        }
+
+        return [...new Set(values)]; // Remove duplicates
     }
 
     /**
@@ -912,82 +1011,47 @@ class TestUnitAnalyzer {
                 };
             }
 
-            // Identifier - infer type from the expression type
-            if (Node.isIdentifier(expression)) {
-                const exprType = expression.getType();
+            // Unwrap the expression to handle type assertions, parentheses, etc.
+            const { innerExpression, outerType } = this.unwrapExpression(expression);
 
-                // Check if it's a literal type (e.g., variable with specific literal value)
-                if (exprType.isLiteral()) {
-                    const literalValue = exprType.getLiteralValue();
-                    if (literalValue !== undefined) {
-                        return {
-                            propName,
-                            value: literalValue as string | number | boolean,
-                            type: 'literal'
-                        };
-                    }
-                }
+            // Check if innerExpression is a property access (e.g., size.value, ref.value)
+            if (Node.isPropertyAccessExpression(innerExpression)) {
+                const propertyName = innerExpression.getName();
 
-                // Check if it's a boolean literal type
-                if (exprType.isBooleanLiteral()) {
-                    const typeText = exprType.getText();
-                    return {
-                        propName,
-                        value: typeText === 'true',
-                        type: 'literal'
-                    };
-                }
+                // Special handling for .value property (likely a ref)
+                if (propertyName === 'value') {
+                    const baseExpression = innerExpression.getExpression();
 
-                // Special case: For union types (e.g., loop variables),
-                // try to find the actual array literal to get real values
-                if (exprType.isUnion()) {
-                    const unionTypes = exprType.getUnionTypes();
-                    const allLiterals = unionTypes.every(t => t.isLiteral() || t.isBooleanLiteral());
-                    if (allLiterals) {
-                        // Try to find the variable declaration and extract array elements
-                        const actualValues = this.extractArrayLiteralValues(expression);
-                        if (actualValues.length > 0) {
+                    // Check if the outer type is a union of literals
+                    if (outerType.isUnion()) {
+                        const unionTypes = outerType.getUnionTypes();
+                        const allLiterals = unionTypes.every((t: Type) => t.isLiteral() || t.isBooleanLiteral());
+
+                        if (allLiterals && Node.isIdentifier(baseExpression)) {
+                            // Try to extract actual values from ref assignments
+                            const actualValues = this.extractRefAssignments(baseExpression);
+                            if (actualValues.length > 0) {
+                                return {
+                                    propName,
+                                    value: '__ARRAY_LITERALS__',
+                                    type: 'literal',
+                                    arrayValues: actualValues
+                                } as any;
+                            }
+
+                            // Fallback: expand to all union members
                             return {
                                 propName,
-                                value: '__ARRAY_LITERALS__',
+                                value: '__UNION_TYPE__',
                                 type: 'literal',
-                                arrayValues: actualValues
+                                unionType: outerType
                             } as any;
                         }
-
-                        // Fallback: expand to all union members
-                        return {
-                            propName,
-                            value: '__UNION_TYPE__',
-                            type: 'literal',
-                            unionType: exprType
-                        } as any;
                     }
                 }
 
-                if (exprType.isString()) {
-                    return { propName, value: 'string', type: 'string' };
-                }
-                if (exprType.isNumber()) {
-                    return { propName, value: 'number', type: 'number' };
-                }
-                if (exprType.isBoolean()) {
-                    return { propName, value: 'boolean', type: 'boolean' };
-                }
-
-                const callSignatures = exprType.getCallSignatures();
-                if (callSignatures.length > 0) {
-                    return { propName, value: 'function', type: 'function' };
-                }
-
-                if (exprType.isObject()) {
-                    return { propName, value: 'object', type: 'object' };
-                }
-            }
-
-            // Property access expression (e.g., value.value in v-model)
-            if (Node.isPropertyAccessExpression(expression)) {
-                const exprType = expression.getType();
+                // For other property access, check the type
+                const exprType = outerType;
 
                 // Check if it's a literal type
                 if (exprType.isLiteral()) {
@@ -1031,6 +1095,80 @@ class TestUnitAnalyzer {
                     return { propName, value: 'object', type: 'object' };
                 }
             }
+
+            // Identifier - infer type from the expression type
+            if (Node.isIdentifier(innerExpression)) {
+                const exprType = outerType;
+
+                // Check if it's a literal type (e.g., variable with specific literal value)
+                if (exprType.isLiteral()) {
+                    const literalValue = exprType.getLiteralValue();
+                    if (literalValue !== undefined) {
+                        return {
+                            propName,
+                            value: literalValue as string | number | boolean,
+                            type: 'literal'
+                        };
+                    }
+                }
+
+                // Check if it's a boolean literal type
+                if (exprType.isBooleanLiteral()) {
+                    const typeText = exprType.getText();
+                    return {
+                        propName,
+                        value: typeText === 'true',
+                        type: 'literal'
+                    };
+                }
+
+                // Special case: For union types (e.g., loop variables),
+                // try to find the actual array literal to get real values
+                if (exprType.isUnion()) {
+                    const unionTypes = exprType.getUnionTypes();
+                    const allLiterals = unionTypes.every((t: Type) => t.isLiteral() || t.isBooleanLiteral());
+                    if (allLiterals) {
+                        // Try to find the variable declaration and extract array elements
+                        const actualValues = this.extractArrayLiteralValues(expression);
+                        if (actualValues.length > 0) {
+                            return {
+                                propName,
+                                value: '__ARRAY_LITERALS__',
+                                type: 'literal',
+                                arrayValues: actualValues
+                            } as any;
+                        }
+
+                        // Fallback: expand to all union members
+                        return {
+                            propName,
+                            value: '__UNION_TYPE__',
+                            type: 'literal',
+                            unionType: exprType
+                        } as any;
+                    }
+                }
+
+                if (exprType.isString()) {
+                    return { propName, value: 'string', type: 'string' };
+                }
+                if (exprType.isNumber()) {
+                    return { propName, value: 'number', type: 'number' };
+                }
+                if (exprType.isBoolean()) {
+                    return { propName, value: 'boolean', type: 'boolean' };
+                }
+
+                const callSignatures = exprType.getCallSignatures();
+                if (callSignatures.length > 0) {
+                    return { propName, value: 'function', type: 'function' };
+                }
+
+                if (exprType.isObject()) {
+                    return { propName, value: 'object', type: 'object' };
+                }
+            }
+
 
             // Object literal
             if (Node.isObjectLiteralExpression(expression)) {
